@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { User } from '../entities/auth';
 import { AuthContext, type Preferences } from './authContext';
 import { setTokenProvider } from './authHeaders';
@@ -21,7 +21,95 @@ interface SessionResponse {
   data?: {
     user?: User;
   } & Partial<User>;
+  message?: string;
 }
+
+const GUEST_AUTH_STORAGE_KEY = 'mytherra-guest-session';
+
+interface GuestStoredSession {
+  token: string;
+  user: User;
+}
+
+const readFrontpageToken = (): string | null => {
+  try {
+    const storage = localStorage.getItem('auth-storage');
+    if (!storage) return null;
+    const parsed = JSON.parse(storage) as { state?: { token?: string } };
+    return parsed.state?.token ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const readFrontpageUser = (): Partial<User> | null => {
+  try {
+    const storage = localStorage.getItem('auth-storage');
+    if (!storage) return null;
+    const parsed = JSON.parse(storage) as { state?: { user?: Partial<User> } };
+    return parsed.state?.user ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const readGuestSession = (): GuestStoredSession | null => {
+  try {
+    const raw = localStorage.getItem(GUEST_AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as GuestStoredSession;
+    return parsed?.token && parsed?.user ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+const saveGuestSession = (session: GuestStoredSession): void => {
+  localStorage.setItem(GUEST_AUTH_STORAGE_KEY, JSON.stringify(session));
+};
+
+const clearGuestSession = (): void => {
+  localStorage.removeItem(GUEST_AUTH_STORAGE_KEY);
+};
+
+const withRedirectParam = (urlValue: string): string => {
+  try {
+    const url = new URL(urlValue, window.location.origin);
+    url.searchParams.set('redirect', window.location.href);
+    return url.toString();
+  } catch {
+    return urlValue;
+  }
+};
+
+const appendQueryParam = (urlValue: string, key: string, value: string): string => {
+  try {
+    const url = new URL(urlValue, window.location.origin);
+    url.searchParams.set(key, value);
+    return url.toString();
+  } catch {
+    return urlValue;
+  }
+};
+
+const readGuestUserIdFromUrl = (): string | null => {
+  try {
+    const value = new URL(window.location.href).searchParams.get('guest_user_id') || '';
+    return value.trim() || null;
+  } catch {
+    return null;
+  }
+};
+
+const removeGuestUserIdFromUrl = (): void => {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('guest_user_id');
+    window.history.replaceState({}, '', url.toString());
+  } catch {
+    // ignore
+  }
+};
 
 const isAxiosLikeError = (error: unknown): error is { response?: { status?: number } } => {
   return typeof error === 'object' && error !== null;
@@ -29,52 +117,74 @@ const isAxiosLikeError = (error: unknown): error is { response?: { status?: numb
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => {
-    try {
-      const storage = localStorage.getItem('auth-storage');
-      if (storage) {
-        const parsed = JSON.parse(storage) as { state?: { token?: string } };
-        if (parsed.state?.token) return parsed.state.token;
-      }
-    } catch {
-      // ignore parse error
-    }
-    return null;
-  });
+  const [token, setToken] = useState<string | null>(() => readFrontpageToken() || readGuestSession()?.token || null);
+  const [authMode, setAuthMode] = useState<'frontpage' | 'guest' | null>(() => readFrontpageToken() ? 'frontpage' : (readGuestSession()?.token ? 'guest' : null));
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const hasAttemptedGuestLinkRef = useRef(false);
 
   const login = useCallback(async () => {
     try {
-      const response = await apiClient.get<PortalUrlResponse>(
-        `/auth/login-url?return_url=${encodeURIComponent(window.location.href)}`
-      );
-      const data = response.data;
-      const loginUrl = data.data?.login_url;
-      if (data.success && loginUrl) window.location.href = loginUrl;
-    } catch (error) {
-      console.error('Failed to get login URL', error);
+      const response = await apiClient.get<PortalUrlResponse>(`/auth/login-url?return_url=${encodeURIComponent(window.location.href)}`);
+      const loginUrl = response.data.data?.login_url;
+      if (response.data.success && loginUrl) window.location.href = loginUrl;
+    } catch (err) {
+      console.error('Failed to get login URL', err);
     }
   }, []);
 
   const register = useCallback(async () => {
     try {
-      const response = await apiClient.get<PortalUrlResponse>(
-        `/auth/register-url?return_url=${encodeURIComponent(window.location.href)}`
-      );
-      const data = response.data;
-      const registerUrl = data.data?.register_url;
-      if (data.success && registerUrl) window.location.href = registerUrl;
-    } catch (error) {
-      console.error('Failed to get register URL', error);
+      const response = await apiClient.get<PortalUrlResponse>(`/auth/register-url?return_url=${encodeURIComponent(window.location.href)}`);
+      const registerUrl = response.data.data?.register_url;
+      if (response.data.success && registerUrl) window.location.href = registerUrl;
+    } catch (err) {
+      console.error('Failed to get register URL', err);
     }
   }, []);
 
-  const initializeUser = useCallback(async (authToken: string | null) => {
-    if (!authToken) return;
+  const continueAsGuest = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const existing = readGuestSession();
+      if (existing?.token && existing.user) {
+        setToken(existing.token);
+        setAuthMode('guest');
+        setUser(existing.user);
+        return;
+      }
+
+      const response = await apiClient.post('/auth/guest-session');
+      const data = response.data as { success: boolean; data?: { token?: string; user?: User }; message?: string };
+      if (!data.success || !data.data?.token || !data.data?.user) {
+        throw new Error(data.message || 'Failed to create guest session');
+      }
+
+      const session = { token: data.data.token, user: { ...data.data.user, is_guest: true, auth_type: 'guest' as const } };
+      saveGuestSession(session);
+      setToken(session.token);
+      setAuthMode('guest');
+      setUser(session.user);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const getLinkAccountUrl = useCallback(() => {
+    const guestUserId = user?.guest_user_id || (user?.is_guest ? user.id : null);
+    const base = withRedirectParam(import.meta.env.VITE_WEB_HATCHERY_SIGNUP_URL || '/signup');
+    return guestUserId ? appendQueryParam(base, 'guest_user_id', String(guestUserId)) : base;
+  }, [user]);
+
+  const initializeUser = useCallback(async (authToken: string | null, mode: 'frontpage' | 'guest' | null) => {
+    if (!authToken) {
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setIsLoading(true);
-
       const response = await apiClient.get<SessionResponse>('/auth/session', {
         headers: {
           Authorization: `Bearer ${authToken}`
@@ -82,14 +192,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
 
       const data = response.data;
-      const maybeUser =
-        data.data && 'user' in data.data ? data.data.user : (data.data as User | undefined);
-      if (data.success && maybeUser) setUser(maybeUser);
-    } catch (error: unknown) {
-      if (isAxiosLikeError(error) && error.response?.status === 401) {
-        console.warn('Backend rejected token (401). Showing login URL instead of redirect.');
+      const maybeUser = data.data && 'user' in data.data ? data.data.user : (data.data as User | undefined);
+      if (data.success && maybeUser) {
+        const frontpageUser = mode === 'frontpage' ? readFrontpageUser() : null;
+        const isGuest = Boolean(maybeUser.is_guest || mode === 'guest');
+        setUser({
+          ...maybeUser,
+          username: mode === 'frontpage' ? (frontpageUser?.username as string || maybeUser.username) : maybeUser.username,
+          display_name: mode === 'frontpage' ? (frontpageUser?.display_name as string || maybeUser.display_name) : maybeUser.display_name,
+          is_guest: isGuest,
+          auth_type: isGuest ? 'guest' : 'frontpage',
+        });
+      }
+    } catch (err: unknown) {
+      if (isAxiosLikeError(err) && err.response?.status === 401) {
+        setUser(null);
+        setToken(null);
+        setAuthMode(null);
       } else {
-        console.error('Failed to initialize user:', error);
+        setError(err instanceof Error ? err.message : 'Failed to initialize user');
       }
     } finally {
       setIsLoading(false);
@@ -102,103 +223,92 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     if (urlToken) {
       setToken(urlToken);
-
-      const authState = {
-        state: {
-          token: urlToken,
-          isAuthenticated: true,
-          user: null,
-        },
-        version: 0,
-      };
+      setAuthMode('frontpage');
+      const authState = { state: { token: urlToken, isAuthenticated: true, user: null }, version: 0 };
       localStorage.setItem('auth-storage', JSON.stringify(authState));
-
       window.history.replaceState({}, document.title, window.location.pathname);
-      void initializeUser(urlToken);
+      void initializeUser(urlToken, 'frontpage');
       return;
     }
 
     if (token) {
-      void initializeUser(token);
+      void initializeUser(token, authMode);
     } else {
       setIsLoading(false);
     }
-  }, [initializeUser, token]);
+  }, [authMode, initializeUser, token]);
 
   useEffect(() => {
     if (token) setTokenProvider(async () => token);
     else setTokenProvider(null);
   }, [token]);
 
+  useEffect(() => {
+    const guestUserId = readGuestUserIdFromUrl();
+    if (!guestUserId || hasAttemptedGuestLinkRef.current) return;
+    if (authMode !== 'frontpage' || !token || !user || user.is_guest) return;
+    hasAttemptedGuestLinkRef.current = true;
+
+    (async () => {
+      try {
+        await apiClient.post('/auth/link-guest', { guest_user_id: guestUserId }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        clearGuestSession();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to link guest account');
+      } finally {
+        removeGuestUserIdFromUrl();
+      }
+    })();
+  }, [authMode, token, user]);
+
   const logout = useCallback(() => {
+    if (authMode === 'guest') {
+      clearGuestSession();
+    }
     setUser(null);
     setToken(null);
+    setAuthMode(null);
     localStorage.removeItem('auth-storage');
-  }, []);
+  }, [authMode]);
 
   const refreshUser = useCallback(async () => {
-    if (token) await initializeUser(token);
-  }, [initializeUser, token]);
+    if (token) await initializeUser(token, authMode);
+  }, [authMode, initializeUser, token]);
 
-  const updatePreferences = useCallback(
-    async (preferences: Preferences) => {
-      if (!user || !token) return;
-
-      try {
-        const response = await apiClient.put(
-          '/auth/preferences',
-          { preferences },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          }
-        );
-
-        if (response.status >= 200 && response.status < 300) {
-          setUser(prev => (prev ? { ...prev, game_preferences: preferences } : null));
-        }
-      } catch (error) {
-        console.error('Failed to update preferences:', error);
+  const updatePreferences = useCallback(async (preferences: Preferences) => {
+    if (!user || !token) return;
+    try {
+      const response = await apiClient.put('/auth/preferences', { preferences }, { headers: { Authorization: `Bearer ${token}` } });
+      if (response.status >= 200 && response.status < 300) {
+        setUser(prev => (prev ? { ...prev, game_preferences: preferences } : null));
       }
-    },
-    [token, user]
-  );
+    } catch (err) {
+      console.error('Failed to update preferences:', err);
+    }
+  }, [token, user]);
 
   const isAdmin = useCallback((): boolean => user?.role === 'admin', [user?.role]);
+  const hasRole = useCallback((role: string): boolean => (user?.role === 'admin' ? true : user?.role === role), [user?.role]);
 
-  const hasRole = useCallback(
-    (role: string): boolean => (user?.role === 'admin' ? true : user?.role === role),
-    [user?.role]
-  );
-
-  const value = useMemo(
-    () => ({
-      user,
-      token,
-      isAuthenticated: !!user && !!token,
-      isLoading,
-      login,
-      register,
-      logout,
-      refreshUser,
-      updatePreferences,
-      isAdmin,
-      hasRole,
-    }),
-    [
-      hasRole,
-      isAdmin,
-      isLoading,
-      login,
-      logout,
-      refreshUser,
-      register,
-      token,
-      updatePreferences,
-      user,
-    ]
-  );
+  const value = useMemo(() => ({
+    user,
+    token,
+    isAuthenticated: !!user && !!token,
+    isLoading,
+    error,
+    authMode,
+    login,
+    register,
+    continueAsGuest,
+    getLinkAccountUrl,
+    logout,
+    refreshUser,
+    updatePreferences,
+    isAdmin,
+    hasRole,
+  }), [authMode, continueAsGuest, error, getLinkAccountUrl, hasRole, isAdmin, isLoading, login, logout, refreshUser, register, token, updatePreferences, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

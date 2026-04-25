@@ -30,6 +30,7 @@ class BettingController
      */    public function placeDivineBet(Request $request, Response $response): Response
     {
         $body = json_decode($request->getBody(), true);
+        $localUser = $request->getAttribute('user');
         
         // Validate required fields
         $requiredFields = ['betType', 'targetId', 'description', 'timeframe', 'confidence', 'divineFavorStake'];
@@ -57,6 +58,10 @@ class BettingController
                     'code' => 'VALIDATION_ERROR'
                 ]
             ], 400);
+        }
+        
+        if ($localUser && !isset($body['playerId'])) {
+            $body['playerId'] = (string) $localUser->id;
         }
         
         return $this->handleApiAction(
@@ -214,3 +219,4 @@ class BettingController
         ]);
     }
 }
+

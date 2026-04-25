@@ -7,14 +7,9 @@ interface ProtectedRouteProps {
   fallback?: React.ReactNode;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  children,
-  requireAdmin = false,
-  fallback,
-}) => {
-  const { isAuthenticated, isLoading, user, isAdmin, login } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requireAdmin = false, fallback }) => {
+  const { isAuthenticated, isLoading, user, isAdmin, login, continueAsGuest } = useAuth();
 
-  // Show loading state
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
@@ -26,44 +21,35 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Check authentication
   if (!isAuthenticated || !user) {
-    if (fallback) {
-      return <>{fallback}</>;
-    }
-
+    if (fallback) return <>{fallback}</>;
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-900">
+      <div className="flex items-center justify-center min-h-screen bg-gray-900 px-4">
         <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center max-w-md">
-          <h2 className="text-2xl font-bold text-white mb-4">Authentication Required</h2>
+          <h2 className="text-2xl font-bold text-white mb-4">Enter Mytherra</h2>
           <p className="text-gray-300 mb-6">
-            You need to be logged in to access Mytherra. Please log in with your WebHatchery
-            account.
+            Start instantly as a guest or sign in with your WebHatchery account and link the session later.
           </p>
-          <button
-            onClick={() => login()}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition duration-200"
-          >
-            Login with WebHatchery
-          </button>
+          <div className="grid gap-3">
+            <button onClick={() => { void continueAsGuest(); }} className="bg-yellow-500 hover:bg-yellow-400 text-gray-900 font-bold py-2 px-6 rounded transition duration-200">
+              Continue as Guest
+            </button>
+            <button onClick={() => login()} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded transition duration-200">
+              Login with WebHatchery
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
-  // Check admin requirement
   if (requireAdmin && !isAdmin()) {
-    if (fallback) {
-      return <>{fallback}</>;
-    }
-
+    if (fallback) return <>{fallback}</>;
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-900">
         <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center max-w-md">
           <h2 className="text-2xl font-bold text-white mb-4">Access Denied</h2>
-          <p className="text-gray-300 mb-6">
-            You need administrator privileges to access this area.
-          </p>
+          <p className="text-gray-300 mb-6">You need administrator privileges to access this area.</p>
           <p className="text-sm text-gray-400">Current role: {user.role}</p>
         </div>
       </div>

@@ -6,7 +6,6 @@ use App\Core\Response;
 use App\Core\Request;
 use App\Models\User;
 use Firebase\JWT\JWT;
-use Firebase\JWT\Key;
 
 class AuthController
 {
@@ -16,148 +15,200 @@ class AuthController
     public function __construct()
     {
         $this->authPortalBaseUrl = $_ENV['AUTH_PORTAL_BASE_URL'] ?? 'http://localhost:8000';
-        // In a real DI container this would be injected, but for now we instantiate it
         $this->authService = new \App\Services\AuthService();
     }
 
-    /**
-     * Handle callback from auth portal with JWT token
-     */
     public function callback(Request $request, Response $response): Response
     {
         $queryParams = $request->getQueryParams();
         $token = $queryParams['token'] ?? null;
 
         if (!$token) {
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'No token provided'
-            ]));
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'No token provided']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
         try {
-            // Validate token
             $authUser = $this->authService->validateToken($token);
-
-            // Create or update local user
             $localUser = $this->authService->syncUser($authUser);
-            
-            // Assuming User model has these properties public or via getters
+
             $response->getBody()->write(json_encode([
                 'success' => true,
                 'message' => 'Authentication successful',
                 'data' => [
                     'token' => $token,
-                    'user' => [
-                        'id' => $localUser->id,
-                        'auth_user_id' => $localUser->auth_user_id,
-                        'display_name' => $localUser->display_name ?? $authUser['username'],
-                        'divine_influence' => $localUser->divine_influence ?? 0,
-                        'divine_favor' => $localUser->divine_favor ?? 0,
-                        'role' => $authUser['role'] ?? 'user'
-                    ]
+                    'user' => $this->serializeUser($localUser, $authUser)
                 ]
             ]));
-            
+
             return $response->withHeader('Content-Type', 'application/json');
-            
+
         } catch (\Exception $e) {
             error_log('Auth callback error: ' . $e->getMessage());
-            
-            $status = 500;
-            $message = 'Authentication failed';
-
-            if (strpos($e->getMessage(), 'Invalid token') !== false) {
-                $status = 401;
-                $message = 'Invalid token';
-            } elseif (strpos($e->getMessage(), 'Server configuration') !== false) {
-                $message = 'Server configuration error';
-            }
-
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => $message
-            ]));
+            $status = strpos($e->getMessage(), 'Invalid token') !== false ? 401 : 500;
+            $message = $status === 401 ? 'Invalid token' : 'Authentication failed';
+            $response->getBody()->write(json_encode(['success' => false, 'message' => $message]));
             return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
         }
     }
 
-    /**
-     * Get current authenticated user information
-     */
     public function getCurrentUser(Request $request, Response $response): Response
     {
         $authUser = $request->getAttribute('auth_user');
         $localUser = $request->getAttribute('user');
 
         if (!$authUser || !$localUser) {
-            error_log(
-                'AuthController::getCurrentUser missing auth context - has_auth_user='
-                . ($authUser ? 'yes' : 'no')
-                . ' has_local_user='
-                . ($localUser ? 'yes' : 'no')
-            );
-
-            if ($authUser) {
-                $response->getBody()->write(json_encode([
-                    'success' => true,
-                    'data' => [
-                        'user' => [
-                            'id' => (int) ($authUser['user_id'] ?? 0),
-                            'auth_user_id' => (int) ($authUser['user_id'] ?? 0),
-                            'email' => $authUser['email'] ?? null,
-                            'username' => $authUser['username'] ?? null,
-                            'display_name' => $authUser['username'] ?? null,
-                            'divine_influence' => 0,
-                            'divine_favor' => 0,
-                            'betting_stats' => [],
-                            'game_preferences' => [],
-                            'role' => $authUser['role'] ?? 'user',
-                            'is_active' => true
-                        ]
-                    ]
-                ]));
-                return $response->withHeader('Content-Type', 'application/json');
-            }
-
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'User not authenticated'
-            ]));
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'User not authenticated']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
         }
 
         $response->getBody()->write(json_encode([
             'success' => true,
             'data' => [
-                'user' => [
-                    'id' => $localUser->id,
-                    'auth_user_id' => $localUser->auth_user_id,
-                    'email' => $localUser->auth_email,
-                    'username' => $localUser->auth_username,
-                    'display_name' => $localUser->display_name,
-                    'divine_influence' => $localUser->divine_influence,
-                    'divine_favor' => $localUser->divine_favor,
-                    'betting_stats' => $localUser->betting_stats ?? [],
-                    'game_preferences' => $localUser->game_preferences ?? [],
-                    'role' => $authUser['role'] ?? 'user',
-                    'is_active' => $localUser->is_active ?? true
-                ]
+                'user' => $this->serializeUser($localUser, $authUser)
             ]
         ]));
 
         return $response->withHeader('Content-Type', 'application/json');
     }
 
-    /**
-     * Get login redirect URL
-     */
+    public function createGuestSession(Request $request, Response $response): Response
+    {
+        $jwtSecret = trim((string) ($_ENV['JWT_SECRET'] ?? ''));
+        if ($jwtSecret === '') {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'message' => 'Guest session is unavailable'
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+
+        $guestExternalId = 'guest_' . bin2hex(random_bytes(16));
+        $guestUser = User::createOrUpdateFromAuthData([
+            'user_id' => $guestExternalId,
+            'username' => 'guest_' . substr(bin2hex(random_bytes(4)), 0, 8),
+            'display_name' => 'Guest Oracle',
+            'auth_type' => 'guest',
+            'is_guest' => true,
+            'role' => 'guest',
+            'email' => '',
+        ]);
+
+        $now = time();
+        $claims = [
+            'iss' => $_ENV['JWT_ISSUER'] ?? 'webhatchery',
+            'aud' => $_ENV['JWT_AUDIENCE'] ?? ($_ENV['APP_URL'] ?? 'mytherra-app'),
+            'iat' => $now,
+            'nbf' => $now - 5,
+            'exp' => $now + (60 * 60 * 24 * 365),
+            'jti' => bin2hex(random_bytes(16)),
+            'sub' => $guestExternalId,
+            'user_id' => $guestExternalId,
+            'username' => $guestUser->auth_username ?: $guestUser->username,
+            'display_name' => $guestUser->display_name ?: 'Guest Oracle',
+            'email' => '',
+            'role' => 'guest',
+            'auth_type' => 'guest',
+            'is_guest' => true,
+        ];
+
+        $token = JWT::encode($claims, $jwtSecret, 'HS256');
+        $response->getBody()->write(json_encode([
+            'success' => true,
+            'message' => 'Guest session created',
+            'data' => [
+                'token' => $token,
+                'user' => $this->serializeUser($guestUser, [
+                    'role' => 'guest',
+                    'roles' => ['guest'],
+                    'is_guest' => true,
+                    'auth_type' => 'guest',
+                    'user_id' => $guestExternalId,
+                ])
+            ]
+        ]));
+
+        return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
+    }
+
+    public function linkGuestAccount(Request $request, Response $response): Response
+    {
+        $authUser = $request->getAttribute('auth_user');
+        $localUser = $request->getAttribute('user');
+        if (!$authUser || !$localUser) {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'User not authenticated']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(401);
+        }
+
+        if (($authUser['role'] ?? 'user') === 'admin') {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Guest accounts cannot be linked to admin accounts']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(403);
+        }
+
+        if (!empty($authUser['is_guest'])) {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Linking requires a signed-in non-guest account']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $payload = json_decode((string) $request->getBody(), true) ?: [];
+        $guestUserId = trim((string) ($payload['guest_user_id'] ?? ''));
+        if ($guestUserId === '' || !str_starts_with($guestUserId, 'guest_')) {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Invalid guest_user_id']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $guestUser = User::where('auth0_id', $guestUserId)->first();
+        if (!$guestUser) {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Guest account not found']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
+        }
+
+        $movedByTable = [
+            'divine_bets' => 0,
+            'divine_influence_actions' => 0,
+            'users' => 0,
+        ];
+
+        \Illuminate\Database\Capsule\Manager::connection()->transaction(function () use ($guestUser, $localUser, $guestUserId, &$movedByTable) {
+            $movedByTable['divine_bets'] = \Illuminate\Database\Capsule\Manager::table('divine_bets')
+                ->where('player_id', (string) $guestUser->id)
+                ->update(['player_id' => (string) $localUser->id]);
+
+            if (\Illuminate\Database\Capsule\Manager::schema()->hasTable('divine_influence_actions')) {
+                $movedByTable['divine_influence_actions'] = \Illuminate\Database\Capsule\Manager::table('divine_influence_actions')
+                    ->where('player_id', (string) $guestUser->id)
+                    ->update(['player_id' => (string) $localUser->id]);
+            }
+
+            $localUser->divine_influence = (int) $localUser->divine_influence + (int) $guestUser->divine_influence;
+            $localUser->divine_favor = (int) $localUser->divine_favor + (int) $guestUser->divine_favor;
+            $localUser->experience = (int) $localUser->experience + (int) $guestUser->experience;
+            $localUser->level = max((int) $localUser->level, (int) $guestUser->level);
+            $localUser->betting_stats = array_merge($guestUser->betting_stats ?? [], $localUser->betting_stats ?? []);
+            $localUser->game_preferences = array_merge($guestUser->game_preferences ?? [], $localUser->game_preferences ?? []);
+            $localUser->save();
+
+            $movedByTable['users'] = $guestUser->delete() ? 1 : 0;
+        });
+
+        $response->getBody()->write(json_encode([
+            'success' => true,
+            'message' => 'Guest account data linked successfully',
+            'data' => [
+                'guest_user_id' => $guestUserId,
+                'linked_to_user_id' => (string) $localUser->id,
+                'moved_rows_by_table' => $movedByTable,
+                'total_moved_rows' => array_sum($movedByTable),
+            ]
+        ]));
+
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
     public function getLoginUrl(Request $request, Response $response): Response
     {
         $queryParams = $request->getQueryParams();
         $returnUrl = $queryParams['return_url'] ?? null;
-
         $params = [];
         if ($returnUrl) {
             $params['redirect'] = urlencode($returnUrl);
@@ -165,24 +216,14 @@ class AuthController
         $queryString = !empty($params) ? '?' . http_build_query($params) : '';
         $loginUrl = $this->authPortalBaseUrl . '/login' . $queryString;
 
-        $response->getBody()->write(json_encode([
-            'success' => true,
-            'data' => [
-                'login_url' => $loginUrl
-            ]
-        ]));
-
+        $response->getBody()->write(json_encode(['success' => true, 'data' => ['login_url' => $loginUrl]]));
         return $response->withHeader('Content-Type', 'application/json');
     }
 
-    /**
-     * Get register redirect URL
-     */
     public function getRegisterUrl(Request $request, Response $response): Response
     {
         $queryParams = $request->getQueryParams();
         $returnUrl = $queryParams['return_url'] ?? null;
-
         $params = [];
         if ($returnUrl) {
             $params['redirect'] = urlencode($returnUrl);
@@ -190,76 +231,55 @@ class AuthController
         $queryString = !empty($params) ? '?' . http_build_query($params) : '';
         $registerUrl = $this->authPortalBaseUrl . '/register' . $queryString;
 
-        $response->getBody()->write(json_encode([
-            'success' => true,
-            'data' => [
-                'register_url' => $registerUrl
-            ]
-        ]));
-
+        $response->getBody()->write(json_encode(['success' => true, 'data' => ['register_url' => $registerUrl]]));
         return $response->withHeader('Content-Type', 'application/json');
     }
 
-    /**
-     * Update user game preferences
-     */
     public function updatePreferences(Request $request, Response $response): Response
     {
         $localUser = $request->getAttribute('user');
-        
         if (!$localUser) {
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'User not found'
-            ]));
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'User not found']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(404);
         }
 
-        $body = json_decode((string)$request->getBody(), true);
+        $body = json_decode((string) $request->getBody(), true);
         $preferences = $body['preferences'] ?? [];
-
         if (!is_array($preferences)) {
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'Invalid preferences format'
-            ]));
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Invalid preferences format']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
-        try {
-            $localUser->updateGamePreferences($preferences);
-            
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'message' => 'Preferences updated successfully',
-                'data' => [
-                    'preferences' => $localUser->game_preferences
-                ]
-            ]));
-            
-            return $response->withHeader('Content-Type', 'application/json');
-            
-        } catch (\Exception $e) {
-            error_log('Failed to update preferences: ' . $e->getMessage());
-            
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'Failed to update preferences'
-            ]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-        }
+        $localUser->updateGamePreferences($preferences);
+        $response->getBody()->write(json_encode(['success' => true, 'message' => 'Preferences updated successfully', 'data' => ['preferences' => $localUser->game_preferences]]));
+        return $response->withHeader('Content-Type', 'application/json');
     }
 
-    /**
-     * Logout
-     */
     public function logout(Request $request, Response $response): Response
     {
-        $response->getBody()->write(json_encode([
-            'success' => true,
-            'message' => 'Logged out successfully'
-        ]));
-
+        $response->getBody()->write(json_encode(['success' => true, 'message' => 'Logged out successfully']));
         return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    private function serializeUser(User $user, array $authUser): array
+    {
+        $isGuest = (bool) ($authUser['is_guest'] ?? false) || (($authUser['auth_type'] ?? 'frontpage') === 'guest');
+        return [
+            'id' => $user->id,
+            'auth_user_id' => $user->auth_user_id,
+            'email' => $user->auth_email,
+            'username' => $user->auth_username,
+            'display_name' => $user->display_name,
+            'divine_influence' => $user->divine_influence,
+            'divine_favor' => $user->divine_favor,
+            'betting_stats' => $user->betting_stats ?? [],
+            'game_preferences' => $user->game_preferences ?? [],
+            'role' => $isGuest ? 'guest' : ($authUser['role'] ?? 'user'),
+            'roles' => $authUser['roles'] ?? ($isGuest ? ['guest'] : ['user']),
+            'is_active' => $user->is_active ?? true,
+            'is_guest' => $isGuest,
+            'auth_type' => $isGuest ? 'guest' : 'frontpage',
+            'guest_user_id' => $isGuest ? ($authUser['user_id'] ?? null) : null,
+        ];
     }
 }

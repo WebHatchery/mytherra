@@ -2,17 +2,12 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/useAuth';
 
 const UserInfo: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, getLinkAccountUrl } = useAuth();
   const [showDropdown, setShowDropdown] = useState(false);
 
   if (!user) {
     return null;
   }
-
-  const handleLogout = () => {
-    setShowDropdown(false);
-    logout();
-  };
 
   return (
     <div className="relative">
@@ -22,39 +17,23 @@ const UserInfo: React.FC = () => {
       >
         <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
           <span className="text-white text-sm font-bold">
-            {user.display_name?.charAt(0).toUpperCase() ||
-              user.username?.charAt(0).toUpperCase() ||
-              'U'}
+            {user.display_name?.charAt(0).toUpperCase() || user.username?.charAt(0).toUpperCase() || 'U'}
           </span>
         </div>
         <div className="text-left hidden sm:block">
-          <p className="text-white text-sm font-medium">{user.display_name || user.username}</p>
-          <p className="text-gray-400 text-xs">
-            {user.divine_influence} Influence | {user.divine_favor} Favor
-          </p>
+          <p className="text-white text-sm font-medium">{user.is_guest ? 'Guest Oracle' : (user.display_name || user.username)}</p>
+          <p className="text-gray-400 text-xs">{user.divine_influence} Influence | {user.divine_favor} Favor</p>
         </div>
-        <svg
-          className={`w-4 h-4 text-gray-400 transition-transform ${showDropdown ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
       </button>
 
       {showDropdown && (
         <div className="absolute right-0 mt-2 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50">
           <div className="p-4 border-b border-gray-700">
             <p className="text-white font-medium">{user.display_name || user.username}</p>
-            <p className="text-gray-400 text-sm">{user.email}</p>
+            <p className="text-gray-400 text-sm">{user.is_guest ? 'Guest session' : user.email}</p>
             <div className="flex items-center space-x-4 mt-2">
-              <span className="text-xs text-gray-400">
-                Role: <span className="text-blue-400 font-medium">{user.role}</span>
-              </span>
-              {isAdmin() && (
-                <span className="bg-red-600 text-white text-xs px-2 py-1 rounded">Admin</span>
-              )}
+              <span className="text-xs text-gray-400">Role: <span className="text-blue-400 font-medium">{user.role}</span></span>
+              {isAdmin() && <span className="bg-red-600 text-white text-xs px-2 py-1 rounded">Admin</span>}
             </div>
           </div>
 
@@ -70,11 +49,14 @@ const UserInfo: React.FC = () => {
               </div>
             </div>
 
-            <button
-              onClick={handleLogout}
-              className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-3 rounded transition duration-200"
-            >
-              Logout
+            {user.is_guest && (
+              <a href={getLinkAccountUrl()} className="block w-full bg-yellow-500 hover:bg-yellow-400 text-gray-900 text-sm py-2 px-3 rounded transition duration-200 text-center mb-2">
+                Link Account
+              </a>
+            )}
+
+            <button onClick={logout} className="w-full bg-red-600 hover:bg-red-700 text-white text-sm py-2 px-3 rounded transition duration-200">
+              {user.is_guest ? 'Exit Guest' : 'Logout'}
             </button>
           </div>
         </div>

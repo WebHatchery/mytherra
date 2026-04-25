@@ -73,45 +73,84 @@ class User extends Model
         }
     }
 
-    /**
-     * Create or update a user from auth portal data
-     */
     public static function createOrUpdateFromAuthData(array $authData): self
     {
-        $user = self::where('auth_user_id', $authData['user_id'])->first();
-        
+        $isGuest = (bool) ($authData['is_guest'] ?? false) || (($authData['auth_type'] ?? 'frontpage') === 'guest');
+        $externalId = (string) ($authData['user_id'] ?? '');
+
+        if ($isGuest) {
+            $user = self::where('auth0_id', $externalId)->first();
+            if (!$user) {
+                $baseUsername = 'guest_' . substr(preg_replace('/[^a-zA-Z0-9]/', '', $externalId), 0, 10);
+                $username = $baseUsername;
+                $counter = 1;
+                while (self::where('username', $username)->exists()) {
+                    $counter++;
+                    $username = $baseUsername . '_' . $counter;
+                }
+
+                $user = new self();
+                $user->auth0_id = $externalId;
+                $user->auth_username = $username;
+                $user->username = $username;
+                $user->display_name = 'Guest Oracle';
+                $user->auth_email = '';
+                $user->email = '';
+                $user->divine_influence = 100;
+                $user->divine_favor = 100;
+                $user->betting_stats = [];
+                $user->game_preferences = [];
+            }
+
+            $user->is_active = true;
+            $user->save();
+            return $user;
+        }
+
+        $user = null;
+        if ($externalId !== '' && ctype_digit($externalId)) {
+            $user = self::where('auth_user_id', (int) $externalId)->first();
+        }
+        if (!$user && $externalId !== '') {
+            $user = self::where('auth0_id', $externalId)->first();
+        }
+        if (!$user && !empty($authData['email'])) {
+            $user = self::where('auth_email', $authData['email'])->orWhere('email', $authData['email'])->first();
+        }
+
         if (!$user) {
             $user = new self();
-            $user->auth_user_id = $authData['user_id'];
-            $user->divine_influence = 100; // Starting influence
-            $user->divine_favor = 100; // Starting favor
+            if ($externalId !== '' && ctype_digit($externalId)) {
+                $user->auth_user_id = (int) $externalId;
+            }
+            $user->divine_influence = 100;
+            $user->divine_favor = 100;
             $user->betting_stats = [];
             $user->game_preferences = [];
         }
-        
-        // Update auth portal data
+
+        if ($externalId !== '') {
+            $user->auth0_id = $externalId;
+        }
+        if ($externalId !== '' && ctype_digit($externalId)) {
+            $user->auth_user_id = (int) $externalId;
+        }
         $user->auth_email = $authData['email'] ?? $user->auth_email;
-        $user->auth_username = $authData['username'] ?? $user->auth_username ?? $authData['email'] ?? 'user_' . $authData['user_id'];
+        $user->auth_username = $authData['username'] ?? $user->auth_username ?? $authData['email'] ?? 'user_' . $externalId;
+        $user->username = $user->username ?? $user->auth_username;
         $user->display_name = $authData['display_name'] ?? $authData['username'] ?? $user->display_name ?? $user->auth_username;
         $user->is_active = true;
-        
         $user->save();
-        
+
         return $user;
     }
 
-    /**
-     * Add divine influence
-     */
     public function addDivineInfluence(int $amount): bool
     {
         $this->divine_influence += $amount;
         return $this->save();
     }
 
-    /**
-     * Spend divine influence
-     */
     public function spendDivineInfluence(int $amount): bool
     {
         if ($this->divine_influence < $amount) {
@@ -121,18 +160,12 @@ class User extends Model
         return $this->save();
     }
 
-    /**
-     * Add divine favor
-     */
     public function addDivineFavor(int $amount): bool
     {
         $this->divine_favor += $amount;
         return $this->save();
     }
 
-    /**
-     * Spend divine favor
-     */
     public function spendDivineFavor(int $amount): bool
     {
         if ($this->divine_favor < $amount) {
@@ -142,25 +175,16 @@ class User extends Model
         return $this->save();
     }
 
-    /**
-     * Get divine influence
-     */
     public function getDivineInfluence(): int
     {
         return $this->divine_influence;
     }
 
-    /**
-     * Get divine favor
-     */
     public function getDivineFavor(): int
     {
         return $this->divine_favor;
     }
 
-    /**
-     * Update betting statistics
-     */
     public function updateBettingStats(array $stats): bool
     {
         $currentStats = $this->betting_stats ?? [];
@@ -168,9 +192,6 @@ class User extends Model
         return $this->save();
     }
 
-    /**
-     * Update game preferences
-     */
     public function updateGamePreferences(array $preferences): bool
     {
         $currentPreferences = $this->game_preferences ?? [];
@@ -178,37 +199,23 @@ class User extends Model
         return $this->save();
     }
 
-    /**
-     * Add experience and handle level ups (MMO feature)
-     */
     public function addExperience(int $amount): bool
     {
         $this->experience += $amount;
-        
-        // Simple level calculation - level up every 1000 XP
         $newLevel = intval($this->experience / 1000) + 1;
         if ($newLevel > $this->level) {
             $this->level = $newLevel;
         }
-        
         return $this->save();
     }
 
-    /**
-     * Get level progress (percentage to next level)
-     */
     public function getLevelProgress(): float
     {
         $currentLevelXP = ($this->level - 1) * 1000;
-        $nextLevelXP = $this->level * 1000;
         $progressXP = $this->experience - $currentLevelXP;
-        
         return ($progressXP / 1000) * 100;
     }
 
-    /**
-     * Join a guild (MMO feature)
-     */
     public function joinGuild(int $guildId, string $rank = 'member'): bool
     {
         $this->guild_id = $guildId;
@@ -216,9 +223,6 @@ class User extends Model
         return $this->save();
     }
 
-    /**
-     * Leave guild (MMO feature)
-     */
     public function leaveGuild(): bool
     {
         $this->guild_id = null;
@@ -226,9 +230,6 @@ class User extends Model
         return $this->save();
     }
 
-    /**
-     * Promote in guild (MMO feature)
-     */
     public function promoteInGuild(string $newRank): bool
     {
         if ($this->guild_id) {
@@ -238,28 +239,20 @@ class User extends Model
         return false;
     }
 
-    /**
-     * Get character power level (based on level, divine influence, and favor)
-     */
     public function getPowerLevel(): int
     {
         return ($this->level * 100) + $this->divine_influence + $this->divine_favor;
     }
 
-    /**
-     * Get character rank based on power level
-     */
     public function getCharacterRank(): string
     {
         $powerLevel = $this->getPowerLevel();
-        
         if ($powerLevel >= 10000) return 'Divine Champion';
         if ($powerLevel >= 5000) return 'Legendary Hero';
         if ($powerLevel >= 2500) return 'Epic Adventurer';
         if ($powerLevel >= 1000) return 'Veteran Explorer';
         if ($powerLevel >= 500) return 'Skilled Adventurer';
         if ($powerLevel >= 200) return 'Novice Explorer';
-        
         return 'Apprentice';
     }
 }

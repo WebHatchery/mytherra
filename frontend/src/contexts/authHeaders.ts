@@ -1,6 +1,5 @@
-// Keep auth header logic out of React component modules to satisfy react-refresh rules.
-
 let tokenProvider: (() => Promise<string | null>) | null = null;
+const GUEST_AUTH_STORAGE_KEY = 'mytherra-guest-session';
 
 export const setTokenProvider = (provider: (() => Promise<string | null>) | null) => {
   tokenProvider = provider;
@@ -17,7 +16,7 @@ export const getAuthHeaders = async (): Promise<HeadersInit> => {
       if (token) headers['Authorization'] = `Bearer ${token}`;
       return headers;
     } catch {
-      // Fall through to auth-storage
+      // Fall through to storage
     }
   }
 
@@ -27,6 +26,14 @@ export const getAuthHeaders = async (): Promise<HeadersInit> => {
     if (storage) {
       const parsed = JSON.parse(storage) as { state?: { token?: string } };
       token = parsed.state?.token ?? null;
+    }
+
+    if (!token) {
+      const guestStorage = localStorage.getItem(GUEST_AUTH_STORAGE_KEY);
+      if (guestStorage) {
+        const parsedGuest = JSON.parse(guestStorage) as { token?: string };
+        token = parsedGuest.token ?? null;
+      }
     }
   } catch {
     // ignore parse error

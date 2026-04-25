@@ -8,8 +8,12 @@ export interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  error: string | null;
+  authMode: 'frontpage' | 'guest' | null;
   login: () => Promise<void>;
   register: () => Promise<void>;
+  continueAsGuest: () => Promise<void>;
+  getLinkAccountUrl: () => string;
   logout: () => void;
   refreshUser: () => Promise<void>;
   updatePreferences: (preferences: Preferences) => Promise<void>;
