@@ -27,29 +27,29 @@ class BettingController
     /**
      * Create a new divine bet
      * POST /api/bets
-     */    public function placeDivineBet(Request $request, Response $response): Response
+     */
+    public function placeDivineBet(Request $request, Response $response): Response
     {
         $body = json_decode($request->getBody(), true);
         $localUser = $request->getAttribute('user');
-        
-        // Validate required fields
+
+    // Validate required fields
         $requiredFields = ['betType', 'targetId', 'description', 'timeframe', 'confidence', 'divineFavorStake'];
         try {
             ValidationHelper::validateRequiredFields($body, $requiredFields);
-            
-            // Validate bet type using model constant
+
+    // Validate bet type using model constant
             if (!DivineBet::validateBetType($body['betType'])) {
                 throw new \InvalidArgumentException('Invalid bet type');
             }
-            
-            // Validate confidence level
+
+    // Validate confidence level
             $validConfidenceLevels = ['long_shot', 'possible', 'likely', 'near_certain'];
             ValidationHelper::validateEnum($body['confidence'], $validConfidenceLevels, 'confidence');
 
-            // Validate numeric values
+    // Validate numeric values
             ValidationHelper::validatePositiveInt($body['timeframe'], 'timeframe');
             ValidationHelper::validatePositiveInt($body['divineFavorStake'], 'divineFavorStake');
-
         } catch (\InvalidArgumentException $e) {
             return $this->jsonResponse($response, [
                 'success' => false,
@@ -59,21 +59,24 @@ class BettingController
                 ]
             ], 400);
         }
-        
+
         if ($localUser && !isset($body['playerId'])) {
             $body['playerId'] = (string) $localUser->id;
         }
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->bettingActions->placeDivineBet($body),
             'placing divine bet',
             'Failed to place divine bet'
         );
-    }    /**
+    }
+
+    /**
      * Get divine bet by ID
      * GET /api/bets/:id
-     */    public function getDivineBetById(Request $request, Response $response, array $args): Response
+     */
+    public function getDivineBetById(Request $request, Response $response, array $args): Response
     {
         return $this->handleApiAction(
             $response,
@@ -97,14 +100,16 @@ class BettingController
             'limit' => isset($queryParams['limit']) ? min((int)$queryParams['limit'], 100) : 20,
             'offset' => isset($queryParams['offset']) ? (int)$queryParams['offset'] : 0
         ];
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->bettingActions->fetchAllDivineBets($filters),
             'fetching divine bets',
             'No divine bets found'
         );
-    }    /**
+    }
+
+    /**
      * Get betting odds
      * GET /api/betting-odds
      */
@@ -153,12 +158,12 @@ class BettingController
     public function createComboBet(Request $request, Response $response): Response
     {
         $body = json_decode($request->getBody(), true);
-        
+
         try {
             if (!isset($body['betIds']) || !is_array($body['betIds'])) {
                 throw new \InvalidArgumentException('betIds array is required');
             }
-            
+
             if (!isset($body['totalStake']) || !is_numeric($body['totalStake'])) {
                 throw new \InvalidArgumentException('totalStake is required');
             }
@@ -167,15 +172,15 @@ class BettingController
                 $body['betIds'],
                 (int) $body['totalStake']
             );
-            
+
             return $this->jsonResponse($response, [
-                'success' => true,
-                'data' => $comboBet
+            'success' => true,
+            'data' => $comboBet
             ]);
         } catch (\InvalidArgumentException $e) {
             return $this->jsonResponse($response, [
-                'success' => false,
-                'error' => ['message' => $e->getMessage()]
+            'success' => false,
+            'error' => ['message' => $e->getMessage()]
             ], 400);
         }
     }
@@ -187,22 +192,22 @@ class BettingController
     public function previewComboBet(Request $request, Response $response): Response
     {
         $body = json_decode($request->getBody(), true);
-        
+
         try {
             if (!isset($body['betIds']) || !is_array($body['betIds'])) {
                 throw new \InvalidArgumentException('betIds array is required');
             }
-            
+
             $preview = $this->comboBetService->previewComboOdds($body['betIds']);
-            
+
             return $this->jsonResponse($response, [
-                'success' => true,
-                'data' => $preview
+            'success' => true,
+            'data' => $preview
             ]);
         } catch (\InvalidArgumentException $e) {
             return $this->jsonResponse($response, [
-                'success' => false,
-                'error' => ['message' => $e->getMessage()]
+            'success' => false,
+            'error' => ['message' => $e->getMessage()]
             ], 400);
         }
     }
@@ -219,4 +224,3 @@ class BettingController
         ]);
     }
 }
-

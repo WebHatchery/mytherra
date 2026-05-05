@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class HeroEventMessage extends Model
 {
     protected $table = 'hero_event_messages';
-    
+
     protected $fillable = [
         'code',
         'message_template',
@@ -29,8 +29,12 @@ class HeroEventMessage extends Model
                 $table->id();
                 $table->string('code')->unique();
                 $table->text('message_template');
-                $table->string('category'); // level, movement, death, etc.
-                $table->string('subcategory')->nullable(); // For category-specific subdivisions
+                $table->string('category');
+
+    // level, movement, death, etc.
+                $table->string('subcategory')->nullable();
+
+    // For category-specific subdivisions
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
@@ -39,7 +43,7 @@ class HeroEventMessage extends Model
                 $table->index(['category', 'subcategory']);
             });
 
-            // Seed default messages
+    // Seed default messages
             self::seedDefaultMessages();
         }
     }
@@ -66,7 +70,7 @@ class HeroEventMessage extends Model
                 'category' => 'level',
                 'subcategory' => 'feat'
             ],
-            
+
             // Movement messages
             [
                 'code' => 'movement_stay',
@@ -99,7 +103,7 @@ class HeroEventMessage extends Model
         if ($category) {
             $query->where('category', $category);
         }
-        
+
         $message = $query->first();
         return $message ? $message->message_template : null;
     }

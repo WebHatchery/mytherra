@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class BuildingType extends Model
 {
     protected $table = 'building_types';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -27,6 +27,7 @@ class BuildingType extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -62,13 +63,13 @@ class BuildingType extends Model
                 $table->json('prerequisites')->nullable();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index(['is_active']);
                 $table->index(['code']);
                 $table->index(['category']);
             });
-            
-            // Seed default building types
+
+    // Seed default building types
             self::seedDefaultTypes();
         }
     }

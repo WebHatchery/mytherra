@@ -56,7 +56,6 @@ class AuthController
             ]));
 
             return $response->withHeader('Content-Type', 'application/json');
-
         } catch (\Exception $e) {
             error_log('Auth callback error: ' . $e->getMessage());
             $status = strpos($e->getMessage(), 'Invalid token') !== false ? 401 : 500;

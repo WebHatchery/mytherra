@@ -13,7 +13,8 @@ class HeroController
 
     public function __construct(
         private HeroActions $heroActions
-    ) {}
+    ) {
+    }
 
     /**
      * Get all heroes
@@ -30,7 +31,7 @@ class HeroController
 
     /**
      * Get hero by ID
-     */    
+     */
     public function getHeroById(Request $request, Response $response, array $args): Response
     {
         return $this->handleApiAction(

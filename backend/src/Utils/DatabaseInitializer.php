@@ -9,9 +9,9 @@ class DatabaseInitializer
 {
     public static function initialize(array $config = null): void
     {
-        $capsule = new Capsule;
+        $capsule = new Capsule();
 
-        // If no config provided, use environment variables
+    // If no config provided, use environment variables
         if ($config === null) {
             $config = [
                 'driver'    => Environment::required('DB_CONNECTION'),

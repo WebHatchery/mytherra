@@ -45,7 +45,6 @@ class AuthService
                 'auth_type' => $isGuest ? 'guest' : 'frontpage',
                 'is_guest' => $isGuest,
             ];
-
         } catch (\Exception $e) {
             throw new \Exception('Invalid token: ' . $e->getMessage());
         }

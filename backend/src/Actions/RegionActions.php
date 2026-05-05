@@ -22,18 +22,22 @@ class RegionActions
             error_log("Error in fetchAllRegions: " . $error->getMessage());
             throw new \Exception('Failed to fetch regions from database.');
         }
-    }    public function fetchRegionById(string $regionId)
+    }
+
+    public function fetchRegionById(string $regionId)
     {
         try {
             $region = $this->regionRepository->getById($regionId);
-            
+
             if (!$region) {
                 throw new \App\Core\Exceptions\ResourceNotFoundException("Region with ID {$regionId} not found");
             }
-            
+
             return $region;
         } catch (\App\Core\Exceptions\ResourceNotFoundException $error) {
-            throw $error; // Re-throw ResourceNotFoundException as-is
+            throw $error;
+
+    // Re-throw ResourceNotFoundException as-is
         } catch (\Exception $error) {
             error_log("Error in fetchRegionById for ID {$regionId}: " . $error->getMessage());
             throw new \Exception('Failed to fetch region from database.');
@@ -47,9 +51,9 @@ class RegionActions
             throw new \Exception("Region with ID {$regionId} not found for systemic update.");
         }
 
-        // Apply systemic changes logic here
+    // Apply systemic changes logic here
         // This would include prosperity/chaos changes, status updates, etc.
-        
+
         $region->save();
         return $region;
     }
@@ -57,7 +61,7 @@ class RegionActions
     public function createNewRegion(string $creatorName, int $currentYear)
     {
         $regionId = 'region-' . bin2hex(random_bytes(8));
-        
+
         $region = new Region([
             'id' => $regionId,
             'name' => $creatorName . "'s Domain",
@@ -67,7 +71,8 @@ class RegionActions
             'magic_affinity' => 50,
             'status' => 'developing',
             'event_ids' => []
-        ]);        $region->save();
+        ]);
+        $region->save();
         return $region;
     }
 
@@ -79,7 +84,7 @@ class RegionActions
         // Import LandmarkActions to reuse the existing method
         $landmarkRepo = new \App\Repositories\LandmarkRepository(\App\Repositories\DatabaseService::getInstance());
         $landmarkActions = new \App\Actions\LandmarkActions($landmarkRepo);
-        
+
         return $landmarkActions->getLandmarksByRegion($regionId);
     }
 }

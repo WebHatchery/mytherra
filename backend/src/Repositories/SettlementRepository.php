@@ -50,52 +50,52 @@ class SettlementRepository
     {
         try {
             $query = Settlement::query();
-            
-            // Apply filters using Eloquent
+
+    // Apply filters using Eloquent
             if (!empty($filters['type'])) {
                 $query->where('type', $filters['type']);
             }
-            
+
             if (!empty($filters['status'])) {
                 $query->where('status', $filters['status']);
             }
-            
+
             if (!empty($filters['region_id'])) {
                 $query->where('region_id', $filters['region_id']);
             }
-            
+
             if (!empty($filters['minPopulation'])) {
                 $query->where('population', '>=', $filters['minPopulation']);
             }
-            
+
             if (!empty($filters['maxPopulation'])) {
                 $query->where('population', '<=', $filters['maxPopulation']);
             }
-            
+
             if (!empty($filters['minProsperity'])) {
                 $query->where('prosperity', '>=', $filters['minProsperity']);
             }
-            
+
             if (!empty($filters['maxProsperity'])) {
                 $query->where('prosperity', '<=', $filters['maxProsperity']);
             }
-            
+
             if (!empty($filters['hasPort'])) {
                 $query->where('has_port', $filters['hasPort']);
             }
-            
+
             if (!empty($filters['tradeRoutes'])) {
                 $query->where('trade_routes', '>=', $filters['tradeRoutes']);
             }
 
-            // Apply ordering and pagination
+    // Apply ordering and pagination
             $settlements = $query
                 ->orderBy('population', 'desc')
                 ->orderBy('prosperity', 'desc')
                 ->skip($offset)
                 ->take($limit)
                 ->get();
-            
+
             return $settlements->map->toArray()->all();
         } catch (Exception $e) {
             Logger::error("Error fetching settlements: " . $e->getMessage());
@@ -143,8 +143,8 @@ class SettlementRepository
         try {
             $query = Settlement::query();
 
-            // Add filters for settlements that are more likely to have interesting events
-            $query->where(function($q) {
+    // Add filters for settlements that are more likely to have interesting events
+            $query->where(function ($q) {
                 $q->where('prosperity', '>=', 50)
                   ->orWhereIn('status', ['growing', 'declining', 'transforming'])
                   ->orWhere('cultural_influence', '>=', 60);
@@ -163,8 +163,8 @@ class SettlementRepository
             }
 
             $limit = $filters['limit'] ?? 5;
-            
-            // Order by prosperity and population to find most notable settlements
+
+    // Order by prosperity and population to find most notable settlements
             $settlements = $query
                 ->orderBy('prosperity', 'desc')
                 ->orderBy('population', 'desc')
@@ -187,7 +187,7 @@ class SettlementRepository
             if ($newPopulation < 0) {
                 throw new Exception("Population cannot be negative");
             }
-            
+
             $settlement = Settlement::find($settlementId);
             if (!$settlement) {
                 throw new Exception("Settlement not found for population update");
@@ -210,7 +210,7 @@ class SettlementRepository
             if ($newProsperity < 0 || $newProsperity > 100) {
                 throw new Exception("Prosperity must be between 0 and 100");
             }
-            
+
             $settlement = Settlement::find($settlementId);
             if (!$settlement) {
                 throw new Exception("Settlement not found for prosperity update");

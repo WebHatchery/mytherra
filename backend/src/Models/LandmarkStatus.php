@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class LandmarkStatus extends Model
 {
     protected $table = 'landmark_statuses';
-    
+
     protected $fillable = [
         'name',
         'code',
@@ -89,12 +89,12 @@ class LandmarkStatus extends Model
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
-                // Indexes
+    // Indexes
                 $table->index('code');
                 $table->index('is_active');
             });
 
-            // Seed default data
+    // Seed default data
             self::seedDefaultData();
         }
     }

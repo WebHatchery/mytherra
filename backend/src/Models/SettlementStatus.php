@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class SettlementStatus extends Model
 {
     protected $table = 'settlement_statuses';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -22,6 +22,7 @@ class SettlementStatus extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -49,11 +50,15 @@ class SettlementStatus extends Model
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
                   $table->index(['is_active']);
-                $table->index(['code']);            });
-            
-            // Seed default data
+                $table->index(['code']);
+            });
+
+    // Seed default data
             self::seedDefaultStatuses();
-        }    }    public static function seedDefaultStatuses()
+        }
+    }
+
+    public static function seedDefaultStatuses()
     {
         foreach (SettlementStatusData::getData() as $status) {
             self::create($status);

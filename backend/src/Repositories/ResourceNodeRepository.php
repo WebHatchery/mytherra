@@ -9,7 +9,7 @@ use App\Utils\Logger;
 class ResourceNodeRepository extends BaseRepository
 {
     protected string $table = 'resource_nodes';
-    
+
     public function __construct(DatabaseService $db)
     {
         parent::__construct($db);
@@ -17,7 +17,8 @@ class ResourceNodeRepository extends BaseRepository
 
     /**
      * Fetch resource node by ID
-     */    public function getResourceNodeById($id)
+     */
+    public function getResourceNodeById($id)
     {
         $sql = "SELECT * FROM resource_nodes WHERE id = :id";
         $stmt = $this->db->getPdo()->prepare($sql);
@@ -32,7 +33,7 @@ class ResourceNodeRepository extends BaseRepository
     {
         $sql = "SELECT * FROM resource_nodes WHERE 1=1";
         $params = [];
-        
+
         if (!empty($filters['type'])) {
             $sql .= " AND type = :type";
             $params[':type'] = $filters['type'];
@@ -58,7 +59,7 @@ class ResourceNodeRepository extends BaseRepository
             $params[':min_quality'] = $filters['minQuality'];
         }
 
-        // Add ordering and pagination
+    // Add ordering and pagination
         $sql .= " ORDER BY quality DESC, quantity DESC";
         $sql .= " LIMIT :limit OFFSET :offset";
         $params[':limit'] = $limit;
@@ -112,7 +113,7 @@ class ResourceNodeRepository extends BaseRepository
         $sql = "SELECT * FROM resource_nodes 
                 WHERE settlement_id = :settlement_id 
                 ORDER BY quality DESC, quantity DESC";
-                
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':settlement_id' => $settlementId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -128,7 +129,7 @@ class ResourceNodeRepository extends BaseRepository
             last_harvest_year = :last_harvest_year,
             updated_at = NOW()
             WHERE id = :id";
-            
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':id' => $nodeId,
@@ -146,7 +147,7 @@ class ResourceNodeRepository extends BaseRepository
             status = :status,
             updated_at = NOW()
             WHERE id = :id";
-            
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':id' => $nodeId,
@@ -165,7 +166,7 @@ class ResourceNodeRepository extends BaseRepository
                 FROM resource_nodes 
                 WHERE region_id = :region_id 
                 GROUP BY type";
-                
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':region_id' => $regionId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);

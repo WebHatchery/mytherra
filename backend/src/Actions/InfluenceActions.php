@@ -23,11 +23,12 @@ class InfluenceActions
 
     /**
      * Calculate divine influence cost
-     */    public function calculateDivineInfluenceCost(array $params): array
+     */
+    public function calculateDivineInfluenceCost(array $params): array
     {
         $request = \App\Utils\DTOs\DivineInfluenceRequest::fromArray($params);
         $errors = $request->validate();
-        
+
         if (!empty($errors)) {
             return [
                 'success' => false,
@@ -41,7 +42,9 @@ class InfluenceActions
             $request->influenceType,
             $request->strength
         );
-    }    /**
+    }
+
+    /**
      * Apply divine influence
      */
     public function applyDivineInfluence(array $params): array
@@ -51,8 +54,8 @@ class InfluenceActions
 
         if (!empty($errors)) {
             return [
-                'success' => false,
-                'errors' => $errors
+            'success' => false,
+            'errors' => $errors
             ];
         }
 

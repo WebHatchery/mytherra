@@ -32,7 +32,7 @@ class EventRepository
         try {
             $query = GameEvent::query();
 
-            // Apply filters
+    // Apply filters
             if (!empty($filters['type'])) {
                 $query->where('type', $filters['type']);
             }
@@ -49,7 +49,7 @@ class EventRepository
                 $query->where('related_hero_ids', 'like', '%' . $filters['hero_id'] . '%');
             }
 
-            // Apply pagination if specified
+    // Apply pagination if specified
             if (isset($filters['limit'])) {
                 $query->take($filters['limit']);
                 if (isset($filters['offset'])) {

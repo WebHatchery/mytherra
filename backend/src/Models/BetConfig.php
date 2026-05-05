@@ -27,7 +27,7 @@ class BetConfig
     public static function createTables()
     {
         self::init();
-        
+
         try {
             // Create bet_types table
             self::$db->query("
@@ -45,7 +45,7 @@ class BetConfig
                 )
             ");
 
-            // Create confidence_levels table
+    // Create confidence_levels table
             self::$db->query("
                 CREATE TABLE IF NOT EXISTS confidence_levels (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -59,7 +59,7 @@ class BetConfig
                 )
             ");
 
-            // Create timeframe_modifiers table
+    // Create timeframe_modifiers table
             self::$db->query("
                 CREATE TABLE IF NOT EXISTS timeframe_modifiers (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -71,7 +71,7 @@ class BetConfig
                 )
             ");
 
-            // Create betting_system_config table for other constants
+    // Create betting_system_config table for other constants
             self::$db->query("
                 CREATE TABLE IF NOT EXISTS betting_system_config (
                     id INT AUTO_INCREMENT PRIMARY KEY,

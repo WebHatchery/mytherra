@@ -53,7 +53,7 @@ class JwtAuthMiddleware
             error_log('JwtAuthMiddleware: token decode failed - ' . $e->getMessage());
             return $this->unauthorizedResponse($response, 'Invalid token');
         }
-        
+
         if (!$authUser || !$authUser['user_id']) {
             return $this->unauthorizedResponse($response, 'Invalid token user data');
         }
@@ -77,7 +77,7 @@ class JwtAuthMiddleware
             'error_code' => 'UNAUTHORIZED',
             'login_url' => Environment::required('WEB_HATCHERY_LOGIN_URL')
         ]));
-        
+
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(401);

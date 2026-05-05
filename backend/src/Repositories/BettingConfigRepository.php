@@ -9,11 +9,13 @@ use Mytherra\Utils\Logger;
 class BettingConfigRepository extends BaseRepository
 {
     protected string $table = 'bet_type_configs';
-    
+
     public function __construct(DatabaseService $db)
     {
         parent::__construct($db);
-    }    /**
+    }
+
+    /**
      * Get bet type configuration
      */
     public function getBetTypeConfig($betType)
@@ -39,7 +41,9 @@ class BettingConfigRepository extends BaseRepository
             Logger::error("Error fetching bet type configs: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Get confidence configuration
      */
     public function getConfidenceConfig($confidence)
@@ -65,7 +69,9 @@ class BettingConfigRepository extends BaseRepository
             Logger::error("Error fetching confidence configs: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Get timeframe modifiers configuration
      */
     public function getTimeframeModifiers()

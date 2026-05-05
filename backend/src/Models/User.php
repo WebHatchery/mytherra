@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class User extends Model
 {
     protected $table = 'users';
-    
+
     protected $fillable = [
         'auth_user_id',
         'auth0_id',
@@ -66,7 +66,7 @@ class User extends Model
                 $table->json('game_preferences')->nullable();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index('auth_user_id', 'idx_auth_user_id');
                 $table->index('auth0_id', 'idx_auth0_id');
             });
@@ -247,12 +247,24 @@ class User extends Model
     public function getCharacterRank(): string
     {
         $powerLevel = $this->getPowerLevel();
-        if ($powerLevel >= 10000) return 'Divine Champion';
-        if ($powerLevel >= 5000) return 'Legendary Hero';
-        if ($powerLevel >= 2500) return 'Epic Adventurer';
-        if ($powerLevel >= 1000) return 'Veteran Explorer';
-        if ($powerLevel >= 500) return 'Skilled Adventurer';
-        if ($powerLevel >= 200) return 'Novice Explorer';
+        if ($powerLevel >= 10000) {
+            return 'Divine Champion';
+        }
+        if ($powerLevel >= 5000) {
+            return 'Legendary Hero';
+        }
+        if ($powerLevel >= 2500) {
+            return 'Epic Adventurer';
+        }
+        if ($powerLevel >= 1000) {
+            return 'Veteran Explorer';
+        }
+        if ($powerLevel >= 500) {
+            return 'Skilled Adventurer';
+        }
+        if ($powerLevel >= 200) {
+            return 'Novice Explorer';
+        }
         return 'Apprentice';
     }
 }

@@ -5,7 +5,7 @@ namespace App\Utils\DTOs;
 /**
  * Data Transfer Object for divine influence requests
  */
-class DivineInfluenceRequest 
+class DivineInfluenceRequest
 {
     public string $targetId;
     public string $targetType;
@@ -13,7 +13,7 @@ class DivineInfluenceRequest
     public string $strength;
     public string $description;
 
-    public static function fromArray(array $data): self 
+    public static function fromArray(array $data): self
     {
         $request = new self();
         $request->targetId = $data['target_id'] ?? '';
@@ -24,7 +24,7 @@ class DivineInfluenceRequest
         return $request;
     }
 
-    public function validate(): array 
+    public function validate(): array
     {
         $errors = [];
         if (empty($this->targetId)) {

@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class Region extends Model
 {
     protected $table = 'regions';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -44,6 +44,7 @@ class Region extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     // Database-driven validation methods
@@ -144,10 +145,18 @@ class Region extends Model
     public function getDivineResonanceEffectiveness(): string
     {
         $resonance = $this->divine_resonance ?? 50;
-        if ($resonance >= 80) return 'Very High';
-        if ($resonance >= 60) return 'High';
-        if ($resonance >= 40) return 'Moderate';
-        if ($resonance >= 20) return 'Low';
+        if ($resonance >= 80) {
+            return 'Very High';
+        }
+        if ($resonance >= 60) {
+            return 'High';
+        }
+        if ($resonance >= 40) {
+            return 'Moderate';
+        }
+        if ($resonance >= 20) {
+            return 'Low';
+        }
         return 'Very Low';
     }
 
@@ -173,10 +182,18 @@ class Region extends Model
     public function getDangerLevelClassification(): string
     {
         $level = $this->danger_level ?? 5;
-        if ($level >= 8) return 'Extreme';
-        if ($level >= 6) return 'High';
-        if ($level >= 4) return 'Moderate';
-        if ($level >= 2) return 'Low';
+        if ($level >= 8) {
+            return 'Extreme';
+        }
+        if ($level >= 6) {
+            return 'High';
+        }
+        if ($level >= 4) {
+            return 'Moderate';
+        }
+        if ($level >= 2) {
+            return 'Low';
+        }
         return 'Minimal';
     }
 
@@ -261,12 +278,12 @@ class Region extends Model
                 $table->integer('divine_resonance')->default(50);
                 $table->timestamps();
 
-                // Add foreign key constraints
+    // Add foreign key constraints
                 $table->foreign('status')->references('code')->on('region_statuses');
                 $table->foreign('climate_type')->references('code')->on('region_climate_types');
                 $table->foreign('cultural_influence')->references('code')->on('region_cultural_influences');
 
-                // Add indexes for performance
+    // Add indexes for performance
                 $table->index('status');
                 $table->index('climate_type');
                 $table->index('cultural_influence');
@@ -284,12 +301,12 @@ class Region extends Model
             throw new \InvalidArgumentException("Invalid region status: {$this->status}");
         }
 
-        // Validate climate type
+    // Validate climate type
         if (!$this->validateClimateType()) {
             throw new \InvalidArgumentException("Invalid climate type: {$this->climate_type}");
         }
 
-        // Validate cultural influence
+    // Validate cultural influence
         if (!$this->validateCulturalInfluence()) {
             throw new \InvalidArgumentException("Invalid cultural influence: {$this->cultural_influence}");
         }

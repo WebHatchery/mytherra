@@ -8,10 +8,11 @@ use App\Utils\Logger;
 use App\Repositories\DatabaseService;
 
 abstract class BaseRepository
-{    protected DatabaseService $db;
+{
+    protected DatabaseService $db;
     protected string $table;
     protected string $primaryKey = 'id';
-    
+
     public function __construct(DatabaseService $db)
     {
         $this->db = $db;
@@ -22,7 +23,8 @@ abstract class BaseRepository
      */
     public function getById($id)
     {
-        try {            $sql = "SELECT * FROM {$this->table} WHERE {$this->primaryKey} = :id";
+        try {
+            $sql = "SELECT * FROM {$this->table} WHERE {$this->primaryKey} = :id";
             $stmt = $this->db->getPdo()->prepare($sql);
             $stmt->execute([':id' => $id]);
             return $stmt->fetch(PDO::FETCH_ASSOC);
@@ -38,7 +40,8 @@ abstract class BaseRepository
     public function getByIds(array $ids)
     {
         try {
-            $placeholders = str_repeat('?,', count($ids) - 1) . '?';            $sql = "SELECT * FROM {$this->table} WHERE {$this->primaryKey} IN ($placeholders)";
+            $placeholders = str_repeat('?,', count($ids) - 1) . '?';
+            $sql = "SELECT * FROM {$this->table} WHERE {$this->primaryKey} IN ($placeholders)";
             $stmt = $this->db->getPdo()->prepare($sql);
             $stmt->execute($ids);
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -73,7 +76,8 @@ abstract class BaseRepository
 
     /**
      * Execute a query safely
-     */    protected function executeQuery($sql, $params = [])
+     */
+    protected function executeQuery($sql, $params = [])
     {
         try {
             $stmt = $this->db->getPdo()->prepare($sql);

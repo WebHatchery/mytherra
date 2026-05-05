@@ -18,7 +18,7 @@ class StatisticsService
     public function getGameSummary(): array
     {
         $gameState = GameState::first();
-        
+
         return [
             'currentEra' => $gameState->era ?? 1,
             'currentYear' => $gameState->year ?? 1,
@@ -36,11 +36,11 @@ class StatisticsService
     public function getHeroStatistics(): array
     {
         $heroes = Hero::all();
-        
+
         $byRole = $heroes->groupBy('role')->map->count();
         $byStatus = $heroes->groupBy('status')->map->count();
-        
-        // Level distribution (buckets)
+
+    // Level distribution (buckets)
         $levelDistribution = [
             '1-10' => $heroes->whereBetween('level', [1, 10])->count(),
             '11-25' => $heroes->whereBetween('level', [11, 25])->count(),
@@ -81,15 +81,15 @@ class StatisticsService
     public function getFinancialStatistics(): array
     {
         $bets = DivineBet::all();
-        
+
         return [
             'totalBetsPlaced' => $bets->count(),
             'totalInfluenceWagered' => $bets->sum('amount'),
             'betsWon' => $bets->where('status', 'won')->count(),
             'betsLost' => $bets->where('status', 'lost')->count(),
             'activeBets' => $bets->where('status', 'active')->count(),
-            'payoutRatio' => $bets->where('status', 'won')->count() > 0 
-                ? round($bets->where('status', 'won')->sum('payout') / max(1, $bets->where('status', 'won')->sum('amount')), 2) 
+            'payoutRatio' => $bets->where('status', 'won')->count() > 0
+                ? round($bets->where('status', 'won')->sum('payout') / max(1, $bets->where('status', 'won')->sum('amount')), 2)
                 : 0
         ];
     }

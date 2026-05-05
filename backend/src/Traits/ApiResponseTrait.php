@@ -16,7 +16,9 @@ trait ApiResponseTrait
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus($status);
-    }    /**
+    }
+
+    /**
      * Handle API action with consistent error handling
      *
      * @param Response $response The Response object
@@ -37,20 +39,20 @@ trait ApiResponseTrait
                 'success' => true,
                 'data' => $result
             ], $successStatus);
-        } catch (\InvalidArgumentException $error) {
-            // Return 400 for validation errors
-            return $this->jsonResponse($response, [
-                'success' => false,
-                'message' => $error->getMessage(),
-                'error_code' => 'VALIDATION_ERROR'
-            ], 400);
-        } catch (\Exception $error) {
-            // Return 500 only for actual system errors
-            error_log("Error {$errorContext}: " . $error->getMessage());
-            return $this->jsonResponse($response, [
-                'success' => false,
-                'message' => "An error occurred while {$errorContext}"
-            ], 500);
-        }
+    } catch (\InvalidArgumentException $error) {
+        // Return 400 for validation errors
+        return $this->jsonResponse($response, [
+            'success' => false,
+            'message' => $error->getMessage(),
+            'error_code' => 'VALIDATION_ERROR'
+        ], 400);
+    } catch (\Exception $error) {
+        // Return 500 only for actual system errors
+        error_log("Error {$errorContext}: " . $error->getMessage());
+        return $this->jsonResponse($response, [
+            'success' => false,
+            'message' => "An error occurred while {$errorContext}"
+        ], 500);
+    }
     }
 }

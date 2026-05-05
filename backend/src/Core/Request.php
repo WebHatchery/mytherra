@@ -29,22 +29,22 @@ class Request
     {
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        
-        // Query Params
+
+    // Query Params
         parse_str($_SERVER['QUERY_STRING'] ?? '', $queryParams);
-        
-        // Body
+
+    // Body
         $input = file_get_contents('php://input');
         $parsedBody = [];
         $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
-        
+
         if (strpos($contentType, 'application/json') !== false) {
             $parsedBody = json_decode($input, true) ?? [];
         } else {
             $parsedBody = $_POST;
         }
 
-        // Headers
+    // Headers
         $headers = [];
         if (function_exists('getallheaders')) {
             $headers = getallheaders();
@@ -80,7 +80,7 @@ class Request
         }
         return '';
     }
-    
+
     public function withAttribute(string $name, $value): self
     {
         $clone = clone $this;

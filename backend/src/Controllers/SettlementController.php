@@ -16,7 +16,8 @@ class SettlementController
     public function __construct(
         private SettlementActions $settlementActions,
         private BuildingActions $buildingActions
-    ) {}
+    ) {
+    }
 
     /**
      * Get all settlements with optional filtering
@@ -25,7 +26,7 @@ class SettlementController
     public function getAllSettlements(Request $request, Response $response): Response
     {
         Logger::debug("GET /api/settlements endpoint called");
-        
+
         $queryParams = $request->getQueryParams();
         $filters = [
             'regionId' => $queryParams['regionId'] ?? null,
@@ -35,14 +36,16 @@ class SettlementController
             'limit' => isset($queryParams['limit']) ? min((int)$queryParams['limit'], 100) : 20,
             'offset' => isset($queryParams['offset']) ? (int)$queryParams['offset'] : 0
         ];
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->settlementActions->fetchAllSettlements($filters),
             'fetching settlements',
             'No settlements found with the specified criteria'
         );
-    }    /**
+    }
+
+    /**
      * Get settlement by ID
      */
     public function getSettlementById(Request $request, Response $response, array $args): Response
@@ -61,7 +64,7 @@ class SettlementController
     public function getSettlementBuildings(Request $request, Response $response, array $args): Response
     {
         Logger::debug("GET /api/settlements/{$args['id']}/buildings endpoint called");
-        
+
         $queryParams = $request->getQueryParams();
         $filters = [
             'settlementId' => $args['id'],
@@ -72,7 +75,7 @@ class SettlementController
             'limit' => isset($queryParams['limit']) ? min((int)$queryParams['limit'], 100) : 20,
             'offset' => isset($queryParams['offset']) ? (int)$queryParams['offset'] : 0
         ];
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->buildingActions->fetchAllBuildings($filters),

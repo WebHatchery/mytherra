@@ -48,10 +48,10 @@ class HeroLifecycleService
             $events = [];
             $newFeats = [];
 
-            // Age the hero
+    // Age the hero
             $this->ageHero($hero, $changes);
 
-            // Process leveling
+    // Process leveling
             $levelingResult = $this->processHeroLeveling($hero, $currentYear);
             if ($levelingResult['leveledUp']) {
                 $changes['level'] = $levelingResult['newLevel'];
@@ -59,7 +59,7 @@ class HeroLifecycleService
                 $newFeats = array_merge($newFeats, $levelingResult['newFeats']);
             }
 
-            // Process movement
+    // Process movement
             $movementResult = $this->processHeroMovement($hero, $currentYear);
             if ($movementResult['moved']) {
                 $changes['region_id'] = $movementResult['newRegionId'];
@@ -69,7 +69,7 @@ class HeroLifecycleService
                 }
             }
 
-            // Check mortality
+    // Check mortality
             if ($this->shouldDieNaturally($hero) || $this->shouldDieFromDanger($hero)) {
                 $deathReason = $this->generateDeathReason($hero);
                 $this->processHeroDeath($hero, $currentYear, $deathReason);
@@ -81,7 +81,7 @@ class HeroLifecycleService
                 ];
             }
 
-            // Apply changes and update feats
+    // Apply changes and update feats
             if (!empty($newFeats)) {
                 $currentFeats = json_decode($hero['feats'] ?? '[]', true);
                 $changes['feats'] = json_encode(array_merge($currentFeats, $newFeats));
@@ -98,7 +98,6 @@ class HeroLifecycleService
                 'newFeats' => $newFeats,
                 'died' => false
             ];
-
         } catch (\Exception $e) {
             Logger::error("Error processing hero lifecycle: " . $e->getMessage());
             throw $e;
@@ -114,20 +113,22 @@ class HeroLifecycleService
         $totalLevelsGained = 0;
         $newFeats = [];
 
-        // Try multiple level ups per year for low-level heroes
+    // Try multiple level ups per year for low-level heroes
         for ($attempt = 0; $attempt < self::MAX_LEVELS_PER_YEAR; $attempt++) {
             $levelUpChance = $this->calculateLevelUpChance($currentLevel);
-            
+
             if (mt_rand() / mt_getrandmax() < $levelUpChance) {
                 $currentLevel++;
                 $totalLevelsGained++;
 
-                // Check for milestone levels
+    // Check for milestone levels
                 if ($this->isMilestoneLevel($currentLevel)) {
                     $newFeats[] = $this->generateLevelUpFeat($hero['name'], $currentLevel, $currentYear);
                 }
             } else {
-                break; // Stop attempting level-ups once we fail
+                break;
+
+    // Stop attempting level-ups once we fail
             }
         }
 
@@ -160,7 +161,7 @@ class HeroLifecycleService
     {
         $chance = self::BASE_LEVEL_UP_CHANCE * pow(self::LEVEL_UP_DIFFICULTY_FACTOR, $currentLevel - 1);
 
-        // Apply level-based multipliers
+    // Apply level-based multipliers
         if ($currentLevel <= self::LOW_LEVEL_THRESHOLD) {
             $chance *= self::LOW_LEVEL_MULTIPLIER;
         } elseif ($currentLevel < self::HIGH_LEVEL_THRESHOLD) {
@@ -176,16 +177,17 @@ class HeroLifecycleService
      * Process hero movement between regions
      */
     private function processHeroMovement(array $hero, int $currentYear): array
-    {        $messageTemplate = null;
+    {
+        $messageTemplate = null;
         if (mt_rand() / mt_getrandmax() >= self::CHANCE_TO_MOVE) {
             $messageTemplate = \App\Models\HeroEventMessage::getMessageTemplate('movement_stay', 'movement')
-                ?? '{heroName} remained in their current region.';
+            ?? '{heroName} remained in their current region.';
 
             return [
-                'moved' => false,
-                'eventDescription' => strtr($messageTemplate, [
-                    '{heroName}' => $hero['name']
-                ]),
+            'moved' => false,
+            'eventDescription' => strtr($messageTemplate, [
+                '{heroName}' => $hero['name']
+            ]),
                 'newFeats' => []
             ];
         }
@@ -195,13 +197,13 @@ class HeroLifecycleService
 
         if (empty($availableRegions)) {
             $messageTemplate = \App\Models\HeroEventMessage::getMessageTemplate('movement_no_options', 'movement')
-                ?? '{heroName} had nowhere else to travel.';
+            ?? '{heroName} had nowhere else to travel.';
 
             return [
-                'moved' => false,
-                'eventDescription' => strtr($messageTemplate, [
-                    '{heroName}' => $hero['name']
-                ]),
+            'moved' => false,
+            'eventDescription' => strtr($messageTemplate, [
+                '{heroName}' => $hero['name']
+            ]),
                 'newFeats' => []
             ];
         }
@@ -209,7 +211,7 @@ class HeroLifecycleService
         $targetRegion = $availableRegions[array_rand($availableRegions)];
         $messageTemplate = \App\Models\HeroEventMessage::getMessageTemplate('movement_travel', 'movement')
             ?? '{heroName} traveled from {fromRegion} to {toRegion}.';
-        
+
         $eventDescription = strtr($messageTemplate, [
             '{heroName}' => $hero['name'],
             '{fromRegion}' => $currentRegion['name'],
@@ -243,7 +245,9 @@ class HeroLifecycleService
         $lifeExpectancy = $baseLifeExpectancy + $powerBonus;
 
         if (($hero['age'] ?? 20) > $lifeExpectancy) {
-            return mt_rand(1, 100) <= 20; // 20% chance per year after life expectancy
+            return mt_rand(1, 100) <= 20;
+
+    // 20% chance per year after life expectancy
         }
 
         return false;
@@ -254,7 +258,9 @@ class HeroLifecycleService
      */
     private function shouldDieFromDanger(array $hero): bool
     {
-        $baseDanger = 0.01; // 1% base chance
+        $baseDanger = 0.01;
+
+    // 1% base chance
         $powerModifier = max(0.2, 1 - (($hero['level'] ?? 1) / 10));
         return mt_rand(1, 100) / 100 <= ($baseDanger * $powerModifier);
     }
@@ -277,7 +283,8 @@ class HeroLifecycleService
 
     /**
      * Generate a death reason
-     */    private function generateDeathReason(array $hero): string
+     */
+    private function generateDeathReason(array $hero): string
     {
         // Get active death reasons from the database
         $reasons = \App\Models\HeroDeathReason::where('is_active', true)->get();
@@ -286,7 +293,7 @@ class HeroLifecycleService
             return 'Died under mysterious circumstances';
         }
 
-        // Select a random reason
+    // Select a random reason
         $reason = $reasons->random();
         return $reason->description;
     }
@@ -301,7 +308,9 @@ class HeroLifecycleService
         }
 
         return $level >= 25 && $level % 25 === 0;
-    }    /**
+    }
+
+    /**
      * Generate a level-up feat description
      */
     private function generateLevelUpFeat(string $heroName, int $level, int $currentYear): string
@@ -323,7 +332,7 @@ class HeroLifecycleService
     {
         $code = $levelsGained === 1 ? 'level_up_single' : 'level_up_multiple';
         $template = \App\Models\HeroEventMessage::getMessageTemplate($code, 'level')
-            ?? ($levelsGained === 1 
+            ?? ($levelsGained === 1
                 ? 'Year {year}: {heroName} reached level {level}.'
                 : 'Year {year}: {heroName} rapidly advanced {levelsGained} levels, reaching level {level}!');
 

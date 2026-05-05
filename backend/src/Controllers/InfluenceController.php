@@ -15,7 +15,8 @@ class InfluenceController
 
     public function __construct(
         private InfluenceActions $influenceActions
-    ) {}
+    ) {
+    }
 
     /**
      * Calculate divine influence cost
@@ -23,9 +24,9 @@ class InfluenceController
     public function calculateDivineInfluenceCost(Request $request, Response $response): Response
     {
         Logger::debug("POST /api/influence/divine/calculate-cost endpoint called");
-        
+
         $body = json_decode((string)$request->getBody(), true);
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->influenceActions->calculateDivineInfluenceCost($body),
@@ -40,9 +41,9 @@ class InfluenceController
     public function applyDivineInfluence(Request $request, Response $response): Response
     {
         Logger::debug("POST /api/influence/divine/apply endpoint called");
-        
+
         $body = json_decode((string)$request->getBody(), true);
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->influenceActions->applyDivineInfluence($body),
@@ -57,9 +58,9 @@ class InfluenceController
     public function empowerHero(Request $request, Response $response): Response
     {
         Logger::debug("POST /api/influence/hero/empower endpoint called");
-        
+
         $body = json_decode((string)$request->getBody(), true);
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->influenceActions->empowerHero($body),
@@ -74,9 +75,9 @@ class InfluenceController
     public function guideHero(Request $request, Response $response): Response
     {
         Logger::debug("POST /api/influence/hero/guide endpoint called");
-        
+
         $body = json_decode((string)$request->getBody(), true);
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->influenceActions->guideHero($body),
@@ -91,9 +92,9 @@ class InfluenceController
     public function guideRegionResearch(Request $request, Response $response): Response
     {
         Logger::debug("POST /api/influence/region/guide-research endpoint called");
-        
+
         $body = json_decode((string)$request->getBody(), true);
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->influenceActions->guideRegionResearch($body),

@@ -1,4 +1,5 @@
 <?php
+
 // f:\WebDevelopment\Mytherra\backend\src\Actions\BettingActions.php
 
 namespace App\Actions;
@@ -12,37 +13,32 @@ use App\Utils\Logger;
 
 class BettingActions
 {
-    public function __construct(
-        private BettingRepository $repository,
-        private OddsCalculationService $oddsCalculator,
-        private DivineBettingService $divineBettingService
-    ) {}    /**
+    public function __construct(private BettingRepository $repository, private OddsCalculationService $oddsCalculator, private DivineBettingService $divineBettingService)
+    {
+    }
+
+    /**
      * Create a new divine bet with validation
      */
     public function createDivineBet($betData)
     {
         try {
-            // Validate target entity exists
+// Validate target entity exists
             $targetExists = $this->repository->validateTargetEntity($betData['targetId']);
             if (!$targetExists) {
                 throw new Exception("Target entity with ID {$betData['targetId']} not found");
             }
-            
-            // Calculate odds and potential payout
-            $oddsResult = $this->oddsCalculator->calculateBetOdds(
-                $betData['betType'],
-                $betData['targetId'],
-                $betData['timeframe'],
-                $betData['confidence']
-            );
-            
+
+    // Calculate odds and potential payout
+            $oddsResult = $this->oddsCalculator->calculateBetOdds($betData['betType'], $betData['targetId'], $betData['timeframe'], $betData['confidence']);
             $currentOdds = $oddsResult['odds'];
             $potentialPayoutMultiplier = $oddsResult['potentialPayout'];
             $calculatedPayout = (int)floor($betData['divineFavorStake'] * $potentialPayoutMultiplier);
-            
-            // Get current game year and generate UUID
+
+    // Get current game year and generate UUID
             $gameYear = $this->getCurrentGameYear();
-              // Create bet using repository
+
+    // Create bet using repository
             $bet = [
                 'player_id' => $betData['playerId'] ?? 'SINGLE_PLAYER',
                 'bet_type' => $betData['betType'],
@@ -56,7 +52,6 @@ class BettingActions
                 'status' => 'active',
                 'placed_year' => $gameYear
             ];
-            
             $betId = $this->repository->createBet($bet);
             return $this->repository->getBetById($betId);
         } catch (Exception $e) {
@@ -84,7 +79,9 @@ class BettingActions
             Logger::error("Error fetching divine bets: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Fetch divine bet by ID
      */
     public function fetchDivineBetById($betId)
@@ -123,33 +120,23 @@ class BettingActions
     public function fetchBettingOdds()
     {
         try {
-            // Get sample targets for odds calculation
+// Get sample targets for odds calculation
             $sampleTargets = $this->repository->getSampleTargets();
-            
-            // Generate sample odds for different bet types
+
+    // Generate sample odds for different bet types
             $betTypes = [
-                'settlement_growth', 'landmark_discovery', 'cultural_shift', 
-                'hero_settlement_bond', 'hero_location_visit', 'settlement_transformation', 
+                'settlement_growth', 'landmark_discovery', 'cultural_shift',
+                'hero_settlement_bond', 'hero_location_visit', 'settlement_transformation',
                 'corruption_spread'
             ];
-            
             $defaultTimeframe = 5;
             $defaultConfidence = 'possible';
             $oddsData = [];
-            
             foreach ($betTypes as $betType) {
                 try {
                     $targetId = $this->getTargetIdForBetType($betType, $sampleTargets);
-                    
-                    $oddsResult = $this->oddsCalculator->calculateBetOdds(
-                        $betType,
-                        $targetId,
-                        $defaultTimeframe,
-                        $defaultConfidence
-                    );
-                    
+                    $oddsResult = $this->oddsCalculator->calculateBetOdds($betType, $targetId, $defaultTimeframe, $defaultConfidence);
                     $probability = $this->oddsCalculator->calculateWinProbability($oddsResult['odds']);
-                    
                     $oddsData[$betType] = [
                         'probability' => round($probability / 100, 2),
                         'payout' => round($oddsResult['potentialPayout'], 2),
@@ -158,13 +145,13 @@ class BettingActions
                 } catch (Exception $e) {
                     Logger::error("Error calculating odds for {$betType}: " . $e->getMessage());
                     $oddsData[$betType] = [
-                        'probability' => 0.5,
-                        'payout' => 2.0,
-                        'confidence' => $defaultConfidence
+                    'probability' => 0.5,
+                    'payout' => 2.0,
+                    'confidence' => $defaultConfidence
                     ];
                 }
             }
-            
+
             $formattedOddsData = [];
             foreach ($oddsData as $betType => $data) {
                 $formattedOddsData[] = [
@@ -173,7 +160,7 @@ class BettingActions
                     'lastUpdated' => date('c')
                 ];
             }
-            
+
             return $formattedOddsData;
         } catch (Exception $e) {
             Logger::error("Error fetching betting odds: " . $e->getMessage());
@@ -192,7 +179,9 @@ class BettingActions
             Logger::error("Error processing expired bets: " . $e->getMessage());
             throw $e;
         }
-    }    private function getCurrentGameYear(): int
+    }
+
+    private function getCurrentGameYear(): int
     {
         try {
             $gameState = \App\Models\GameState::getCurrent();

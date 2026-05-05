@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class HeroRole extends Model
 {
     protected $table = 'hero_roles';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -23,6 +23,7 @@ class HeroRole extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -51,15 +52,15 @@ class HeroRole extends Model
                 $table->json('starting_level_range')->nullable();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index(['is_active']);
                 $table->index(['code']);
             });
-            
-            // Seed default hero roles
+
+    // Seed default hero roles
             self::seedDefaultRoles();
         }
-    }    
+    }
 
     public static function seedDefaultRoles()
     {

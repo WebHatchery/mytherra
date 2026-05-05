@@ -28,7 +28,7 @@ class HeroAlignmentService
     {
         try {
             $modifiers = HeroAlignmentConfig::getModifiers($triggerType, $triggerCondition);
-            
+
             foreach ($modifiers as $modifier) {
                 $this->applyTraitModification(
                     $hero,
@@ -72,7 +72,6 @@ class HeroAlignmentService
                 'probability' => $highestProbability,
                 'influence_modifier' => $bestResponse['influence_modifier']
             ] : null;
-
         } catch (Exception $e) {
             Logger::error("Error predicting event response: " . $e->getMessage());
             return null;
@@ -102,13 +101,14 @@ class HeroAlignmentService
             $currentValue = $hero['traits'][$traitCode] ?? 0;
             $opposingTrait = $this->getOpposingTrait($traitCode);
 
-            // Calculate new trait value
+    // Calculate new trait value
             $newValue = max(0, min(100, $currentValue + $modifierValue));
             $hero['traits'][$traitCode] = $newValue;
 
-            // If trait has an opposite, reduce it proportionally
+    // If trait has an opposite, reduce it proportionally
             if ($opposingTrait && isset($hero['traits'][$opposingTrait])) {
-                $hero['traits'][$opposingTrait] = max(0, 
+                $hero['traits'][$opposingTrait] = max(
+                    0,
                     $hero['traits'][$opposingTrait] - ($modifierValue * 0.5)
                 );
             }
@@ -127,8 +127,8 @@ class HeroAlignmentService
     {
         $traitValue = $hero['traits'][$requiredTrait] ?? 0;
         $traitInfluence = $this->calculateTraitInfluence($hero, $requiredTrait);
-        
-        // Probability increases with trait level but has diminishing returns
+
+    // Probability increases with trait level but has diminishing returns
         $modifier = 1 + (($traitValue / 100) * $traitInfluence);
         return min(1.0, $baseProbability * $modifier);
     }
@@ -187,16 +187,16 @@ class HeroAlignmentService
         foreach ($this->traits as $trait) {
             $traitValue = $hero['traits'][$trait['code']] ?? 0;
             $influence = $trait['base_influence'];
-            
-            // Positive traits contribute positively, negative traits negatively
+
+    // Positive traits contribute positively, negative traits negatively
             $isPositive = in_array($trait['code'], ['altruistic', 'honorable', 'cautious']);
             $contribution = $isPositive ? $traitValue : -$traitValue;
-            
+
             $score += $contribution * $influence;
             $totalWeight += $influence;
         }
 
-        return $totalWeight > 0 ? 
+        return $totalWeight > 0 ?
             min(100, max(-100, $score / $totalWeight)) : 0;
     }
 }

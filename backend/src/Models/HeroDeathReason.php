@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class HeroDeathReason extends Model
 {
     protected $table = 'hero_death_reasons';
-    
+
     protected $fillable = [
         'code',
         'description',
@@ -30,8 +30,12 @@ class HeroDeathReason extends Model
                 $table->id();
                 $table->string('code')->unique();
                 $table->text('description');
-                $table->string('category')->default('combat'); // combat, natural, magical, tragic
-                $table->integer('severity')->default(1); // 1-5, affects event impact
+                $table->string('category')->default('combat');
+
+    // combat, natural, magical, tragic
+                $table->integer('severity')->default(1);
+
+    // 1-5, affects event impact
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
@@ -40,10 +44,12 @@ class HeroDeathReason extends Model
                 $table->index(['category', 'severity']);
             });
 
-            // Seed default death reasons
+    // Seed default death reasons
             self::seedDefaultReasons();
         }
-    }    public static function seedDefaultReasons()
+    }
+
+    public static function seedDefaultReasons()
     {
         foreach (HeroDeathReasonData::getData() as $reason) {
             self::create($reason);

@@ -11,30 +11,15 @@ abstract class BaseRepository
     protected DatabaseService $db;
     protected string $table;
     protected string $primaryKey = 'id';
-    
+
     public function __construct(DatabaseService $db)
     {
         $this->db = $db;
     }
 
-    protected function FETCH_ASSOC()
-    {
-        return $this->db->getPdo()::FETCH_ASSOC;
-    }
-
-    protected function PARAM_INT()
-    {
-        return $this->db->getPdo()::PARAM_INT;
-    }
-
-    protected function PARAM_STR()
-    {
-        return $this->db->getPdo()::PARAM_STR;
-    }
-
     /**
      * Get entity by ID
-     */    
+     */
     public function getById($id)
     {
         try {
@@ -50,7 +35,7 @@ abstract class BaseRepository
 
     /**
      * Get entities by array of IDs
-     */    
+     */
     public function getByIds(array $ids)
     {
         try {
@@ -85,7 +70,7 @@ abstract class BaseRepository
     {
         $limit = $limit !== null ? (int)$limit : null;
         $offset = $offset !== null ? (int)$offset : null;
-        
+
         if ($limit !== null && $offset !== null) {
             $sql .= " LIMIT ? OFFSET ?";
             $params[] = $limit;

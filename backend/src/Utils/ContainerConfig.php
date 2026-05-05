@@ -4,8 +4,7 @@ namespace App\Utils;
 
 use DI\ContainerBuilder;
 use App\Repositories\DatabaseService;
-
-// Controllers
+    // Controllers
 use App\Controllers\StatusController;
 use App\Controllers\RegionController;
 use App\Controllers\HeroController;
@@ -18,8 +17,7 @@ use App\Controllers\BettingController;
 use App\Controllers\InfluenceController;
 use App\Controllers\AuthController;
 use App\Controllers\StatisticsController;
-
-// Actions
+    // Actions
 use App\Actions\RegionActions;
 use App\Actions\HeroActions;
 use App\Actions\EventActions;
@@ -30,8 +28,7 @@ use App\Actions\StatusActions;
 use App\Actions\BettingActions;
 use App\Actions\InfluenceActions;
 use App\Actions\ResourceNodeActions;
-
-// Repositories
+    // Repositories
 // Repositories
 use App\Repositories\RegionRepository;
 use App\Repositories\HeroRepository;
@@ -45,25 +42,24 @@ use App\Repositories\InfluenceRepository;
 use App\Repositories\OddsRepository;
 use App\Repositories\BettingConfigRepository;
 use App\Repositories\ResourceNodeRepository;
-
-// Services
+    // Services
 use App\Services\GameConfigService;
 use App\Services\DivineInfluenceService;
 use App\Services\OddsCalculationService;
 use App\Services\DivineBettingService;
 use App\Services\ComboBetService;
 use App\Services\StatisticsService;
-
-// Middleware
+    // Middleware
 use App\Middleware\JwtAuthMiddleware;
 use App\Middleware\AdminAuthMiddleware;
 
 class ContainerConfig
 {
     public static function createContainer()
-    {        $containerBuilder = new ContainerBuilder();
-        
-        // Enable compilation for better performance in production
+    {
+        $containerBuilder = new ContainerBuilder();
+
+    // Enable compilation for better performance in production
         if (isset($_ENV['APP_ENV']) && $_ENV['APP_ENV'] === 'production') {
             $containerBuilder->enableCompilation(__DIR__ . '/../../var/cache');
         }
@@ -75,54 +71,54 @@ class ContainerConfig
             },            // ====================================
             // REPOSITORIES
             // ====================================
-            RegionRepository::class => function($container) {
+            RegionRepository::class => function ($container) {
                 return new RegionRepository();
-            },            HeroRepository::class => function($container) {
+            },            HeroRepository::class => function ($container) {
                 return new HeroRepository();
-            },            EventRepository::class => function($container) {
+            },            EventRepository::class => function ($container) {
                 return new EventRepository();
             },
-            SettlementRepository::class => function($container) {
+            SettlementRepository::class => function ($container) {
                 return new SettlementRepository($container->get(DatabaseService::class));
             },
-            BuildingRepository::class => function($container) {
+            BuildingRepository::class => function ($container) {
                 return new BuildingRepository($container->get(DatabaseService::class));
             },
-            LandmarkRepository::class => function($container) {
+            LandmarkRepository::class => function ($container) {
                 return new LandmarkRepository($container->get(DatabaseService::class));
             },
-            StatusRepository::class => function($container) {
+            StatusRepository::class => function ($container) {
                 return new StatusRepository($container->get(DatabaseService::class));
             },
-            BettingRepository::class => function($container) {
+            BettingRepository::class => function ($container) {
                 return new BettingRepository($container->get(DatabaseService::class));
             },
-            InfluenceRepository::class => function($container) {
+            InfluenceRepository::class => function ($container) {
                 return new InfluenceRepository($container->get(DatabaseService::class));
             },
-            OddsRepository::class => function($container) {
+            OddsRepository::class => function ($container) {
                 return new OddsRepository($container->get(DatabaseService::class));
-            },            BettingConfigRepository::class => function($container) {
+            },            BettingConfigRepository::class => function ($container) {
                 return new BettingConfigRepository($container->get(DatabaseService::class));
             },
-            ResourceNodeRepository::class => function($container) {
+            ResourceNodeRepository::class => function ($container) {
                 return new ResourceNodeRepository($container->get(DatabaseService::class));
             },
 
             // ====================================
             // SERVICES
             // ====================================
-            GameConfigService::class => function() {
+            GameConfigService::class => function () {
                 return GameConfigService::getInstance();
-            },            DivineInfluenceService::class => function($container) {
+            },            DivineInfluenceService::class => function ($container) {
                 return new DivineInfluenceService();
             },
-            OddsCalculationService::class => function($container) {
+            OddsCalculationService::class => function ($container) {
                 return new OddsCalculationService(
                     $container->get(OddsRepository::class),
                     $container->get(BettingConfigRepository::class)
                 );
-            },            DivineBettingService::class => function($container) {
+            },            DivineBettingService::class => function ($container) {
                 return new DivineBettingService(
                     $container->get(BettingRepository::class),
                     $container->get(SettlementRepository::class),
@@ -132,57 +128,57 @@ class ContainerConfig
                     $container->get(OddsCalculationService::class)
                 );
             },
-            ComboBetService::class => function($container) {
+            ComboBetService::class => function ($container) {
                 return new ComboBetService();
             },
-            StatisticsService::class => function($container) {
+            StatisticsService::class => function ($container) {
                 return new StatisticsService();
             },
 
             // ====================================
             // MIDDLEWARE
             // ====================================
-            JwtAuthMiddleware::class => function($container) {
+            JwtAuthMiddleware::class => function ($container) {
                 return new JwtAuthMiddleware();
             },
 
-            AdminAuthMiddleware::class => function($container) {
+            AdminAuthMiddleware::class => function ($container) {
                 return new AdminAuthMiddleware();
             },
 
             // ====================================
             // ACTIONS
             // ====================================
-            RegionActions::class => function($container) {
+            RegionActions::class => function ($container) {
                 return new RegionActions($container->get(RegionRepository::class));
             },
-            HeroActions::class => function($container) {
+            HeroActions::class => function ($container) {
                 return new HeroActions($container->get(HeroRepository::class));
             },
-            EventActions::class => function($container) {
+            EventActions::class => function ($container) {
                 return new EventActions($container->get(EventRepository::class));
             },
-            SettlementActions::class => function($container) {
+            SettlementActions::class => function ($container) {
                 return new SettlementActions($container->get(SettlementRepository::class));
             },
-            BuildingActions::class => function($container) {
+            BuildingActions::class => function ($container) {
                 return new BuildingActions($container->get(BuildingRepository::class));
-            },            LandmarkActions::class => function($container) {
+            },            LandmarkActions::class => function ($container) {
                 return new LandmarkActions($container->get(LandmarkRepository::class));
             },
-            ResourceNodeActions::class => function($container) {
+            ResourceNodeActions::class => function ($container) {
                 return new ResourceNodeActions($container->get(ResourceNodeRepository::class));
             },
-            StatusActions::class => function($container) {
+            StatusActions::class => function ($container) {
                 return new StatusActions($container->get(GameConfigService::class));
-            },            BettingActions::class => function($container) {
+            },            BettingActions::class => function ($container) {
                 return new BettingActions(
                     $container->get(BettingRepository::class),
                     $container->get(OddsCalculationService::class),
                     $container->get(DivineBettingService::class)
                 );
             },
-            InfluenceActions::class => function($container) {
+            InfluenceActions::class => function ($container) {
                 return new InfluenceActions(
                     $container->get(DivineInfluenceService::class),
                     $container->get(InfluenceRepository::class)
@@ -192,60 +188,60 @@ class ContainerConfig
             // ====================================
             // CONTROLLERS
             // ====================================
-            StatusController::class => function($container) {
+            StatusController::class => function ($container) {
                 return new StatusController(
                     $container->get(StatusActions::class)
                 );
             },
-            RegionController::class => function($container) {
+            RegionController::class => function ($container) {
                 return new RegionController(
                     $container->get(RegionActions::class)
                 );
             },
-            HeroController::class => function($container) {
+            HeroController::class => function ($container) {
                 return new HeroController(
                     $container->get(HeroActions::class)
                 );
             },
-            EventController::class => function($container) {
+            EventController::class => function ($container) {
                 return new EventController(
                     $container->get(EventActions::class)
                 );
             },
-            SettlementController::class => function($container) {
+            SettlementController::class => function ($container) {
                 return new SettlementController(
                     $container->get(SettlementActions::class),
                     $container->get(BuildingActions::class)
                 );
             },
-            BuildingController::class => function($container) {
+            BuildingController::class => function ($container) {
                 return new BuildingController(
                     $container->get(BuildingActions::class)
                 );
             },
-            LandmarkController::class => function($container) {
+            LandmarkController::class => function ($container) {
                 return new LandmarkController(
                     $container->get(LandmarkActions::class)
                 );
             },
-            BettingController::class => function($container) {
+            BettingController::class => function ($container) {
                 return new BettingController(
                     $container->get(BettingActions::class),
                     $container->get(ComboBetService::class)
                 );
             },
-            InfluenceController::class => function($container) {
+            InfluenceController::class => function ($container) {
                 return new InfluenceController(
                     $container->get(InfluenceActions::class)
                 );
             },
-            StatisticsController::class => function($container) {
+            StatisticsController::class => function ($container) {
                 return new StatisticsController(
                     $container->get(StatisticsService::class)
                 );
             },
 
-            AuthController::class => function($container) {
+            AuthController::class => function ($container) {
                 return new AuthController();
             }
         ]);

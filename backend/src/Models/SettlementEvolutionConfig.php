@@ -25,7 +25,7 @@ class SettlementEvolutionConfig
             // Create evolution parameters table
             EvolutionParameter::createTable();
 
-            // Create settlement evolution thresholds table
+    // Create settlement evolution thresholds table
             self::$dbService->query("
                 CREATE TABLE IF NOT EXISTS settlement_evolution_thresholds (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -41,7 +41,9 @@ class SettlementEvolutionConfig
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     INDEX idx_type (settlement_type)
                 )
-            ");            // Create prosperity factors table
+            ");
+
+    // Create prosperity factors table
             self::$dbService->query("
                 CREATE TABLE IF NOT EXISTS settlement_prosperity_factors (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -55,7 +57,9 @@ class SettlementEvolutionConfig
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
-            ");            // Create growth modifiers table
+            ");
+
+    // Create growth modifiers table
             self::$dbService->query("
                 CREATE TABLE IF NOT EXISTS settlement_growth_modifiers (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -70,7 +74,9 @@ class SettlementEvolutionConfig
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                     INDEX idx_type_condition (modifier_type, condition_type)
                 )
-            ");            // Create settlement specializations table
+            ");
+
+    // Create settlement specializations table
             self::$dbService->query("
                 CREATE TABLE IF NOT EXISTS settlement_specializations (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -84,7 +90,9 @@ class SettlementEvolutionConfig
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
-            ");            // Create settlement traits table
+            ");
+
+    // Create settlement traits table
             self::$dbService->query("
                 CREATE TABLE IF NOT EXISTS settlement_traits (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -98,7 +106,9 @@ class SettlementEvolutionConfig
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
                 )
-            ");            // Create evolution types table
+            ");
+
+    // Create evolution types table
             self::$dbService->query("
                 CREATE TABLE IF NOT EXISTS settlement_evolution_types (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -129,14 +139,14 @@ class SettlementEvolutionConfig
         self::init();
         try {
             $data = \App\InitData\SettlementEvolutionData::getData();
-            
-            // Seed evolution parameters
+
+    // Seed evolution parameters
             EvolutionParameter::truncate();
             foreach ($data['parameters'] as $param) {
                 EvolutionParameter::create($param);
             }
-            
-            // Seed evolution thresholds
+
+    // Seed evolution thresholds
             foreach ($data['thresholds'] as $threshold) {
                 $stmt = self::$dbService->prepare("
                     INSERT INTO settlement_evolution_thresholds 
@@ -147,7 +157,9 @@ class SettlementEvolutionConfig
                     :required_buildings, :evolution_time_days, :divine_favor_cost)
                 ");
                 $stmt->execute($threshold);
-            }            // Seed specializations
+            }
+
+    // Seed specializations
             self::$dbService->query("TRUNCATE TABLE settlement_specializations");
             foreach ($data['specializations'] as $spec) {
                 $stmt = self::$dbService->prepare("
@@ -159,7 +171,9 @@ class SettlementEvolutionConfig
                     :weight, :requirements)
                 ");
                 $stmt->execute($spec);
-            }            // Seed traits
+            }
+
+    // Seed traits
             self::$dbService->query("TRUNCATE TABLE settlement_traits");
             foreach ($data['traits'] as $trait) {
                 $stmt = self::$dbService->prepare("
@@ -171,7 +185,9 @@ class SettlementEvolutionConfig
                     :weight, :biome_restrictions)
                 ");
                 $stmt->execute($trait);
-            }            // Seed evolution types
+            }
+
+    // Seed evolution types
             self::$dbService->query("TRUNCATE TABLE settlement_evolution_types");
             foreach ($data['evolution_types'] as $type) {
                 $stmt = self::$dbService->prepare("
@@ -204,7 +220,7 @@ class SettlementEvolutionConfig
             $stmt->execute(['type' => $settlementType]);
             return $stmt->fetch(\PDO::FETCH_ASSOC);
         }
-        
+
         $stmt = self::$dbService->prepare(
             "SELECT * FROM settlement_evolution_thresholds ORDER BY min_population ASC"
         );

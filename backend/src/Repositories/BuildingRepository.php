@@ -6,11 +6,10 @@ use Exception;
 use App\Utils\Logger;
 use App\Repositories\DatabaseService;
 
-
 class BuildingRepository extends BaseRepository
 {
     protected string $table = 'buildings';
-      public function __construct(DatabaseService $db)
+    public function __construct(DatabaseService $db)
     {
         parent::__construct($db);
     }
@@ -45,17 +44,17 @@ class BuildingRepository extends BaseRepository
         try {
             $sql = "SELECT * FROM {$this->table} WHERE 1=1";
             $params = [];
-            
-            // Define filter mappings
+
+    // Define filter mappings
             $filterMapping = [
                 'type' => 'type',
                 'status' => 'status',
                 'settlementId' => 'settlement_id',
                 'level' => 'level'
             ];
-            
+
             $this->applyFilters($sql, $params, $filters, $filterMapping);
-            
+
             $sql .= " ORDER BY level DESC, type ASC";
             $this->addPagination($sql, $params, $limit, $offset);
 
@@ -74,8 +73,8 @@ class BuildingRepository extends BaseRepository
     {
         try {
             $requiredFields = ['name', 'type', 'settlement_id', 'level', 'status'];
-            
-            // Add timestamps
+
+    // Add timestamps
             $buildingData['created_at'] = $buildingData['created_at'] ?? date('Y-m-d H:i:s');
             $buildingData['updated_at'] = date('Y-m-d H:i:s');
 

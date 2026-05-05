@@ -22,7 +22,7 @@ class SettlementActions
 
     /**
      * Fetch all settlements with optional filtering
-     * 
+     *
      * @param array $filters Optional filters (regionId, settlementType, minPopulation, maxPopulation, limit, offset)
      * @return array List of settlements
      * @throws \RuntimeException if database operation fails
@@ -31,26 +31,26 @@ class SettlementActions
     {
         try {
             $query = Settlement::query();
-            
+
             if (!empty($filters['regionId'])) {
                 $query->where('region_id', $filters['regionId']);
             }
-            
+
             if (!empty($filters['settlementType'])) {
                 $query->where('type', $filters['settlementType']);
             }
-            
+
             if (isset($filters['minPopulation'])) {
                 $query->where('population', '>=', $filters['minPopulation']);
             }
-            
+
             if (isset($filters['maxPopulation'])) {
                 $query->where('population', '<=', $filters['maxPopulation']);
             }
-            
+
             $limit = $filters['limit'] ?? 20;
             $offset = $filters['offset'] ?? 0;
-            
+
             return $query
                 ->orderBy('population', 'DESC')
                 ->skip($offset)
@@ -64,9 +64,11 @@ class SettlementActions
             ]);
             throw new \RuntimeException('Failed to fetch settlements from database', 0, $error);
         }
-    }    /**
+    }
+
+    /**
      * Fetch settlement by ID with relationships
-     * 
+     *
      * @param string $settlementId Settlement identifier
      * @return array Settlement data
      * @throws ResourceNotFoundException if settlement not found
@@ -76,12 +78,12 @@ class SettlementActions
     {
         try {
             $settlement = Settlement::find($settlementId);
-            
+
             if (!$settlement) {
                 Logger::info("Settlement not found", ['settlementId' => $settlementId]);
                 throw new ResourceNotFoundException("Settlement not found: {$settlementId}");
             }
-            
+
             return $settlement->toArray();
         } catch (ResourceNotFoundException $error) {
             throw $error;
@@ -96,7 +98,7 @@ class SettlementActions
 
     /**
      * Get settlements by region ID
-     * 
+     *
      * @param string $regionId Region identifier
      * @return array List of settlements in the region
      * @throws \RuntimeException if database operation fails
@@ -119,7 +121,7 @@ class SettlementActions
 
     /**
      * Get settlement statistics for a region
-     * 
+     *
      * @param string $regionId Region identifier
      * @return array Settlement statistics
      * @throws \RuntimeException if database operation fails
@@ -128,7 +130,7 @@ class SettlementActions
     {
         try {
             $settlements = Settlement::where('region_id', $regionId)->get();
-            
+
             return [
                 'total_settlements' => $settlements->count(),
                 'total_population' => $settlements->sum('population'),
@@ -158,7 +160,7 @@ class SettlementActions
 
     /**
      * Create a new settlement
-     * 
+     *
      * @param array $settlementData Settlement creation data
      * @return array Created settlement data
      * @throws \RuntimeException if database operation fails
@@ -178,7 +180,7 @@ class SettlementActions
 
     /**
      * Update settlement by ID
-     * 
+     *
      * @param string $settlementId Settlement identifier
      * @param array $updateData Update data
      * @return array Updated settlement data
@@ -191,13 +193,13 @@ class SettlementActions
             if (!$settlement) {
                 throw new \RuntimeException('Settlement not found');
             }
-            
+
             foreach ($updateData as $key => $value) {
                 if (property_exists($settlement, $key)) {
                     $settlement->$key = $value;
                 }
             }
-            
+
             $settlement->save();
             return $settlement->toArray();
         } catch (\RuntimeException $error) {

@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class BuildingStatus extends Model
 {
     protected $table = 'building_statuses';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -22,6 +22,7 @@ class BuildingStatus extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -48,12 +49,12 @@ class BuildingStatus extends Model
                 $table->decimal('maintenance_modifier', 5, 2)->default(1.0);
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index(['is_active']);
                 $table->index(['code']);
             });
-            
-            // Seed default building statuses
+
+    // Seed default building statuses
             self::seedDefaultStatuses();
         }
     }

@@ -12,7 +12,9 @@ use App\Services\GameLoopService;
 
 class GameTickJob implements ShouldQueue
 {
-    use InteractsWithQueue, Queueable, SerializesModels;
+    use InteractsWithQueue;
+    use Queueable;
+    use SerializesModels;
 
     private const DIVINE_FAVOR_PER_TICK = 10;
 
@@ -30,37 +32,41 @@ class GameTickJob implements ShouldQueue
                 ['current_year' => 1]
             );
 
-            // Process game tick
+    // Process game tick
             $this->processGameTick($gameState);
 
-            // Schedule next tick
-            $this->release(60); // Release back to queue after 60 seconds
+    // Schedule next tick
+            $this->release(60);
+
+    // Release back to queue after 60 seconds
         } catch (\Exception $e) {
             \Log::error('Error in game tick processing: ' . $e->getMessage());
-            $this->release(60); // Retry after 60 seconds even on error
+            $this->release(60);
+
+    // Retry after 60 seconds even on error
         }
     }
 
     private function processGameTick(GameState $gameState)
     {
         $loopService = new GameLoopService();
-        
-        // 1. Process regions
+
+    // 1. Process regions
         $loopService->processRegions($gameState->current_year);
 
-        // 2. Process heroes
+    // 2. Process heroes
         $loopService->processHeroes($gameState->current_year);
 
-        // 3. Process settlements
+    // 3. Process settlements
         $loopService->processSettlements($gameState->current_year);
 
-        // 4. Process expired bets
+    // 4. Process expired bets
         $loopService->processExpiredBets($gameState->current_year);
 
-        // 5. Update divine favor
+    // 5. Update divine favor
         $this->updateDivineFavor();
 
-        // Log tick completion
+    // Log tick completion
         \Log::info('Game tick completed for year ' . $gameState->current_year);
     }
 

@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class SettlementType extends Model
 {
     protected $table = 'settlement_types';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -22,6 +22,7 @@ class SettlementType extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -48,12 +49,12 @@ class SettlementType extends Model
                 $table->integer('max_population')->nullable();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index(['is_active']);
                 $table->index(['code']);
             });
-            
-            // Seed default settlement types
+
+    // Seed default settlement types
             self::seedDefaultTypes();
         }
     }
@@ -81,11 +82,11 @@ class SettlementType extends Model
         if ($population < $this->min_population) {
             return false;
         }
-        
+
         if ($this->max_population && $population > $this->max_population) {
             return false;
         }
-        
+
         return true;
     }
 }

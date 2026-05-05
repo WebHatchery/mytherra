@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class SettlementNamePool extends Model
 {
     protected $table = 'settlement_name_pools';
-    
+
     protected $fillable = [
         'type',
         'value'

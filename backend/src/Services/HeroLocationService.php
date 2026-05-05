@@ -31,14 +31,14 @@ class HeroLocationService
                 throw new Exception("Invalid interaction type: {$interactionCode}");
             }
 
-            // Get location-specific modifiers
+    // Get location-specific modifiers
             $locationInteractions = LocationInteractionConfig::getLocationTypeInteractions($location['type']);
             $locationModifier = $this->getLocationModifier($locationInteractions, $interactionCode);
 
-            // Get status-based modifiers
+    // Get status-based modifiers
             $statusModifier = $this->getStatusModifier($location['status'], $interactionCode);
 
-            // Calculate success chance
+    // Calculate success chance
             $successChance = $this->calculateSuccessChance(
                 $hero,
                 $interactionType,
@@ -46,14 +46,14 @@ class HeroLocationService
                 $statusModifier
             );
 
-            // Calculate duration
+    // Calculate duration
             $duration = $this->calculateDuration(
                 $interactionType['base_duration'],
                 $locationModifier,
                 $statusModifier
             );
 
-            // Check requirements
+    // Check requirements
             $this->validateRequirements($hero, $locationModifier, $interactionType);
 
             return [
@@ -62,7 +62,6 @@ class HeroLocationService
                 'influence_cost' => $interactionType['influence_cost'],
                 'cooldown' => $interactionType['cooldown_hours']
             ];
-
         } catch (Exception $e) {
             Logger::error("Error starting interaction: " . $e->getMessage());
             throw $e;
@@ -76,13 +75,12 @@ class HeroLocationService
     {
         try {
             $success = $this->rollForSuccess($interaction['success_chance']);
-            
+
             if ($success) {
                 return $this->generateSuccessResults($hero, $location, $interaction);
             } else {
                 return $this->generateFailureResults($hero, $location, $interaction);
             }
-
         } catch (Exception $e) {
             Logger::error("Error completing interaction: " . $e->getMessage());
             throw $e;
@@ -103,11 +101,11 @@ class HeroLocationService
                 ];
             }
 
-            // Get location-specific modifiers
+    // Get location-specific modifiers
             $locationInteractions = LocationInteractionConfig::getLocationTypeInteractions($location['type']);
             $locationModifier = $this->getLocationModifier($locationInteractions, $interactionCode);
 
-            // Check level requirement
+    // Check level requirement
             if ($hero['level'] < ($locationModifier['min_hero_level'] ?? 1)) {
                 return [
                     'allowed' => false,
@@ -115,7 +113,7 @@ class HeroLocationService
                 ];
             }
 
-            // Check cooldown
+    // Check cooldown
             if ($this->isOnCooldown($hero, $interactionCode)) {
                 return [
                     'allowed' => false,
@@ -123,7 +121,7 @@ class HeroLocationService
                 ];
             }
 
-            // Check influence cost
+    // Check influence cost
             if (($hero['divine_favor'] ?? 0) < $interactionType['influence_cost']) {
                 return [
                     'allowed' => false,
@@ -135,7 +133,6 @@ class HeroLocationService
                 'allowed' => true,
                 'reason' => null
             ];
-
         } catch (Exception $e) {
             Logger::error("Error checking interaction possibility: " . $e->getMessage());
             return [
@@ -148,35 +145,37 @@ class HeroLocationService
     private function calculateSuccessChance($hero, $interactionType, $locationModifier, $statusModifier)
     {
         $baseChance = $interactionType['base_success_chance'];
-        
-        // Apply location modifier
+
+    // Apply location modifier
         $baseChance *= ($locationModifier['success_modifier'] ?? 1.0);
-        
-        // Apply status modifier
+
+    // Apply status modifier
         $baseChance *= ($statusModifier['success_modifier'] ?? 1.0);
-        
-        // Apply hero level bonus (1% per level)
+
+    // Apply hero level bonus (1% per level)
         $baseChance *= (1 + ($hero['level'] * 0.01));
-        
-        // Apply trait bonus if hero has required trait
-        if (isset($locationModifier['required_trait']) && 
-            isset($hero['traits'][$locationModifier['required_trait']])) {
+
+    // Apply trait bonus if hero has required trait
+        if (
+            isset($locationModifier['required_trait']) &&
+            isset($hero['traits'][$locationModifier['required_trait']])
+        ) {
             $baseChance *= (1 + $locationModifier['trait_bonus']);
         }
-        
+
         return min(0.95, max(0.05, $baseChance));
     }
 
     private function calculateDuration($baseDuration, $locationModifier, $statusModifier)
     {
         $duration = $baseDuration;
-        
-        // Apply location modifier
+
+    // Apply location modifier
         $duration *= ($locationModifier['duration_modifier'] ?? 1.0);
-        
-        // Apply status modifier
+
+    // Apply status modifier
         $duration *= ($statusModifier['duration_modifier'] ?? 1.0);
-        
+
         return max(1, round($duration));
     }
 
@@ -187,12 +186,12 @@ class HeroLocationService
             throw new Exception("Hero level too low for this interaction");
         }
 
-        // Check influence cost
+    // Check influence cost
         if (($hero['divine_favor'] ?? 0) < $interactionType['influence_cost']) {
             throw new Exception("Insufficient divine favor");
         }
 
-        // Check cooldown
+    // Check cooldown
         if ($this->isOnCooldown($hero, $interactionType['code'])) {
             throw new Exception("This interaction is still on cooldown");
         }
@@ -221,8 +220,10 @@ class HeroLocationService
     private function getStatusModifier($statusCode, $interactionCode)
     {
         foreach ($this->statusModifiers as $modifier) {
-            if ($modifier['status_code'] === $statusCode && 
-                $modifier['interaction_code'] === $interactionCode) {
+            if (
+                $modifier['status_code'] === $statusCode &&
+                $modifier['interaction_code'] === $interactionCode
+            ) {
                 return $modifier;
             }
         }
@@ -238,7 +239,7 @@ class HeroLocationService
         $lastInteraction = $hero['last_interactions'][$interactionCode];
         $interactionType = $this->getInteractionType($interactionCode);
         $cooldownHours = $interactionType['cooldown_hours'];
-        
+
         $cooldownEnds = strtotime($lastInteraction) + ($cooldownHours * 3600);
         return time() < $cooldownEnds;
     }
@@ -260,19 +261,19 @@ class HeroLocationService
             case 'explore':
                 $results['rewards'] = $this->generateExplorationRewards($location);
                 break;
-                
+
             case 'gather_resources':
                 $results['rewards'] = $this->generateResourceRewards($location);
                 break;
-                
+
             case 'investigate_rumors':
                 $results['rewards'] = $this->generateRumorResults($location);
                 break;
-                
+
             case 'establish_camp':
                 $results['rewards'] = $this->generateCampResults($location);
                 break;
-                
+
             case 'study_magic':
                 $results['rewards'] = $this->generateMagicStudyResults($location);
                 break;

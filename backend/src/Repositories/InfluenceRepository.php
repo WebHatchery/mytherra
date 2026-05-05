@@ -9,7 +9,7 @@ use App\Utils\Logger;
 class InfluenceRepository extends BaseRepository
 {
     protected string $table = 'influence_actions';
-    
+
     public function __construct(DatabaseService $db)
     {
         parent::__construct($db);
@@ -44,7 +44,7 @@ class InfluenceRepository extends BaseRepository
                 WHERE player_id = :player_id 
                 ORDER BY created_at DESC
                 LIMIT :limit OFFSET :offset";
-                
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':player_id' => $playerId,
@@ -63,7 +63,7 @@ class InfluenceRepository extends BaseRepository
                 WHERE target_id = :target_id 
                 AND target_type = :target_type 
                 ORDER BY created_at DESC";
-                
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':target_id' => $targetId,
@@ -80,17 +80,17 @@ class InfluenceRepository extends BaseRepository
         $sql = "SELECT SUM(influence_cost) as total_spent 
                 FROM divine_influence_actions 
                 WHERE player_id = :player_id";
-        
+
         if ($timeframe) {
             $sql .= " AND created_at >= DATE_SUB(NOW(), INTERVAL :timeframe DAY)";
         }
-                
+
         $stmt = $this->db->prepare($sql);
         $params = [':player_id' => $playerId];
         if ($timeframe) {
             $params[':timeframe'] = $timeframe;
         }
-        
+
         $stmt->execute($params);
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['total_spent'] ?? 0;
@@ -106,7 +106,7 @@ class InfluenceRepository extends BaseRepository
                 AND target_type = :target_type 
                 AND created_at >= DATE_SUB(NOW(), INTERVAL :days_ago DAY)
                 ORDER BY created_at DESC";
-                
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':target_id' => $targetId,
@@ -128,14 +128,14 @@ class InfluenceRepository extends BaseRepository
                 AND target_type = :target_type 
                 AND action_type = :action_type
                 AND created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)";
-                
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':target_id' => $targetId,
             ':target_type' => $targetType,
             ':action_type' => $actionType
         ]);
-        
+
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
         return $result['recent_actions'] == 0;
     }
@@ -147,8 +147,8 @@ class InfluenceRepository extends BaseRepository
     {
         // Get recent influence actions on the target
         $recentActions = $this->getRecentInfluenceEffects($targetId, $targetType, 7);
-        
-        // Base costs for different action types
+
+    // Base costs for different action types
         $baseCosts = [
             'guide' => 5,
             'empower' => 10,
@@ -156,12 +156,12 @@ class InfluenceRepository extends BaseRepository
             'corrupt' => 20,
             'revive' => 50
         ];
-        
+
         $baseCost = $baseCosts[$actionType] ?? 10;
-        
-        // Increase cost based on recent actions
+
+    // Increase cost based on recent actions
         $costMultiplier = 1 + (count($recentActions) * 0.2);
-        
+
         return ceil($baseCost * $costMultiplier);
     }
 
@@ -179,7 +179,7 @@ class InfluenceRepository extends BaseRepository
                 GROUP BY player_id
                 ORDER BY total_influence DESC
                 LIMIT :limit";
-                
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':timeframe' => $timeframe,

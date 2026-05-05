@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class BuildingTypeConfig extends Model
 {
     protected $table = 'building_type_configs';
-    
+
     protected $fillable = [
         'category',
         'code',

@@ -28,7 +28,7 @@ class StatusRepository
             $stmt->execute();
             $gameState = $stmt->fetch(\PDO::FETCH_ASSOC);
 
-            // Get player's divine favor
+    // Get player's divine favor
             $stmt = $this->db->prepare("
                 SELECT divine_favor 
                 FROM players 

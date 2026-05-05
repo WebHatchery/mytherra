@@ -17,19 +17,21 @@ class DivineInfluenceService
     public function __construct()
     {
         // All database operations now use Eloquent ORM
-    }/**
+    }
+
+    /**
      * Calculate target resistance to divine influence
      */
     public function calculateTargetResistance($targetId, $targetType, $influenceType)
     {
         try {
             $baseResistance = 0;
-            
+
             switch ($targetType) {
                 case 'hero':
                     // Heroes have varying resistance based on their power level and role
                     $hero = Hero::where('id', $targetId)->first(['level', 'role']);
-                    
+
                     if ($hero) {
                         $baseResistance = $hero->level * 5;
                         if ($hero->role === 'mystic' || $hero->role === 'priest') {
@@ -41,7 +43,7 @@ class DivineInfluenceService
                 case 'region':
                     // Regions resist based on their magic affinity and chaos levels
                     $region = Region::where('id', $targetId)->first(['magic_affinity', 'chaos']);
-                    
+
                     if ($region) {
                         $baseResistance = ($region->magic_affinity + $region->chaos) / 2;
                     }
@@ -50,7 +52,7 @@ class DivineInfluenceService
                 case 'settlement':
                     // Settlements resist based on population and prosperity
                     $settlement = Settlement::where('id', $targetId)->first(['population', 'prosperity']);
-                    
+
                     if ($settlement) {
                         $baseResistance = min(75, sqrt($settlement->population / 100) + $settlement->prosperity / 2);
                     }
@@ -59,23 +61,29 @@ class DivineInfluenceService
                 case 'landmark':
                     // Landmarks resist based on their magic and danger levels
                     $landmark = Landmark::where('id', $targetId)->first(['magic_level', 'danger_level']);
-                    
+
                     if ($landmark) {
                         $baseResistance = max($landmark->magic_level, $landmark->danger_level);
                     }
                     break;
             }
 
-            // Adjust resistance based on influence type
+    // Adjust resistance based on influence type
             switch ($influenceType) {
                 case 'bless':
-                    $baseResistance *= 0.8; // Blessings are easier to apply
+                    $baseResistance *= 0.8;
+
+    // Blessings are easier to apply
                     break;
                 case 'curse':
-                    $baseResistance *= 1.5; // Curses are harder to apply
+                    $baseResistance *= 1.5;
+
+    // Curses are harder to apply
                     break;
                 case 'guide':
-                    $baseResistance *= 1.2; // Guidance is moderately difficult
+                    $baseResistance *= 1.2;
+
+    // Guidance is moderately difficult
                     break;
             }
 
@@ -84,9 +92,11 @@ class DivineInfluenceService
             Logger::error("Error calculating target resistance: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Apply divine influence effect to target
-     * 
+     *
      * @param string $targetId ID of the target entity
      * @param string $targetType Type of target (hero, region, settlement, landmark)
      * @param string $influenceType Type of influence (bless, curse, guide, etc.)
@@ -103,7 +113,7 @@ class DivineInfluenceService
     ): array {
         try {
             // Get target entity
-            $target = match($targetType) {
+            $target = match ($targetType) {
                 'hero' => Hero::find($targetId),
                 'region' => Region::find($targetId),
                 'settlement' => Settlement::find($targetId),
@@ -118,11 +128,11 @@ class DivineInfluenceService
                 ];
             }
 
-            // Calculate cost and effectiveness
+    // Calculate cost and effectiveness
             $cost = $this->calculateInfluenceCost($targetId, $targetType, $influenceType, $strength);
             $modifiers = $this->calculateModifiers($influenceType, $targetType, $targetId);
 
-            // Check if player has enough divine favor
+    // Check if player has enough divine favor
             $player = Player::getSinglePlayer();
             if ($player->getDivineFavor() < $cost['cost']) {
                 return [
@@ -132,8 +142,8 @@ class DivineInfluenceService
                 ];
             }
 
-            // Apply effects to target
-            $effects = match($targetType) {
+    // Apply effects to target
+            $effects = match ($targetType) {
                 'hero' => $this->applyHeroInfluence($target, $influenceType, $strength),
                 'region' => $this->applyRegionInfluence($target, $influenceType, $strength),
                 'settlement' => $this->applySettlementInfluence($target, $influenceType, $strength),
@@ -141,7 +151,7 @@ class DivineInfluenceService
                 default => throw new \Exception("Invalid target type: {$targetType}")
             };
 
-            // Spend divine favor
+    // Spend divine favor
             if (!$player->spendDivineFavor($cost['cost'])) {
                 return [
                     'success' => false,
@@ -150,7 +160,7 @@ class DivineInfluenceService
                 ];
             }
 
-            // Record influence history
+    // Record influence history
             $this->recordInfluenceHistory(
                 $targetId,
                 $targetType,
@@ -160,7 +170,7 @@ class DivineInfluenceService
                 $effects
             );
 
-            // Return success response with effects
+    // Return success response with effects
             return [
                 'success' => true,
                 'cost' => $cost['cost'],
@@ -173,8 +183,6 @@ class DivineInfluenceService
                 'message' => "Divine influence successfully applied",
                 'targetName' => $target->name
             ];
-            
-
         } catch (\Exception $e) {
             Logger::error("Error applying divine influence: " . $e->getMessage());
             return [
@@ -186,10 +194,18 @@ class DivineInfluenceService
 
     private function getTargetType($target)
     {
-        if (strpos(get_class($target), 'Hero') !== false) return 'hero';
-        if (strpos(get_class($target), 'Region') !== false) return 'region';
-        if (strpos(get_class($target), 'Settlement') !== false) return 'settlement';
-        if (strpos(get_class($target), 'Landmark') !== false) return 'landmark';
+        if (strpos(get_class($target), 'Hero') !== false) {
+            return 'hero';
+        }
+        if (strpos(get_class($target), 'Region') !== false) {
+            return 'region';
+        }
+        if (strpos(get_class($target), 'Settlement') !== false) {
+            return 'settlement';
+        }
+        if (strpos(get_class($target), 'Landmark') !== false) {
+            return 'landmark';
+        }
         return null;
     }
 
@@ -275,7 +291,9 @@ class DivineInfluenceService
         }
         $landmark->save();
         return $effects;
-    }    private function recordInfluenceEvent($targetId, $targetType, $influenceType, $strength, $description, $effects)
+    }
+
+    private function recordInfluenceEvent($targetId, $targetType, $influenceType, $strength, $description, $effects)
     {
         try {
             GameEvent::create([
@@ -290,7 +308,8 @@ class DivineInfluenceService
             ]);
         } catch (\Exception $e) {
             Logger::error("Error recording influence event: " . $e->getMessage());
-            // Don't throw - this is a non-critical operation
+
+    // Don't throw - this is a non-critical operation
         }
     }
 
@@ -314,11 +333,17 @@ class DivineInfluenceService
 
     public function calculateDivinePointRecovery(string $playerId, int $activeBets = 0): int
     {
-        $baseRecovery = 10; // Base points per year
-        $pointsPerBet = 2; // Additional points for each active bet
+        $baseRecovery = 10;
+
+    // Base points per year
+        $pointsPerBet = 2;
+
+    // Additional points for each active bet
 
         return $baseRecovery + ($activeBets * $pointsPerBet);
-    }    private function recordInfluenceHistory(string $targetId, string $targetType, string $influenceType, string $strength, string $description, array $effects)
+    }
+
+    private function recordInfluenceHistory(string $targetId, string $targetType, string $influenceType, string $strength, string $description, array $effects)
     {
         try {
             InfluenceHistory::create([
@@ -332,7 +357,8 @@ class DivineInfluenceService
             ]);
         } catch (\Exception $e) {
             Logger::error("Error recording influence history: " . $e->getMessage());
-            // Non-critical operation, don't throw
+
+    // Non-critical operation, don't throw
         }
     }
 
@@ -364,21 +390,23 @@ class DivineInfluenceService
                 default => throw new \Exception("Invalid influence type: {$influenceType}")
             };
 
-            // Add target-specific modifiers
+    // Add target-specific modifiers
             $targetResistance = $this->calculateTargetResistance($targetId, $targetType, $influenceType);
             $resistanceModifier = 1 - ($targetResistance / 100);
-            $diminishingReturns = $this->calculateDiminishingReturns($targetId);            // Calculate resonance bonus
+            $diminishingReturns = $this->calculateDiminishingReturns($targetId);
+
+    // Calculate resonance bonus
             $resonanceBonus = 1.0;
             if ($targetType === 'region') {
                 $divineResonance = Region::where('id', $targetId)->value('divine_resonance');
-                
+
                 if ($divineResonance !== null) {
                     // Formula: 1 + (resonance - 50) * 0.01
                     $resonanceBonus += ($divineResonance - 50) * 0.01;
                 }
             }
 
-            // Apply all modifiers
+    // Apply all modifiers
             $finalModifier = $resistanceModifier * $diminishingReturns * $resonanceBonus;
 
             return [
@@ -390,9 +418,11 @@ class DivineInfluenceService
             Logger::error("Error calculating modifiers: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Calculate the cost of applying divine influence
-     * 
+     *
      * @param string $targetId ID of the target entity
      * @param string $targetType Type of target (hero, region, settlement, landmark)
      * @param string $influenceType Type of influence (bless, curse, guide, etc.)
@@ -410,7 +440,7 @@ class DivineInfluenceService
                 'direct' => 25
             ];
 
-            // Strength multipliers
+    // Strength multipliers
             $strengthMultipliers = [
                 'subtle' => 1.0,
                 'minor' => 1.5,
@@ -426,20 +456,24 @@ class DivineInfluenceService
                 throw new \Exception("Invalid strength level: {$strength}");
             }
 
-            // Calculate base cost with strength multiplier
+    // Calculate base cost with strength multiplier
             $cost = round($baseCosts[$influenceType] * $strengthMultipliers[$strength]);
 
-            // Additional cost for certain target types
+    // Additional cost for certain target types
             if ($targetType === 'region') {
-                $cost = round($cost * 1.5); // Regions are more expensive to influence
+                $cost = round($cost * 1.5);
+
+    // Regions are more expensive to influence
             }
 
-            // Ensure minimum cost of 1
-            $cost = max(1, $cost);            // Calculate effectiveness estimate
+    // Ensure minimum cost of 1
+            $cost = max(1, $cost);
+
+    // Calculate effectiveness estimate
             $modifiers = $this->calculateModifiers($influenceType, $targetType, $targetId);
 
-            // Get target name using Eloquent
-            $targetName = match($targetType) {
+    // Get target name using Eloquent
+            $targetName = match ($targetType) {
                 'hero' => Hero::where('id', $targetId)->value('name'),
                 'settlement' => Settlement::where('id', $targetId)->value('name'),
                 'region' => Region::where('id', $targetId)->value('name'),
@@ -452,7 +486,6 @@ class DivineInfluenceService
                 'effectivenessEstimate' => $modifiers,
                 'targetName' => $targetName
             ];
-
         } catch (\Exception $e) {
             Logger::error("Error calculating influence cost: " . $e->getMessage());
             throw $e;

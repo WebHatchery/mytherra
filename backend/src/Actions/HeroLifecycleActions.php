@@ -18,7 +18,8 @@ class HeroLifecycleActions
         private HeroRepository $heroRepository,
         private SettlementRepository $settlementRepository,
         private HeroLifecycleService $heroLifecycleService
-    ) {}
+    ) {
+    }
 
     /**
      * Process a hero's tick (lifecycle events)
@@ -29,7 +30,7 @@ class HeroLifecycleActions
      * @throws ResourceNotFoundException if hero not found
      * @throws \RuntimeException if processing fails
      */
-    public function processHeroTick(string $heroId, int $currentYear): array 
+    public function processHeroTick(string $heroId, int $currentYear): array
     {
         try {
             $result = $this->heroLifecycleService->processTick($heroId, $currentYear);
@@ -100,7 +101,7 @@ class HeroLifecycleActions
     /**
      * Generate a unique hero ID
      */
-    private function generateHeroId(): string 
+    private function generateHeroId(): string
     {
         return 'hero-' . bin2hex(random_bytes(8));
     }
@@ -110,7 +111,7 @@ class HeroLifecycleActions
      *
      * @throws ResourceNotFoundException if region not found
      */
-    private function validateRegionExists(string $regionId): void 
+    private function validateRegionExists(string $regionId): void
     {
         $region = $this->settlementRepository->getRegionById($regionId);
         if (!$region) {
@@ -123,7 +124,7 @@ class HeroLifecycleActions
      *
      * @throws \InvalidArgumentException if role is invalid
      */
-    private function validateHeroRole(string $role): void 
+    private function validateHeroRole(string $role): void
     {
         if (!Hero::validateRole($role)) {
             throw new \InvalidArgumentException("Invalid hero role: {$role}");

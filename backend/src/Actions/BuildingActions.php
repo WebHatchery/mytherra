@@ -14,7 +14,8 @@ class BuildingActions
 {
     public function __construct(
         private BuildingRepository $buildingRepository
-    ) {}
+    ) {
+    }
 
     /**
      * Fetch all buildings with optional filters
@@ -27,33 +28,34 @@ class BuildingActions
     {
         try {
             $query = Building::query();
-              // Apply filters
+
+    // Apply filters
             if (!empty($filters['settlementId'])) {
                 $query->where('settlement_id', $filters['settlementId']);
             }
-            
+
             if (!empty($filters['type'])) {
                 $query->where('type', $filters['type']);
             }
-            
+
             if (!empty($filters['status'])) {
                 $query->where('status', $filters['status']);
             }
-            
+
             if (!empty($filters['minCondition'])) {
                 $query->where('condition', '>=', $filters['minCondition']);
             }
-            
+
             if (!empty($filters['maxCondition'])) {
                 $query->where('condition', '<=', $filters['maxCondition']);
             }
-            
-            // Apply pagination
+
+    // Apply pagination
             $limit = $filters['limit'] ?? 20;
             $offset = $filters['offset'] ?? 0;
-            
+
             $buildings = $query->skip($offset)->take($limit)->get();
-            
+
             return $buildings->map(fn($building) => $building->toArray())->all();
         } catch (\Exception $error) {
             Logger::error('Error fetching buildings', [
@@ -62,7 +64,9 @@ class BuildingActions
             ]);
             throw new \RuntimeException('Failed to fetch buildings from database', 0, $error);
         }
-    }    /**
+    }
+
+    /**
      * Fetch a building by ID
      *
      * @param string $buildingId The ID of the building to fetch
@@ -74,13 +78,13 @@ class BuildingActions
     {
         try {
             $building = $this->buildingRepository->getById($buildingId);
-            
+
             if (!$building) {
                 Logger::info("Building not found", ['buildingId' => $buildingId]);
                 throw new ResourceNotFoundException("Building not found: {$buildingId}");
             }
 
-            // Repository returns array data, not model instance
+    // Repository returns array data, not model instance
             return $building;
         } catch (ResourceNotFoundException $error) {
             throw $error;
@@ -90,7 +94,8 @@ class BuildingActions
                 'error' => $error->getMessage()
             ]);
             throw new \RuntimeException('Failed to fetch building from database', 0, $error);
-        }    }
+        }
+    }
 
     /**
      * Create a new building
@@ -103,15 +108,15 @@ class BuildingActions
     {
         try {
             $building = new Building($buildingData);
-            
-            // Validate the building
+
+    // Validate the building
             $errors = $building->validate();
             if (!empty($errors)) {
                 throw new \RuntimeException('Validation failed: ' . implode(', ', $errors));
             }
-            
+
             $building->save();
-            
+
             Logger::info("Successfully created building", ['id' => $building->id]);
             return $building->toArray();
         } catch (\Exception $error) {
@@ -136,7 +141,7 @@ class BuildingActions
     {
         try {
             $building = $this->buildingRepository->getById($buildingId);
-            
+
             if (!$building) {
                 Logger::info("Building not found", ['buildingId' => $buildingId]);
                 throw new ResourceNotFoundException("Building not found: {$buildingId}");
@@ -145,17 +150,17 @@ class BuildingActions
             if (!($building instanceof Building)) {
                 throw new \RuntimeException("Invalid building data returned from repository");
             }
-            
+
             $building->fill($updateData);
-            
-            // Validate the building
+
+    // Validate the building
             $errors = $building->validate();
             if (!empty($errors)) {
                 throw new \RuntimeException('Validation failed: ' . implode(', ', $errors));
             }
-            
+
             $building->save();
-            
+
             Logger::info("Successfully updated building", ['id' => $buildingId]);
             return $building->toArray();
         } catch (ResourceNotFoundException $error) {
@@ -182,7 +187,7 @@ class BuildingActions
     {
         try {
             $building = $this->buildingRepository->getById($buildingId);
-            
+
             if (!$building) {
                 Logger::info("Building not found", ['buildingId' => $buildingId]);
                 throw new ResourceNotFoundException("Building not found: {$buildingId}");
@@ -191,9 +196,9 @@ class BuildingActions
             if (!($building instanceof Building)) {
                 throw new \RuntimeException("Invalid building data returned from repository");
             }
-            
+
             $building->delete();
-            
+
             Logger::info("Successfully deleted building", ['id' => $buildingId]);
             return true;
         } catch (ResourceNotFoundException $error) {

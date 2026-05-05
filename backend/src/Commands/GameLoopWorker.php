@@ -10,6 +10,7 @@ use App\Jobs\GameTickJob;
 class GameLoopWorker extends Command
 {
     protected $signature = 'game:loop {--queue=game-loop}';
+
     protected $description = 'Start the game loop worker';
 
     private Worker $worker;
@@ -25,7 +26,7 @@ class GameLoopWorker extends Command
         // Dispatch initial game tick
         dispatch(new GameTickJob());
 
-        // Start processing the queue
+    // Start processing the queue
         $this->processQueue();
     }
 
@@ -55,7 +56,9 @@ class GameLoopWorker extends Command
                 );
             } catch (\Exception $e) {
                 $this->error('Queue worker error: ' . $e->getMessage());
-                sleep(10); // Wait before retrying
+                sleep(10);
+
+    // Wait before retrying
             }
         }
     }

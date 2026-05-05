@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class GameConfig extends Model
 {
     protected $table = 'game_configs';
-    
+
     protected $fillable = [
         'id',
         'category',
@@ -20,6 +20,7 @@ class GameConfig extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     public static function createTable()
@@ -33,7 +34,7 @@ class GameConfig extends Model
                 $table->enum('data_type', ['number', 'string', 'boolean', 'array']);
                 $table->text('description')->nullable();
                 $table->timestamps();
-                
+
                 $table->unique(['category', 'key']);
                 $table->index(['category']);
             });

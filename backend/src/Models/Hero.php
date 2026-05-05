@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class Hero extends Model
 {
     protected $table = 'heroes';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -37,9 +37,14 @@ class Hero extends Model
     ];
 
     protected $keyType = 'string';
-    public $incrementing = false;    // Validation constants
-    const ROLES = ['scholar', 'warrior', 'prophet', 'agent of change', 'undecided']; // For backward compatibility
-    const STATUSES = ['living', 'deceased', 'undead', 'ascended'];
+
+    public $incrementing = false;
+
+    // Validation constants
+    public const ROLES = ['scholar', 'warrior', 'prophet', 'agent of change', 'undecided'];
+
+    // For backward compatibility
+    public const STATUSES = ['living', 'deceased', 'undead', 'ascended'];
 
     // Database-driven methods (replaces hardcoded arrays)
     public static function getValidRoles()
@@ -50,7 +55,9 @@ class Hero extends Model
     public static function getRoleDetails()
     {
         return HeroRole::getActiveRoles();
-    }    /**
+    }
+
+    /**
      * Validate hero role
      */
     public function validateRole(): bool
@@ -64,13 +71,15 @@ class Hero extends Model
     public function validateStatus(): bool
     {
         return in_array($this->status, self::STATUSES);
-    }    /**
+    }
+
+    /**
      * Get role configuration
      */
     public function getRoleConfig(): array
     {
         $heroRole = HeroRole::where('code', $this->role)->first();
-        
+
         if (!$heroRole) {
             // Fallback for unknown roles
             return [
@@ -157,10 +166,18 @@ class Hero extends Model
     public function getLevelCategory(): string
     {
         $level = $this->level ?? 1;
-        if ($level >= 50) return 'Legendary';
-        if ($level >= 25) return 'Master';
-        if ($level >= 10) return 'Experienced';
-        if ($level >= 5) return 'Apprentice';
+        if ($level >= 50) {
+            return 'Legendary';
+        }
+        if ($level >= 25) {
+            return 'Master';
+        }
+        if ($level >= 10) {
+            return 'Experienced';
+        }
+        if ($level >= 5) {
+            return 'Apprentice';
+        }
         return 'Novice';
     }
 
@@ -170,10 +187,18 @@ class Hero extends Model
     public function getAgeCategory(): string
     {
         $age = $this->age ?? 20;
-        if ($age >= 70) return 'Elder';
-        if ($age >= 50) return 'Mature';
-        if ($age >= 30) return 'Adult';
-        if ($age >= 18) return 'Young Adult';
+        if ($age >= 70) {
+            return 'Elder';
+        }
+        if ($age >= 50) {
+            return 'Mature';
+        }
+        if ($age >= 30) {
+            return 'Adult';
+        }
+        if ($age >= 18) {
+            return 'Young Adult';
+        }
         return 'Youth';
     }
 
@@ -183,7 +208,9 @@ class Hero extends Model
     public function isMilestoneLevel(): bool
     {
         $level = $this->level ?? 1;
-        if (in_array($level, [5, 10, 25])) return true;
+        if (in_array($level, [5, 10, 25])) {
+            return true;
+        }
         return $level >= 25 && $level % 25 === 0;
     }
 
@@ -195,8 +222,8 @@ class Hero extends Model
         $level = $this->level ?? 1;
         $baseLevelUpChance = 0.3;
         $levelUpDifficultyFactor = 0.95;
-        
-        // Accelerated leveling for low levels
+
+    // Accelerated leveling for low levels
         if ($level <= 15) {
             return $baseLevelUpChance * 4.0 * pow($levelUpDifficultyFactor, $level - 1);
         } elseif ($level <= 49) {
@@ -242,12 +269,12 @@ class Hero extends Model
             'forceNotableEvent' => 15
         ];
 
-        // Calculate revive cost based on hero stats
+    // Calculate revive cost based on hero stats
         if (!$this->isAlive()) {
             $level = $this->level ?? 1;
             $age = $this->age ?? 20;
             $featCount = count($this->feats ?? []);
-            
+
             $baseCosts['reviveHero'] = 50 + ($level * 5) + ($age * 2) + ($featCount * 3);
         }
 
@@ -260,16 +287,18 @@ class Hero extends Model
     public function updateAlignment(int $goodChange, int $chaoticChange, string $reason = ''): void
     {
         $alignment = $this->alignment ?? ['good' => 50, 'chaotic' => 50];
-        
+
         $alignment['good'] = max(0, min(100, $alignment['good'] + $goodChange));
         $alignment['chaotic'] = max(0, min(100, $alignment['chaotic'] + $chaoticChange));
-        
+
         if ($reason) {
             $alignment['lastChange'] = $reason;
         }
-        
+
         $this->alignment = $alignment;
-    }    /**
+    }
+
+    /**
      * Apply role change effects
      */
     public function changeRole(string $newRole, string $reason = ''): bool
@@ -281,26 +310,28 @@ class Hero extends Model
         $oldRole = $this->role;
         $this->role = $newRole;
 
-        // Add feat for role change
+    // Add feat for role change
         if ($oldRole === 'undecided') {
             $this->addFeat("Guided towards the path of a {$newRole}");
         } else {
             $this->addFeat("Changed from {$oldRole} to {$newRole}");
         }
 
-        // Get role details from database for alignment changes
+    // Get role details from database for alignment changes
         $heroRole = HeroRole::where('code', $newRole)->first();
         if ($heroRole && $heroRole->alignment_modifiers) {
             $change = $heroRole->alignment_modifiers;
             $this->updateAlignment(
-                $change['good'] ?? 0, 
-                $change['chaotic'] ?? 0, 
+                $change['good'] ?? 0,
+                $change['chaotic'] ?? 0,
                 $reason ?: "Role change to {$newRole}"
             );
         }
 
         return true;
-    }    // Relationships
+    }
+
+    // Relationships
 
     /**
      * Get the region this hero belongs to
@@ -324,13 +355,18 @@ class Hero extends Model
     public function settlementInteractions()
     {
         return $this->hasMany(HeroSettlementInteraction::class, 'hero_id');
-    }    public static function createTable()
+    }
+
+    public static function createTable()
     {
         if (!Schema::schema()->hasTable('heroes')) {
-            Schema::schema()->create('heroes', function (Blueprint $table) {                $table->string('id')->primary();
+            Schema::schema()->create('heroes', function (Blueprint $table) {
+                $table->string('id')->primary();
                 $table->string('name');
                 $table->string('region_id');
-                $table->string('role'); // Reference to hero_roles.code
+                $table->string('role');
+
+    // Reference to hero_roles.code
                 $table->text('description');
                 $table->json('feats')->nullable();
                 $table->string('influence_last_action')->nullable();
@@ -342,11 +378,12 @@ class Hero extends Model
                 $table->json('alignment')->nullable();
                 $table->enum('status', ['living', 'deceased', 'undead', 'ascended'])->nullable();
                 $table->timestamps();
-                  // Foreign key constraints
+
+    // Foreign key constraints
                 $table->foreign('region_id')->references('id')->on('regions')->onDelete('cascade');
                 $table->foreign('role')->references('code')->on('hero_roles')->onDelete('restrict');
-                
-                // Indexes for performance
+
+    // Indexes for performance
                 $table->index('region_id');
                 $table->index('role');
                 $table->index('is_alive');

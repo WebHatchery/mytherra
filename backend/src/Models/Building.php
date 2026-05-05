@@ -9,7 +9,8 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class Building extends Model
 {
     protected $table = 'buildings';
-      protected $fillable = [
+
+    protected $fillable = [
         'id',
         'settlement_id',
         'type',
@@ -18,13 +19,16 @@ class Building extends Model
         'status',
         'level',
         'specialProperties'
-    ];    protected $casts = [
+      ];
+
+    protected $casts = [
         'specialProperties' => 'array',
         'condition' => 'integer',
         'level' => 'integer'
-    ];
+      ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     // Legacy constants kept for backward compatibility - use database methods instead
@@ -38,22 +42,22 @@ class Building extends Model
 
     public static function getValidStatuses()
     {
-        return BuildingStatus::getStatusCodes();
+          return BuildingStatus::getStatusCodes();
     }
 
     public static function getAllTypeDetails()
     {
-        return BuildingType::getActiveTypes();
+          return BuildingType::getActiveTypes();
     }
 
     public static function getAllStatusDetails()
     {
-        return BuildingStatus::getActiveStatuses();
+          return BuildingStatus::getActiveStatuses();
     }
 
     public static function getValidSpecialProperties()
     {
-        return BuildingSpecialProperty::getPropertyCodes();
+          return BuildingSpecialProperty::getPropertyCodes();
     }
 
     // Relationships
@@ -64,12 +68,12 @@ class Building extends Model
 
     public function buildingType()
     {
-        return $this->belongsTo(BuildingType::class, 'type', 'code');
+          return $this->belongsTo(BuildingType::class, 'type', 'code');
     }
 
     public function buildingStatus()
     {
-        return $this->belongsTo(BuildingStatus::class, 'status', 'code');
+          return $this->belongsTo(BuildingStatus::class, 'status', 'code');
     }
 
     // Validation methods (database-driven)
@@ -80,12 +84,12 @@ class Building extends Model
 
     public function validateStatus($status)
     {
-        return in_array($status, self::getValidStatuses());
+          return in_array($status, self::getValidStatuses());
     }
 
     public function validateCondition($condition)
     {
-        return is_numeric($condition) && $condition >= 0 && $condition <= 100;
+          return is_numeric($condition) && $condition >= 0 && $condition <= 100;
     }
 
     public function validateSpecialProperties($properties)
@@ -93,35 +97,40 @@ class Building extends Model
         if (!is_array($properties)) {
             return false;
         }
-        
-        $validProperties = BuildingSpecialProperty::getPropertyCodes();
+
+          $validProperties = BuildingSpecialProperty::getPropertyCodes();
         foreach ($properties as $property) {
             if (!in_array($property, $validProperties)) {
                 return false;
             }
         }
-        
-        return true;
+
+          return true;
     }
 
     // Database table creation
     public static function createTable()
     {
-        if (!Schema::schema()->hasTable('buildings')) {            Schema::schema()->create('buildings', function (Blueprint $table) {
+        if (!Schema::schema()->hasTable('buildings')) {
+            Schema::schema()->create('buildings', function (Blueprint $table) {
                 $table->string('id')->primary();
                 $table->string('settlement_id');
-                $table->string('type'); // Changed from enum to string for flexibility
+                $table->string('type');
+
+    // Changed from enum to string for flexibility
                 $table->string('name');
                 $table->integer('condition')->default(100);
-                $table->string('status')->default('active'); // Changed from enum to string
+                $table->string('status')->default('active');
+
+    // Changed from enum to string
                 $table->integer('level')->default(1);
                 $table->json('specialProperties')->nullable();
                 $table->timestamps();
 
-                // Foreign key constraint
+    // Foreign key constraint
                 $table->foreign('settlement_id')->references('id')->on('settlements')->onDelete('cascade');
-                
-                // Indexes for performance
+
+    // Indexes for performance
                 $table->index('settlement_id');
                 $table->index('type');
                 $table->index('status');
@@ -140,20 +149,20 @@ class Building extends Model
 
     public function getTypeDetails()
     {
-        $buildingType = BuildingType::getByCode($this->type);
-        return $buildingType ? $buildingType->getTypeDetails() : [];
+          $buildingType = BuildingType::getByCode($this->type);
+          return $buildingType ? $buildingType->getTypeDetails() : [];
     }
 
     public function getStatusDescription()
     {
-        $buildingStatus = BuildingStatus::getByCode($this->status);
-        return $buildingStatus ? $buildingStatus->description : 'Unknown status';
+          $buildingStatus = BuildingStatus::getByCode($this->status);
+          return $buildingStatus ? $buildingStatus->description : 'Unknown status';
     }
 
     public function getStatusDetails()
     {
-        $buildingStatus = BuildingStatus::getByCode($this->status);
-        return $buildingStatus ? $buildingStatus->getStatusDetails() : [];
+          $buildingStatus = BuildingStatus::getByCode($this->status);
+          return $buildingStatus ? $buildingStatus->getStatusDetails() : [];
     }
 
     // Condition methods (database-driven)
@@ -165,25 +174,25 @@ class Building extends Model
 
     public function getConditionDetails()
     {
-        return BuildingConditionLevel::getConditionDetails($this->condition);
+          return BuildingConditionLevel::getConditionDetails($this->condition);
     }
 
     public function getConditionColorCode()
     {
-        $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
-        return $conditionDetails['color_code'];
+          $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
+          return $conditionDetails['color_code'];
     }
 
     public function getMaintenanceMultiplier()
     {
-        $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
-        return $conditionDetails['maintenance_multiplier'];
+          $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
+          return $conditionDetails['maintenance_multiplier'];
     }
 
     public function getProductivityMultiplier()
     {
-        $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
-        return $conditionDetails['productivity_multiplier'];
+          $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
+          return $conditionDetails['productivity_multiplier'];
     }
 
     // Business logic methods (database-driven)
@@ -193,32 +202,32 @@ class Building extends Model
         if (!$buildingStatus) {
             return false;
         }
-        
+
         $modifiers = $buildingStatus->productivity_modifiers ?? [];
         return isset($modifiers['is_operational']) ? $modifiers['is_operational'] : false;
     }
 
     public function hasSpecialProperty($property)
     {
-        return in_array($property, $this->specialProperties ?? []);
+          return in_array($property, $this->specialProperties ?? []);
     }
 
     public function getSpecialPropertyDetails($property)
     {
-        $specialProperty = BuildingSpecialProperty::getByCode($property);
-        return $specialProperty ? $specialProperty->toArray() : null;
+          $specialProperty = BuildingSpecialProperty::getByCode($property);
+          return $specialProperty ? $specialProperty->toArray() : null;
     }
 
     public function getAllSpecialPropertyDetails()
     {
-        $details = [];
+          $details = [];
         foreach ($this->specialProperties ?? [] as $property) {
             $propertyDetails = $this->getSpecialPropertyDetails($property);
             if ($propertyDetails) {
                 $details[] = $propertyDetails;
             }
         }
-        return $details;
+          return $details;
     }
 
     // Category methods (database-driven)
@@ -227,7 +236,7 @@ class Building extends Model
         // Check if building type is magical or has magical special properties
         $buildingType = BuildingType::getByCode($this->type);
         $isMagicalType = $buildingType && ($buildingType->category === 'magical');
-        
+
         $hasMagicalProperty = false;
         foreach ($this->specialProperties ?? [] as $property) {
             $propDetails = BuildingSpecialProperty::getByCode($property);
@@ -236,17 +245,17 @@ class Building extends Model
                 break;
             }
         }
-        
+
         return $isMagicalType || $hasMagicalProperty;
     }
 
     public function isReligious()
     {
-        // Check if building type is religious or has religious special properties
-        $buildingType = BuildingType::getByCode($this->type);
-        $isReligiousType = $buildingType && ($buildingType->category === 'religious');
-        
-        $hasReligiousProperty = false;
+          // Check if building type is religious or has religious special properties
+          $buildingType = BuildingType::getByCode($this->type);
+          $isReligiousType = $buildingType && ($buildingType->category === 'religious');
+
+          $hasReligiousProperty = false;
         foreach ($this->specialProperties ?? [] as $property) {
             $propDetails = BuildingSpecialProperty::getByCode($property);
             if ($propDetails && $propDetails->category === 'religious') {
@@ -254,17 +263,17 @@ class Building extends Model
                 break;
             }
         }
-        
-        return $isReligiousType || $hasReligiousProperty;
+
+          return $isReligiousType || $hasReligiousProperty;
     }
 
     public function isMilitary()
     {
-        // Check if building type is military or has defensive special properties
-        $buildingType = BuildingType::getByCode($this->type);
-        $isMilitaryType = $buildingType && ($buildingType->category === 'military');
-        
-        $hasMilitaryProperty = false;
+          // Check if building type is military or has defensive special properties
+          $buildingType = BuildingType::getByCode($this->type);
+          $isMilitaryType = $buildingType && ($buildingType->category === 'military');
+
+          $hasMilitaryProperty = false;
         foreach ($this->specialProperties ?? [] as $property) {
             $propDetails = BuildingSpecialProperty::getByCode($property);
             if ($propDetails && in_array($propDetails->category, ['defensive', 'military'])) {
@@ -272,17 +281,17 @@ class Building extends Model
                 break;
             }
         }
-        
-        return $isMilitaryType || $hasMilitaryProperty;
+
+          return $isMilitaryType || $hasMilitaryProperty;
     }
 
     public function isCommercial()
     {
-        // Check if building type is commercial or has economic special properties
-        $buildingType = BuildingType::getByCode($this->type);
-        $isCommercialType = $buildingType && ($buildingType->category === 'commercial');
-        
-        $hasCommercialProperty = false;
+          // Check if building type is commercial or has economic special properties
+          $buildingType = BuildingType::getByCode($this->type);
+          $isCommercialType = $buildingType && ($buildingType->category === 'commercial');
+
+          $hasCommercialProperty = false;
         foreach ($this->specialProperties ?? [] as $property) {
             $propDetails = BuildingSpecialProperty::getByCode($property);
             if ($propDetails && $propDetails->category === 'economic') {
@@ -290,8 +299,8 @@ class Building extends Model
                 break;
             }
         }
-        
-        return $isCommercialType || $hasCommercialProperty;
+
+          return $isCommercialType || $hasCommercialProperty;
     }
 
     // Calculate building value (fully database-driven)
@@ -300,20 +309,20 @@ class Building extends Model
         // Get base value from building type
         $buildingType = BuildingType::getByCode($this->type);
         $baseValue = $buildingType ? ($buildingType->base_cost ?? 500) : 500;
-        
-        // Apply condition multiplier
+
+    // Apply condition multiplier
         $conditionMultiplier = $this->condition / 100;
-        
-        // Get status multiplier from database
+
+    // Get status multiplier from database
         $buildingStatus = BuildingStatus::getByCode($this->status);
         $statusModifiers = $buildingStatus ? ($buildingStatus->productivity_modifiers ?? []) : [];
         $statusMultiplier = $statusModifiers['value_multiplier'] ?? 1.0;
 
-        // Apply condition level multiplier
+    // Apply condition level multiplier
         $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
         $conditionValueMultiplier = $conditionDetails['productivity_multiplier'] ?? 1.0;
 
-        // Apply special property modifiers
+    // Apply special property modifiers
         $specialPropertyMultiplier = 1.0;
         foreach ($this->specialProperties ?? [] as $property) {
             $propDetails = BuildingSpecialProperty::getByCode($property);
@@ -329,17 +338,17 @@ class Building extends Model
     public function getProductionEfficiency()
     {
         $baseEfficiency = 1.0;
-        
-        // Apply condition modifier
+
+    // Apply condition modifier
         $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
         $conditionModifier = $conditionDetails['productivity_multiplier'] ?? 1.0;
-        
-        // Apply status modifier
+
+    // Apply status modifier
         $buildingStatus = BuildingStatus::getByCode($this->status);
         $statusModifiers = $buildingStatus ? ($buildingStatus->productivity_modifiers ?? []) : [];
         $statusModifier = $statusModifiers['productivity_multiplier'] ?? 1.0;
-        
-        // Apply special property modifiers
+
+    // Apply special property modifiers
         $specialModifier = 1.0;
         foreach ($this->specialProperties ?? [] as $property) {
             $propDetails = BuildingSpecialProperty::getByCode($property);
@@ -347,30 +356,32 @@ class Building extends Model
                 $specialModifier += $propDetails->effects['productivity_bonus'];
             }
             if ($propDetails && isset($propDetails->effects['productivity_penalty'])) {
-                $specialModifier += $propDetails->effects['productivity_penalty']; // Note: penalty is negative
+                $specialModifier += $propDetails->effects['productivity_penalty'];
+
+    // Note: penalty is negative
             }
         }
-        
+
         return $baseEfficiency * $conditionModifier * $statusModifier * $specialModifier;
     }
 
     public function getMaintenanceCost()
     {
-        // Get base maintenance from building type
-        $buildingType = BuildingType::getByCode($this->type);
-        $baseMaintenance = $buildingType ? ($buildingType->maintenance_cost ?? 10) : 10;
-        
-        // Apply condition multiplier
-        $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
-        $conditionMultiplier = $conditionDetails['maintenance_multiplier'] ?? 1.0;
-        
-        // Apply status modifier
-        $buildingStatus = BuildingStatus::getByCode($this->status);
-        $statusModifiers = $buildingStatus ? ($buildingStatus->maintenance_modifiers ?? []) : [];
-        $statusMultiplier = $statusModifiers['maintenance_multiplier'] ?? 1.0;
-        
-        // Apply special property modifiers
-        $specialMultiplier = 1.0;
+          // Get base maintenance from building type
+          $buildingType = BuildingType::getByCode($this->type);
+          $baseMaintenance = $buildingType ? ($buildingType->maintenance_cost ?? 10) : 10;
+
+    // Apply condition multiplier
+          $conditionDetails = BuildingConditionLevel::getConditionDetails($this->condition);
+          $conditionMultiplier = $conditionDetails['maintenance_multiplier'] ?? 1.0;
+
+    // Apply status modifier
+          $buildingStatus = BuildingStatus::getByCode($this->status);
+          $statusModifiers = $buildingStatus ? ($buildingStatus->maintenance_modifiers ?? []) : [];
+          $statusMultiplier = $statusModifiers['maintenance_multiplier'] ?? 1.0;
+
+    // Apply special property modifiers
+          $specialMultiplier = 1.0;
         foreach ($this->specialProperties ?? [] as $property) {
             $propDetails = BuildingSpecialProperty::getByCode($property);
             if ($propDetails && isset($propDetails->effects['maintenance_cost'])) {
@@ -380,7 +391,7 @@ class Building extends Model
                 $specialMultiplier += $propDetails->effects['maintenance_penalty'];
             }
         }
-        
-        return (int) round($baseMaintenance * $conditionMultiplier * $statusMultiplier * $specialMultiplier);
+
+          return (int) round($baseMaintenance * $conditionMultiplier * $statusMultiplier * $specialMultiplier);
     }
 }

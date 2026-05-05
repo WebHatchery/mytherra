@@ -16,17 +16,17 @@ class AdminAuthMiddleware
     public function __invoke(Request $request, Response $response, array $args)
     {
         $user = $request->getAttribute('user');
-        
+
         if (!$user) {
             return $this->forbiddenResponse($response, 'User not authenticated');
         }
 
-        // Check if user has admin role
+    // Check if user has admin role
         // This depends on your User model structure. Assuming 'role' attribute or similar.
         // Mytherra User model might have getRole() or public property.
         // Let's assume standardized array access from JwtAuthMiddleware 'user' attribute usually is an array or object?
         // JwtAuthMiddleware sets 'user' as result of createOrUpdateLocalUser (likely an array or User model).
-        
+
         $role = null;
         if (is_array($user)) {
             $role = $user['role'] ?? 'user';
@@ -38,7 +38,7 @@ class AdminAuthMiddleware
             return $this->forbiddenResponse($response, 'Admin access required');
         }
 
-        // Return request to continue
+    // Return request to continue
         return $request;
     }
 
@@ -49,7 +49,7 @@ class AdminAuthMiddleware
             'message' => $message,
             'error_code' => 'FORBIDDEN'
         ]));
-        
+
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(403);

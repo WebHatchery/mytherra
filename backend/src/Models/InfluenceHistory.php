@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class InfluenceHistory extends Model
 {
     protected $table = 'influence_history';
-    
+
     protected $fillable = [
         'target_id',
         'target_type',
@@ -39,7 +39,7 @@ class InfluenceHistory extends Model
                 $table->integer('game_year');
                 $table->timestamps();
 
-                // Indexes for performance
+    // Indexes for performance
                 $table->index(['target_type', 'target_id']);
                 $table->index('game_year');
                 $table->index('created_at');
@@ -50,7 +50,7 @@ class InfluenceHistory extends Model
     // Relationships
     public function targetEntity()
     {
-        return match($this->target_type) {
+        return match ($this->target_type) {
             'hero' => $this->belongsTo(\App\Models\Hero::class, 'target_id'),
             'region' => $this->belongsTo(\App\Models\Region::class, 'target_id'),
             'settlement' => $this->belongsTo(\App\Models\Settlement::class, 'target_id'),

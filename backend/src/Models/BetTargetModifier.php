@@ -48,18 +48,19 @@ class BetTargetModifier
     public static function getTargetTypeModifiers($targetType, $betType)
     {
         self::init();
-        try {            $stmt = self::$db->prepare("
+        try {
+            $stmt = self::$db->prepare("
                 SELECT * FROM bet_target_modifiers 
                 WHERE target_type = :target_type 
                 AND bet_type = :bet_type 
                 AND is_active = TRUE
             ");
-            
+
             $stmt->execute([
                 'target_type' => $targetType,
                 'bet_type' => $betType
             ]);
-            
+
             return $stmt->fetchAll(PDO::FETCH_ASSOC);
         } catch (\PDOException $e) {
             Logger::error("Error fetching target type modifiers: " . $e->getMessage());

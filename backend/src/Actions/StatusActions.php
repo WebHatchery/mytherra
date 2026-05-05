@@ -19,7 +19,7 @@ class StatusActions
 
     /**
      * Fetch version information from GameConfig
-     * 
+     *
      * @return string API version
      * @throws \RuntimeException if config operation fails
      */
@@ -27,7 +27,7 @@ class StatusActions
     {
         try {
             $version = $this->configService->getConfig('system', 'version', '2.0.0');
-            
+
             if (!$version) {
                 // Create version config if it doesn't exist
                 $this->configService->setConfig(
@@ -39,7 +39,7 @@ class StatusActions
                 );
                 $version = '2.0.0';
             }
-            
+
             return $version;
         } catch (\Exception $error) {
             Logger::error('Error fetching version config', [
@@ -51,7 +51,7 @@ class StatusActions
 
     /**
      * Fetch current game status
-     * 
+     *
      * @return array Game status data including current year and divine favor
      * @throws \RuntimeException if fetching game state fails
      */
@@ -60,7 +60,7 @@ class StatusActions
         try {
             $gameState = GameState::getCurrent();
             $player = Player::getSinglePlayer();
-            
+
             return [
                 'currentYear' => $gameState->current_year,
                 'divineFavor' => $player->divine_favor
@@ -75,7 +75,7 @@ class StatusActions
 
     /**
      * Update the current game year
-     * 
+     *
      * @param int $newYear The new year value
      * @return array Updated game state data
      * @throws \RuntimeException if updating game state fails
@@ -102,7 +102,7 @@ class StatusActions
 
     /**
      * Update player's divine favor
-     * 
+     *
      * @param int $favorChange The amount to change divine favor by
      * @return array Updated divine favor data
      * @throws \RuntimeException if updating divine favor fails
@@ -119,7 +119,7 @@ class StatusActions
             ];
         } catch (\Exception $error) {
             Logger::error('Error updating divine favor', [
-                'favorChange' => $favorChange, 
+                'favorChange' => $favorChange,
                 'error' => $error->getMessage()
             ]);
             throw new \RuntimeException('Failed to update divine favor', 0, $error);

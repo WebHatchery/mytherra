@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class SettlementTypeConfig extends Model
 {
     protected $table = 'settlement_type_configs';
-    
+
     protected $fillable = [
         'code',
         'description',

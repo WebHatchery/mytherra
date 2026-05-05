@@ -6,11 +6,10 @@ use PDO;
 use Exception;
 use App\Utils\Logger;
 
-
 class OddsRepository extends BettingBaseRepository
 {
     protected string $table = 'bet_odds';
-    
+
     public function __construct(DatabaseService $db)
     {
         parent::__construct($db);
@@ -33,7 +32,9 @@ class OddsRepository extends BettingBaseRepository
             Logger::error("Error fetching bet history: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Fetch target statistics for odds calculation
      */
     public function getTargetStats($targetId, $type)
@@ -43,7 +44,7 @@ class OddsRepository extends BettingBaseRepository
             $sql = "SHOW TABLES LIKE 'target_statistics'";
             $stmt = $this->db->prepare($sql);
             $stmt->execute();
-            
+
             if (!$stmt->fetch()) {
                 // Table doesn't exist, return default stats based on target type
                 return $this->getDefaultTargetStats($targetId, $type);
@@ -55,12 +56,13 @@ class OddsRepository extends BettingBaseRepository
                 'targetId' => $targetId,
                 'type' => $type
             ]);
-            
+
             $result = $stmt->fetch(PDO::FETCH_ASSOC);
             return $result ?: $this->getDefaultTargetStats($targetId, $type);
         } catch (Exception $e) {
             Logger::error("Error fetching target stats: " . $e->getMessage());
-            // Return default stats on error
+
+    // Return default stats on error
             return $this->getDefaultTargetStats($targetId, $type);
         }
     }

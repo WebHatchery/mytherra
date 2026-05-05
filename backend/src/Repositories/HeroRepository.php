@@ -20,7 +20,9 @@ class HeroRepository
             Logger::error("Error fetching hero by ID: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Fetch hero by ID
      */
     public function getHeroById($id): ?Hero
@@ -44,14 +46,16 @@ class HeroRepository
             Logger::error("Error fetching heroes by IDs: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Get all heroes with optional filtering
      */
     public function getAllHeroes($filters = [], $limit = 20, $offset = 0): array
     {
         try {
             $query = Hero::query();
-            
+
             if (!empty($filters['role'])) {
                 $query->where('role', $filters['role']);
             }
@@ -72,7 +76,7 @@ class HeroRepository
                 $query->where('level', '>=', $filters['minLevel']);
             }
 
-            // Add ordering and pagination
+    // Add ordering and pagination
             $heroes = $query
                 ->orderBy('level', 'desc')
                 ->orderBy('name', 'asc')
@@ -85,7 +89,9 @@ class HeroRepository
             Logger::error("Error fetching all heroes: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Save or update a hero
      */
     public function saveHero($heroData): Hero
@@ -97,7 +103,7 @@ class HeroRepository
                 return $heroData;
             }
 
-            // Convert array data to Hero model
+    // Convert array data to Hero model
             if (isset($heroData['id']) && !empty($heroData['id'])) {
                 // Update existing hero
                 $hero = Hero::find($heroData['id']);
@@ -114,7 +120,9 @@ class HeroRepository
             Logger::error("Error saving hero: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Get heroes suitable for betting opportunities
      */
     public function getHeroesForBetting($filters = []): array
@@ -122,8 +130,8 @@ class HeroRepository
         try {
             $query = Hero::where('is_alive', 1);
 
-            // Add filters for heroes that are more likely to have interesting events
-            $query->where(function($q) {
+    // Add filters for heroes that are more likely to have interesting events
+            $query->where(function ($q) {
                 $q->where('level', '>=', 3)
                   ->orWhereIn('status', ['active', 'questing', 'exploring'])
                   ->orWhereIn('role', ['warrior', 'prophet', 'agent of change']);
@@ -142,8 +150,8 @@ class HeroRepository
             }
 
             $limit = $filters['limit'] ?? 5;
-            
-            // Order by level and recent activity
+
+    // Order by level and recent activity
             $heroes = $query
                 ->orderBy('level', 'desc')
                 ->orderBy('updated_at', 'desc')
@@ -155,7 +163,9 @@ class HeroRepository
             Logger::error("Error fetching heroes for betting: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Update hero's level
      */
     public function updateLevel($heroId, $newLevel): ?Hero
@@ -191,7 +201,9 @@ class HeroRepository
             Logger::error("Error updating hero status: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Get all hero settlement interactions for a hero
      */
     public function getHeroSettlementInteractions($heroId)

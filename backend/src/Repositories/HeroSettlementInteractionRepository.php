@@ -9,7 +9,7 @@ use App\Repositories\DatabaseService;
 class HeroSettlementInteractionRepository extends BaseRepository
 {
     protected string $table = 'hero_settlement_interactions';
-    
+
     public function __construct(DatabaseService $db)
     {
         parent::__construct($db);
@@ -39,7 +39,7 @@ class HeroSettlementInteractionRepository extends BaseRepository
     {
         $sql = "SELECT * FROM {$this->table} WHERE hero_id = :hero_id ORDER BY game_year DESC";
         $params = [':hero_id' => $heroId];
-        
+
         $stmt = $this->executeQuery($sql, $params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -51,7 +51,7 @@ class HeroSettlementInteractionRepository extends BaseRepository
     {
         $sql = "SELECT * FROM {$this->table} WHERE settlement_id = :settlement_id ORDER BY game_year DESC";
         $params = [':settlement_id' => $settlementId];
-        
+
         $stmt = $this->executeQuery($sql, $params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }

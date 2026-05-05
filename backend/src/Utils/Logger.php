@@ -2,7 +2,7 @@
 
 namespace App\Utils;
 
-class Logger 
+class Logger
 {
     /**
      * Log debug message
@@ -38,21 +38,23 @@ class Logger
 
     /**
      * Format log message with context
-     */    private static function log(string $level, string $message, array $context = [])
+     */
+    private static function log(string $level, string $message, array $context = [])
     {
         $formattedMessage = self::formatMessage($message, $context);
         $timestamp = date('Y-m-d H:i:s');
         $logLine = "[{$timestamp}] [{$level}] {$formattedMessage}";
-        
-        // Log to system error log
+
+    // Log to system error log
         error_log($logLine);
-        
-        // Optional: could write to specific file here if configured
+
+    // Optional: could write to specific file here if configured
     }
 
     /**
      * Format log message with context
-     */    private static function formatMessage($message, array $context = []): string
+     */
+    private static function formatMessage($message, array $context = []): string
     {
         if (empty($context)) {
             return $message;

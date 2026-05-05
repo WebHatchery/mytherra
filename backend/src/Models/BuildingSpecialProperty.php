@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class BuildingSpecialProperty extends Model
 {
     protected $table = 'building_special_properties';
-    
+
     protected $fillable = [
         'name',
         'code',
@@ -76,14 +76,14 @@ class BuildingSpecialProperty extends Model
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
-                // Indexes
+    // Indexes
                 $table->index('code');
                 $table->index('is_active');
                 $table->index('category');
                 $table->index('rarity');
             });
 
-            // Seed default data
+    // Seed default data
             self::seedDefaultData();
         }
     }

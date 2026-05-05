@@ -37,14 +37,14 @@ class SettlementEvolutionService
         $this->landmarkRepository = $landmarkRepository;
         $this->buildingRepository = $buildingRepository;
         $this->evolutionRepository = $evolutionRepository;
-        
-        // Load configuration data from database
+
+    // Load configuration data from database
         $this->evolutionConfig = SettlementEvolutionConfig::getEvolutionThresholds();
         $this->specializations = SettlementEvolutionConfig::getSpecializations();
         $this->traits = SettlementEvolutionConfig::getTraits();
         $this->evolutionTypes = SettlementEvolutionConfig::getEvolutionTypes();
-        
-        // Load evolution parameters from repository
+
+    // Load evolution parameters from repository
         $this->evolutionParams = $this->evolutionRepository->getEvolutionParameters();
         $this->settlementTypes = $this->evolutionRepository->getSettlementTypes();
     }
@@ -62,7 +62,7 @@ class SettlementEvolutionService
                 $evolutionResults[$settlement['id']] = $this->processSettlementEvolution($settlement, $currentYear);
             }
 
-            // Update region total population
+    // Update region total population
             $this->updateRegionPopulation($regionId);
 
             return $evolutionResults;
@@ -79,42 +79,44 @@ class SettlementEvolutionService
     {
         try {
             $changes = [];
-            
-            // Calculate prosperity changes
+
+    // Calculate prosperity changes
             $prosperityModifier = 1.0;
             if ($settlement['prosperity'] > 0) {
-                $prosperityChange = rand(-5, 10); // Base change
+                $prosperityChange = rand(-5, 10);
+
+    // Base change
                 $prosperityModifier = $this->calculateProsperityModifier($settlement);
                 $prosperityChange *= $prosperityModifier;
-                
+
                 $newProsperity = min(100, max(0, $settlement['prosperity'] + $prosperityChange));
                 if ($newProsperity != $settlement['prosperity']) {
                     $changes['prosperity'] = $newProsperity;
                 }
             }
 
-            // Calculate population changes using stored evolution parameters
+    // Calculate population changes using stored evolution parameters
             $baseGrowthRate = $this->evolutionParams['BASE_GROWTH_RATE'];
             $maxGrowthRate = $this->evolutionParams['MAX_GROWTH_RATE'];
             $prosperityGrowthMod = $this->evolutionParams['PROSPERITY_GROWTH_MODIFIER'];
 
             $growthRate = $baseGrowthRate * (1 + ($settlement['prosperity'] / 100 * $prosperityGrowthMod));
             $growthRate = min($growthRate, $maxGrowthRate);
-            
+
             $populationChange = ceil($settlement['population'] * $growthRate);
             $maxPopulation = $this->getMaxPopulation($settlement['type']);
-            
+
             $newPopulation = min($maxPopulation, $settlement['population'] + $populationChange);
             if ($newPopulation != $settlement['population']) {
                 $changes['population'] = $newPopulation;
             }
 
-            // Check for evolution type changes
+    // Check for evolution type changes
             if ($typeEvolution = $this->checkSettlementTypeEvolution($settlement, $changes)) {
                 $changes = array_merge($changes, $typeEvolution);
             }
 
-            // Update status based on prosperity
+    // Update status based on prosperity
             if (isset($changes['prosperity'])) {
                 if ($changes['prosperity'] < 25) {
                     $changes['status'] = 'declining';
@@ -140,10 +142,11 @@ class SettlementEvolutionService
         $prosperity = $changes['prosperity'] ?? $settlement['prosperity'];
 
         foreach ($this->evolutionConfig as $threshold) {
-            if ($threshold['settlement_type'] === $currentType &&
+            if (
+                $threshold['settlement_type'] === $currentType &&
                 $population >= $threshold['min_population'] &&
-                $prosperity >= $threshold['min_prosperity'])
-            {
+                $prosperity >= $threshold['min_prosperity']
+            ) {
                 $requiredBuildings = json_decode($threshold['required_buildings'], true);
                 $hasRequiredBuildings = $this->checkRequiredBuildings($settlement['id'], $requiredBuildings);
 
@@ -166,13 +169,13 @@ class SettlementEvolutionService
     {
         $buildings = $this->buildingRepository->getBuildingsBySettlement($settlementId);
         $buildingTypes = array_column($buildings, 'type');
-        
+
         foreach ($requiredTypes as $type) {
             if (!in_array($type, $buildingTypes)) {
                 return false;
             }
         }
-        
+
         return true;
     }
 
@@ -200,7 +203,7 @@ class SettlementEvolutionService
     {
         $modifier = 1.0;
 
-        // Consider specializations
+    // Consider specializations
         $specializations = json_decode($settlement['specializations'] ?? '[]', true);
         foreach ($specializations as $spec) {
             if (isset($this->specializations[$spec]['prosperity_modifier'])) {
@@ -208,7 +211,7 @@ class SettlementEvolutionService
             }
         }
 
-        // Consider traits
+    // Consider traits
         $traits = json_decode($settlement['traits'] ?? '[]', true);
         foreach ($traits as $trait) {
             if (isset($this->traits[$trait]['prosperity_modifier'])) {
@@ -225,7 +228,7 @@ class SettlementEvolutionService
     private function updateRegionPopulation(string $regionId): void
     {
         $settlements = $this->settlementRepository->getSettlementsByRegion($regionId);
-        $totalPopulation = array_reduce($settlements, function($sum, $settlement) {
+        $totalPopulation = array_reduce($settlements, function ($sum, $settlement) {
             return $sum + $settlement['population'];
         }, 0);
 

@@ -19,8 +19,8 @@ class OddsCalculationService
     {
         $this->oddsRepository = $oddsRepository;
         $this->configRepository = $configRepository;
-        
-        // Load configurations from database
+
+    // Load configurations from database
         $betTypes = BetConfig::getBetTypes();
         $this->betTypeConfigs = [];
         foreach ($betTypes as $type) {
@@ -30,7 +30,7 @@ class OddsCalculationService
                 'resolveConditions' => $type['resolve_conditions']
             ];
         }
-        
+
         $confidenceLevels = BetConfig::getConfidenceLevels();
         $this->confidenceLevels = [];
         foreach ($confidenceLevels as $level) {
@@ -41,7 +41,7 @@ class OddsCalculationService
             ];
         }
     }
-    
+
     /**
      * Calculate the odds for a new divine bet based on various factors
      */
@@ -51,37 +51,37 @@ class OddsCalculationService
             // Base odds from constants
             $baseOdds = $this->betTypeConfigs[$betType]['baseOdds'] ?? 3.0;
             $confidenceModifier = $this->confidenceLevels[$confidence]['oddsModifier'] ?? 1.0;
-            
-            // Adjust based on timeframe - shorter timeframes increase odds
+
+    // Adjust based on timeframe - shorter timeframes increase odds
             $timeframeModifier = $this->calculateTimeframeModifier($timeframe);
-            
-            // Calculate target-specific modifiers
+
+    // Calculate target-specific modifiers
             $targetModifier = $this->calculateTargetSpecificModifier($betType, $targetId);
-            
-            // Calculate final odds
+
+    // Calculate final odds
             $calculatedOdds = $baseOdds * $confidenceModifier * $timeframeModifier * $targetModifier;
-            
-            // Round to 2 decimal places and ensure minimum odds of 1.1
+
+    // Round to 2 decimal places and ensure minimum odds of 1.1
             $finalOdds = max(round($calculatedOdds * 100) / 100, 1.1);
-            
-            // Calculate potential payout based on confidence stake multiplier
+
+    // Calculate potential payout based on confidence stake multiplier
             $stakeMultiplier = $this->confidenceLevels[$confidence]['stakeMultiplier'] ?? 1.0;
-            
+
             return [
                 'odds' => $finalOdds,
                 'potentialPayout' => $finalOdds * $stakeMultiplier
             ];
-            
         } catch (Exception $e) {
             Logger::error("Error calculating bet odds: " . $e->getMessage());
-            // Return default values on error
+
+    // Return default values on error
             return [
                 'odds' => 2.0,
                 'potentialPayout' => 2.0
             ];
         }
     }
-    
+
     /**
      * Calculate modifier based on timeframe
      * Shorter timeframes are harder to predict, so odds are higher
@@ -92,15 +92,24 @@ class OddsCalculationService
             return BetConfig::getTimeframeModifier($timeframe);
         } catch (Exception $e) {
             Logger::error("Error getting timeframe modifier: " . $e->getMessage());
-            // Return default values based on timeframe if database lookup fails
-            if ($timeframe <= 1) return 1.5;
-            if ($timeframe <= 3) return 1.2;
-            if ($timeframe <= 5) return 1.0;
-            if ($timeframe <= 10) return 0.8;
+
+    // Return default values based on timeframe if database lookup fails
+            if ($timeframe <= 1) {
+                return 1.5;
+            }
+            if ($timeframe <= 3) {
+                return 1.2;
+            }
+            if ($timeframe <= 5) {
+                return 1.0;
+            }
+            if ($timeframe <= 10) {
+                return 0.8;
+            }
             return 0.6;
         }
     }
-    
+
     /**
      * Calculate modifiers specific to the bet target and type
      */
@@ -111,18 +120,18 @@ class OddsCalculationService
                 case 'settlement_growth':
                 case 'settlement_transformation':
                     return $this->calculateSettlementModifier($targetId, $betType);
-                    
+
                 case 'landmark_discovery':
                     return $this->calculateLandmarkModifier($targetId, $betType);
-                    
+
                 case 'cultural_shift':
                 case 'corruption_spread':
                     return $this->calculateRegionModifier($targetId, $betType);
-                    
+
                 case 'hero_settlement_bond':
                 case 'hero_location_visit':
                     return $this->calculateHeroModifier($targetId, $betType);
-                    
+
                 default:
                     return 1.0;
             }
@@ -131,30 +140,33 @@ class OddsCalculationService
             return 1.0;
         }
     }
-    
+
     /**
      * Calculate settlement-specific odds modifiers
-     */    private function calculateSettlementModifier($settlementId, $betType)
+     */
+    private function calculateSettlementModifier($settlementId, $betType)
     {
         try {
             $stats = $this->oddsRepository->getTargetStats($settlementId, 'settlement');
-            
+
             if (!$stats) {
                 return 1.0;
             }
-            
+
             $modifiers = $this->configRepository->getTargetTypeModifiers('settlement', $betType);
             if (empty($modifiers)) {
                 return 1.0;
             }
-            
+
             $finalModifier = 1.0;
             foreach ($modifiers as $mod) {
-                if ($this->evaluateCondition(
-                    $this->getStatValue($stats, $mod['condition_field']), 
-                    $mod['condition_value'], 
-                    $mod['comparison_operator']
-                )) {
+                if (
+                    $this->evaluateCondition(
+                        $this->getStatValue($stats, $mod['condition_field']),
+                        $mod['condition_value'],
+                        $mod['comparison_operator']
+                    )
+                ) {
                     if ($mod['modifier_type'] === 'multiply') {
                         $finalModifier *= $mod['modifier_value'];
                     } else {
@@ -162,39 +174,41 @@ class OddsCalculationService
                     }
                 }
             }
-            
-            // Ensure modifier stays within reasonable bounds
+
+    // Ensure modifier stays within reasonable bounds
             return max(min($finalModifier, 2.5), 0.5);
-            
         } catch (Exception $e) {
             Logger::error("Error calculating settlement modifier: " . $e->getMessage());
             return 1.0;
         }
     }
-    
+
     /**
      * Calculate hero-specific odds modifiers
-     */    private function calculateHeroModifier($heroId, $betType)
+     */
+    private function calculateHeroModifier($heroId, $betType)
     {
         try {
             $stats = $this->oddsRepository->getTargetStats($heroId, 'hero');
-            
+
             if (!$stats) {
                 return 1.0;
             }
-            
+
             $modifiers = $this->configRepository->getTargetTypeModifiers('hero', $betType);
             if (empty($modifiers)) {
                 return 1.0;
             }
-            
+
             $finalModifier = 1.0;
             foreach ($modifiers as $mod) {
-                if ($this->evaluateCondition(
-                    $this->getStatValue($stats, $mod['condition_field']), 
-                    $mod['condition_value'], 
-                    $mod['comparison_operator']
-                )) {
+                if (
+                    $this->evaluateCondition(
+                        $this->getStatValue($stats, $mod['condition_field']),
+                        $mod['condition_value'],
+                        $mod['comparison_operator']
+                    )
+                ) {
                     if ($mod['modifier_type'] === 'multiply') {
                         $finalModifier *= $mod['modifier_value'];
                     } else {
@@ -202,39 +216,41 @@ class OddsCalculationService
                     }
                 }
             }
-            
-            // Ensure modifier stays within reasonable bounds
+
+    // Ensure modifier stays within reasonable bounds
             return max(min($finalModifier, 2.5), 0.5);
-            
         } catch (Exception $e) {
             Logger::error("Error calculating hero modifier: " . $e->getMessage());
             return 1.0;
         }
     }
-    
+
     /**
      * Calculate region-specific odds modifiers
-     */    private function calculateRegionModifier($regionId, $betType)
+     */
+    private function calculateRegionModifier($regionId, $betType)
     {
         try {
             $stats = $this->oddsRepository->getTargetStats($regionId, 'region');
-            
+
             if (!$stats) {
                 return 1.0;
             }
-            
+
             $modifiers = $this->configRepository->getTargetTypeModifiers('region', $betType);
             if (empty($modifiers)) {
                 return 1.0;
             }
-            
+
             $finalModifier = 1.0;
             foreach ($modifiers as $mod) {
-                if ($this->evaluateCondition(
-                    $this->getStatValue($stats, $mod['condition_field']), 
-                    $mod['condition_value'], 
-                    $mod['comparison_operator']
-                )) {
+                if (
+                    $this->evaluateCondition(
+                        $this->getStatValue($stats, $mod['condition_field']),
+                        $mod['condition_value'],
+                        $mod['comparison_operator']
+                    )
+                ) {
                     if ($mod['modifier_type'] === 'multiply') {
                         $finalModifier *= $mod['modifier_value'];
                     } else {
@@ -242,39 +258,41 @@ class OddsCalculationService
                     }
                 }
             }
-            
-            // Ensure modifier stays within reasonable bounds
+
+    // Ensure modifier stays within reasonable bounds
             return max(min($finalModifier, 2.5), 0.5);
-            
         } catch (Exception $e) {
             Logger::error("Error calculating region modifier: " . $e->getMessage());
             return 1.0;
         }
     }
-    
+
     /**
      * Calculate landmark-specific odds modifiers
-     */    private function calculateLandmarkModifier($landmarkId, $betType)
+     */
+    private function calculateLandmarkModifier($landmarkId, $betType)
     {
         try {
             $stats = $this->oddsRepository->getTargetStats($landmarkId, 'landmark');
-            
+
             if (!$stats) {
                 return 1.0;
             }
-            
+
             $modifiers = $this->configRepository->getTargetTypeModifiers('landmark', $betType);
             if (empty($modifiers)) {
                 return 1.0;
             }
-            
+
             $finalModifier = 1.0;
             foreach ($modifiers as $mod) {
-                if ($this->evaluateCondition(
-                    $stats[$mod['condition_field']], 
-                    $mod['condition_value'], 
-                    $mod['comparison_operator']
-                )) {
+                if (
+                    $this->evaluateCondition(
+                        $stats[$mod['condition_field']],
+                        $mod['condition_value'],
+                        $mod['comparison_operator']
+                    )
+                ) {
                     if ($mod['modifier_type'] === 'multiply') {
                         $finalModifier *= $mod['modifier_value'];
                     } else {
@@ -282,22 +300,21 @@ class OddsCalculationService
                     }
                 }
             }
-            
+
             return max(min($finalModifier, 2.5), 0.5);
-            
         } catch (Exception $e) {
             Logger::error("Error calculating landmark modifier: " . $e->getMessage());
             return 1.0;
         }
     }
-    
+
     /**
      * Update odds for all active bets based on changing world conditions
      */
     public function updateActiveBetOdds($activeBets)
     {
         $updatedBets = [];
-        
+
         foreach ($activeBets as $bet) {
             try {
                 // Recalculate odds based on current world state
@@ -307,35 +324,36 @@ class OddsCalculationService
                     $bet['timeframe'],
                     $bet['confidence']
                 );
-                
-                // Apply a max change of 20% to avoid wild fluctuations
+
+    // Apply a max change of 20% to avoid wild fluctuations
                 $maxChange = $bet['currentOdds'] * 0.2;
                 $newOdds = max(
                     min($oddsResult['odds'], $bet['currentOdds'] + $maxChange),
                     $bet['currentOdds'] - $maxChange
                 );
-                
-                // Ensure minimum odds of 1.1
+
+    // Ensure minimum odds of 1.1
                 $newOdds = max($newOdds, 1.1);
-                
-                // Update the bet object
+
+    // Update the bet object
                 $bet['currentOdds'] = round($newOdds, 2);
-                
-                // Recalculate potential payout based on new odds
+
+    // Recalculate potential payout based on new odds
                 $stakeMultiplier = $this->confidenceConfigs[$bet['confidence']]['stakeMultiplier'];
                 $bet['potentialPayout'] = (int)round($bet['divineFavorStake'] * $bet['currentOdds'] * $stakeMultiplier);
-                
+
                 $updatedBets[] = $bet;
-                
             } catch (Exception $e) {
                 Logger::error("Error updating odds for bet {$bet['id']}: " . $e->getMessage());
-                $updatedBets[] = $bet; // Keep original bet if update fails
+                $updatedBets[] = $bet;
+
+    // Keep original bet if update fails
             }
         }
-        
+
         return $updatedBets;
     }
-    
+
     /**
      * Calculate probability of a bet winning based on current odds
      * This can be used for simulation or AI decision making
@@ -346,7 +364,7 @@ class OddsCalculationService
         // Example: odds of 2.0 = 50% chance, 1.5 = 66.7% chance, 3.0 = 33.3% chance
         return 100 / $odds;
     }
-    
+
     /**
      * Helper method to evaluate a conditional modifier
      */
@@ -377,6 +395,8 @@ class OddsCalculationService
         if (isset($stats[$field])) {
             return is_numeric($stats[$field]) ? (float)$stats[$field] : $stats[$field];
         }
-        return 50; // Default middle value for numerical stats
+        return 50;
+
+    // Default middle value for numerical stats
     }
 }

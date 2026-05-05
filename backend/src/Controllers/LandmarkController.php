@@ -14,7 +14,8 @@ class LandmarkController
 
     public function __construct(
         private LandmarkActions $landmarkActions
-    ) {}
+    ) {
+    }
 
     /**
      * Get all landmarks
@@ -22,7 +23,7 @@ class LandmarkController
     public function getAllLandmarks(Request $request, Response $response): Response
     {
         Logger::debug("GET /api/landmarks endpoint called");
-        
+
         $queryParams = $request->getQueryParams();
         $filters = [
             'type' => $queryParams['type'] ?? null,
@@ -32,7 +33,7 @@ class LandmarkController
             'limit' => isset($queryParams['limit']) ? min((int)$queryParams['limit'], 100) : 20,
             'offset' => isset($queryParams['offset']) ? (int)$queryParams['offset'] : 0
         ];
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->landmarkActions->fetchAllLandmarks($filters),
@@ -60,10 +61,10 @@ class LandmarkController
     public function createLandmark(Request $request, Response $response): Response
     {
         Logger::debug("POST /api/landmarks endpoint called");
-        
+
         try {
             $body = json_decode($request->getBody(), true);
-            
+
             if (!$body) {
                 $errorResponse = [
                     'success' => false,
@@ -72,26 +73,27 @@ class LandmarkController
                         'code' => 'VALIDATION_ERROR'
                     ]
                 ];
-                
+
                 $response->getBody()->write(json_encode($errorResponse));
                 return $response
                     ->withHeader('Content-Type', 'application/json')
-                    ->withStatus(400);            }
-            
+                    ->withStatus(400);
+            }
+
             $landmark = $this->landmarkActions->createLandmark($body);
-            
+
             $responseData = [
                 'success' => true,
                 'data' => $landmark->toArray()
             ];
-            
+
             $response->getBody()->write(json_encode($responseData));
             return $response
                 ->withHeader('Content-Type', 'application/json')
                 ->withStatus(201);
         } catch (\Exception $error) {
             Logger::error('Error creating landmark: ' . $error->getMessage());
-            
+
             $errorResponse = [
                 'success' => false,
                 'error' => [
@@ -99,7 +101,7 @@ class LandmarkController
                     'code' => 'LANDMARK_CREATION_ERROR'
                 ]
             ];
-            
+
             $response->getBody()->write(json_encode($errorResponse));
             return $response
                 ->withHeader('Content-Type', 'application/json')
@@ -114,10 +116,10 @@ class LandmarkController
     {
         $id = $args['id'];
         Logger::debug("PUT /api/landmarks/{$id} endpoint called");
-        
+
         try {
             $body = json_decode($request->getBody(), true);
-            
+
             if (!$body) {
                 $errorResponse = [
                     'success' => false,
@@ -126,26 +128,27 @@ class LandmarkController
                         'code' => 'VALIDATION_ERROR'
                     ]
                 ];
-                
+
                 $response->getBody()->write(json_encode($errorResponse));
                 return $response
                     ->withHeader('Content-Type', 'application/json')
-                    ->withStatus(400);            }
-            
+                    ->withStatus(400);
+            }
+
             $landmark = $this->landmarkActions->updateLandmark($id, $body);
-            
+
             $responseData = [
                 'success' => true,
                 'data' => $landmark->toArray()
             ];
-            
+
             $response->getBody()->write(json_encode($responseData));
             return $response
                 ->withHeader('Content-Type', 'application/json')
                 ->withStatus(200);
         } catch (\Exception $error) {
             Logger::error('Error updating landmark: ' . $error->getMessage());
-            
+
             $errorResponse = [
                 'success' => false,
                 'error' => [
@@ -153,7 +156,7 @@ class LandmarkController
                     'code' => 'LANDMARK_UPDATE_ERROR'
                 ]
             ];
-            
+
             $response->getBody()->write(json_encode($errorResponse));
             return $response
                 ->withHeader('Content-Type', 'application/json')
@@ -168,26 +171,26 @@ class LandmarkController
     {
         $id = $args['id'];
         Logger::debug("DELETE /api/landmarks/{$id} endpoint called");
-        
+
         try {
             // Initialize repositories needed for this endpoint
             $landmarkRepo = new \App\Repositories\LandmarkRepository($this->db);
             $landmarkActions = new LandmarkActions($landmarkRepo);
-            
+
             $success = $landmarkActions->deleteLandmark($id);
-            
+
             $responseData = [
                 'success' => true,
                 'message' => "Landmark with ID '{$id}' has been deleted."
             ];
-            
+
             $response->getBody()->write(json_encode($responseData));
             return $response
                 ->withHeader('Content-Type', 'application/json')
                 ->withStatus(200);
         } catch (\Exception $error) {
             Logger::error('Error deleting landmark: ' . $error->getMessage());
-            
+
             $errorResponse = [
                 'success' => false,
                 'error' => [
@@ -195,7 +198,7 @@ class LandmarkController
                     'code' => 'LANDMARK_DELETE_ERROR'
                 ]
             ];
-            
+
             $response->getBody()->write(json_encode($errorResponse));
             return $response
                 ->withHeader('Content-Type', 'application/json')
@@ -210,25 +213,26 @@ class LandmarkController
     {
         $id = $args['id'];
         Logger::debug("POST /api/landmarks/{$id}/discover endpoint called");
-        
+
         try {
-            $body = json_decode($request->getBody(), true);            $discoveredYear = $body['discoveredYear'] ?? date('Y');
-            
+            $body = json_decode($request->getBody(), true);
+            $discoveredYear = $body['discoveredYear'] ?? date('Y');
+
             $landmark = $this->landmarkActions->discoverLandmark($id, $discoveredYear);
-            
+
             $responseData = [
                 'success' => true,
                 'data' => $landmark->toArray(),
                 'message' => "Landmark '{$landmark->name}' has been discovered."
             ];
-            
+
             $response->getBody()->write(json_encode($responseData));
             return $response
                 ->withHeader('Content-Type', 'application/json')
                 ->withStatus(200);
         } catch (\Exception $error) {
             Logger::error('Error discovering landmark: ' . $error->getMessage());
-            
+
             $errorResponse = [
                 'success' => false,
                 'error' => [
@@ -236,7 +240,7 @@ class LandmarkController
                     'code' => 'LANDMARK_DISCOVERY_ERROR'
                 ]
             ];
-            
+
             $response->getBody()->write(json_encode($errorResponse));
             return $response
                 ->withHeader('Content-Type', 'application/json')

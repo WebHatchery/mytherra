@@ -11,9 +11,11 @@ use InvalidArgumentException;
 class ResourceNode extends Model
 {
     protected $table = 'resource_nodes';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
-    
+
     protected $fillable = [
         'id',
         'region_id',
@@ -46,7 +48,7 @@ class ResourceNode extends Model
                 $table->foreign('region_id')->references('id')->on('regions')->onDelete('cascade');
                 $table->foreign('settlement_id')->references('id')->on('settlements')->onDelete('set null');
 
-                // Add indexes for better performance
+    // Add indexes for better performance
                 $table->index('region_id');
                 $table->index('settlement_id');
                 $table->index('type');
@@ -85,7 +87,7 @@ class ResourceNode extends Model
         if (!$statusConfig) {
             return 0;
         }
-        
+
         return (int) round($this->output * $statusConfig->output_modifier);
     }
 
@@ -107,11 +109,19 @@ class ResourceNode extends Model
     public function getProductivityClass(): string
     {
         $effectiveOutput = $this->getEffectiveOutput();
-        
-        if ($effectiveOutput >= 80) return 'excellent';
-        if ($effectiveOutput >= 60) return 'good';
-        if ($effectiveOutput >= 40) return 'average';
-        if ($effectiveOutput >= 20) return 'poor';
+
+        if ($effectiveOutput >= 80) {
+            return 'excellent';
+        }
+        if ($effectiveOutput >= 60) {
+            return 'good';
+        }
+        if ($effectiveOutput >= 40) {
+            return 'average';
+        }
+        if ($effectiveOutput >= 20) {
+            return 'poor';
+        }
         return 'depleted';
     }
 
@@ -158,7 +168,7 @@ class ResourceNode extends Model
     {
         $nameTemplates = [
             'mine' => [
-                'Deep Shaft Mine', 'Iron Vein Mine', 'Copper Hollow Mine', 
+                'Deep Shaft Mine', 'Iron Vein Mine', 'Copper Hollow Mine',
                 'Silver Peak Mine', 'Gold Strike Mine', 'Crystal Cave Mine'
             ],
             'quarry' => [
@@ -234,12 +244,12 @@ class ResourceNode extends Model
             throw new InvalidArgumentException("Invalid resource node type: {$this->type}");
         }
 
-        // Validate status
+    // Validate status
         if (!in_array($this->status, ResourceNodeStatus::getStatusCodes())) {
             throw new InvalidArgumentException("Invalid resource node status: {$this->status}");
         }
 
-        // Validate output
+    // Validate output
         if ($this->output < 0 || $this->output > 100) {
             throw new InvalidArgumentException("Invalid output value: {$this->output}. Must be between 0 and 100.");
         }

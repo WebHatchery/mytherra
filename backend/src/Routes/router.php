@@ -19,7 +19,7 @@ use App\Middleware\AdminAuthMiddleware;
 return function (Router $router): void {
     $api = '/api';
 
-    $router->get($api . '/site-status', function($request, $response) {
+    $router->get($api . '/site-status', function ($request, $response) {
         $response->getBody()->write(json_encode(['status' => 'OK']));
         return $response->withHeader('Content-Type', 'application/json');
     });

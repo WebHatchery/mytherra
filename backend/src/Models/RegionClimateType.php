@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class RegionClimateType extends Model
 {
     protected $table = 'region_climate_types';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -22,6 +22,7 @@ class RegionClimateType extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -48,14 +49,16 @@ class RegionClimateType extends Model
                 $table->decimal('population_growth_modifier', 5, 2)->default(1.0);
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index(['is_active']);
                 $table->index(['code']);
             });
-            
+
             self::seedDefaultTypes();
         }
-    }    public static function seedDefaultTypes()
+    }
+
+    public static function seedDefaultTypes()
     {
         foreach (RegionClimateTypeData::getData() as $type) {
             self::create($type);

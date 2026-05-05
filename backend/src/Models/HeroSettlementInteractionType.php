@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class HeroSettlementInteractionType extends Model
 {
     protected $table = 'hero_settlement_interaction_types';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -24,6 +24,7 @@ class HeroSettlementInteractionType extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -54,14 +55,16 @@ class HeroSettlementInteractionType extends Model
                 $table->integer('cooldown_hours')->default(0);
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index(['is_active']);
                 $table->index(['code']);
             });
-            
+
             self::seedDefaultTypes();
         }
-    }    public static function seedDefaultTypes()
+    }
+
+    public static function seedDefaultTypes()
     {
         foreach (HeroSettlementInteractionTypeData::getData() as $type) {
             self::create($type);

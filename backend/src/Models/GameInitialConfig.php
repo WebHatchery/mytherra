@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class GameInitialConfig extends Model
 {
     protected $table = 'game_initial_configs';
-    
+
     protected $fillable = [
         'id',
         'category',
@@ -28,6 +28,7 @@ class GameInitialConfig extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     // Initialize the model
@@ -36,15 +37,21 @@ class GameInitialConfig extends Model
         if (!Schema::schema()->hasTable('game_initial_configs')) {
             Schema::schema()->create('game_initial_configs', function (Blueprint $table) {
                 $table->uuid('id')->primary();
-                $table->string('category', 100); // e.g., 'hero', 'region', 'settlement'
-                $table->string('subcategory', 100); // e.g., 'leveling', 'aging', 'evolution'
-                $table->string('key', 100); // e.g., 'base_level_up_chance'
+                $table->string('category', 100);
+
+    // e.g., 'hero', 'region', 'settlement'
+                $table->string('subcategory', 100);
+
+    // e.g., 'leveling', 'aging', 'evolution'
+                $table->string('key', 100);
+
+    // e.g., 'base_level_up_chance'
                 $table->text('value');
                 $table->enum('data_type', ['number', 'string', 'boolean', 'array']);
                 $table->text('description')->nullable();
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->unique(['category', 'subcategory', 'key']);
                 $table->index(['category', 'subcategory']);
                 $table->index(['is_active']);
@@ -95,7 +102,7 @@ class GameInitialConfig extends Model
     }
 
     // Get all configurations in a category
-    public static function getCategoryConfigs($category, $subcategory = null) 
+    public static function getCategoryConfigs($category, $subcategory = null)
     {
         $query = self::where([
             'category' => $category,
@@ -108,7 +115,7 @@ class GameInitialConfig extends Model
 
         $configs = $query->get();
         return $configs->mapWithKeys(function ($config) {
-            $key = $config->subcategory 
+            $key = $config->subcategory
                 ? "{$config->subcategory}.{$config->key}"
                 : $config->key;
             return [$key => self::castValue($config->value, $config->data_type)];

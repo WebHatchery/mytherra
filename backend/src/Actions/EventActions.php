@@ -14,7 +14,8 @@ class EventActions
 {
     public function __construct(
         private EventRepository $eventRepository
-    ) {}
+    ) {
+    }
 
     /**
      * Fetch all events with optional filtering
@@ -28,9 +29,9 @@ class EventActions
         try {
             $limit = $filters['limit'] ?? 10;
             $offset = $filters['offset'] ?? 0;
-            
+
             $events = $this->eventRepository->getAllEvents($filters);
-            
+
             return array_map(fn($event) => $event->toArray(), $events);
         } catch (\Exception $error) {
             Logger::error('Error fetching events', [
@@ -53,7 +54,7 @@ class EventActions
     {
         try {
             $event = $this->eventRepository->getById($eventId);
-            
+
             if (!$event) {
                 Logger::info("Event not found", ['eventId' => $eventId]);
                 throw new ResourceNotFoundException("Event not found: {$eventId}");
@@ -62,7 +63,7 @@ class EventActions
             if (!($event instanceof GameEvent)) {
                 throw new \RuntimeException("Invalid event data returned from repository");
             }
-            
+
             return $event->toArray();
         } catch (ResourceNotFoundException $error) {
             throw $error;
@@ -104,7 +105,7 @@ class EventActions
     {
         try {
             $eventId = 'event-' . bin2hex(random_bytes(8));
-            
+
             $event = new GameEvent(array_merge($eventData, [
                 'id' => $eventId,
                 'timestamp' => date('Y-m-d H:i:s'),
@@ -113,7 +114,7 @@ class EventActions
             ]));
 
             $event->save();
-            
+
             Logger::info("Successfully created event", ['id' => $eventId]);
             return $event->toArray();
         } catch (\Exception $error) {

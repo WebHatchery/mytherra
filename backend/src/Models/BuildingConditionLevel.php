@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class BuildingConditionLevel extends Model
 {
     protected $table = 'building_condition_levels';
-    
+
     protected $fillable = [
         'name',
         'code',
@@ -58,7 +58,7 @@ class BuildingConditionLevel extends Model
     public static function getConditionDetails($conditionValue)
     {
         $level = self::getByCondition($conditionValue);
-        
+
         if (!$level) {
             return [
                 'name' => 'Unknown',
@@ -97,13 +97,13 @@ class BuildingConditionLevel extends Model
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
-                // Indexes
+    // Indexes
                 $table->index('code');
                 $table->index('is_active');
                 $table->index(['min_condition', 'max_condition']);
             });
 
-            // Seed default data
+    // Seed default data
             self::seedDefaultData();
         }
     }

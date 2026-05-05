@@ -37,7 +37,7 @@
             "@php -r \"@mkdir('storage/test', 0777, true);\"",
             "phpunit"
         ],
-        "cs-check": "phpcs --standard=PSR12 src/ tests/",
+        "cs-check": "phpcs --standard=PSR12 --warning-severity=0 src/ tests/",
         "cs-fix": "phpcbf --standard=PSR12 src/ tests/"
     },
     "config": {

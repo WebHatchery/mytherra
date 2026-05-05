@@ -12,14 +12,14 @@ class ConfigurationManager
         // Initialize Laravel components
         LaravelBootstrap::initialize();
 
-        // Create and seed the initial config table
+    // Create and seed the initial config table
         \App\Models\GameInitialConfig::createTable();
         \App\Models\GameInitialConfig::seedDefaultConfig();
 
-        // Create the game config table
+    // Create the game config table
         \App\Models\GameConfig::createTable();
 
-        // Initialize all configurations
+    // Initialize all configurations
         self::initializeFromDefaults();
     }
 

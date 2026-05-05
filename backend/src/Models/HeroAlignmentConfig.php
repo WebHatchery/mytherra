@@ -39,7 +39,7 @@ class HeroAlignmentConfig
                 )
             ");
 
-            // Create alignment_modifiers table
+    // Create alignment_modifiers table
             self::$db->exec("
                 CREATE TABLE IF NOT EXISTS alignment_modifiers (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -55,7 +55,7 @@ class HeroAlignmentConfig
                 )
             ");
 
-            // Create alignment_event_responses table
+    // Create alignment_event_responses table
             self::$db->exec("
                 CREATE TABLE IF NOT EXISTS alignment_event_responses (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -76,13 +76,15 @@ class HeroAlignmentConfig
             Logger::error("Error creating alignment configuration tables: " . $e->getMessage());
             throw $e;
         }
-    }    public static function seedData()
+    }
+
+    public static function seedData()
     {
         self::init();
         try {
             $data = HeroAlignmentConfigData::getData();
 
-            // Seed alignment traits
+    // Seed alignment traits
             $stmt = self::$db->prepare("
                 INSERT INTO alignment_traits 
                 (code, name, description, base_influence, category, opposing_trait_code)
@@ -94,7 +96,7 @@ class HeroAlignmentConfig
                 $stmt->execute($trait);
             }
 
-            // Seed alignment modifiers
+    // Seed alignment modifiers
             $stmt = self::$db->prepare("
                 INSERT INTO alignment_modifiers 
                 (trigger_type, trigger_condition, trait_code, modifier_value, description)
@@ -106,7 +108,7 @@ class HeroAlignmentConfig
                 $stmt->execute($modifier);
             }
 
-            // Seed event responses
+    // Seed event responses
             $stmt = self::$db->prepare("
                 INSERT INTO alignment_event_responses 
                 (event_type, required_trait_code, response_type, probability, influence_modifier, description)

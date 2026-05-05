@@ -18,7 +18,8 @@ final class Router
 
     public function __construct(
         private readonly ?ContainerInterface $container = null
-    ) {}
+    ) {
+    }
 
     public function setBasePath(string $basePath): void
     {
@@ -80,19 +81,19 @@ final class Router
         foreach ($this->routes as $route) {
             if ($route['method'] === $method && preg_match($route['pattern'], $path, $matches)) {
                 $routeParams = array_filter($matches, 'is_string', ARRAY_FILTER_USE_KEY);
-                
+
                 $request = Request::createFromGlobals();
                 $response = new Response();
 
                 $middlewares = array_merge($this->globalMiddleware, $route['middleware']);
-                
-                // For native PHP simple router, we handle middleware as a simple chain or loop.
+
+    // For native PHP simple router, we handle middleware as a simple chain or loop.
                 // Since we dropped PSR-15, we'll assume middlewares are callables: mw($request, $response, $next)
                 // OR simply mw($request, $response, $params) and return response.
-                
+
                 // Let's adopt a simple approach: if middleware returns FALSE/null, we stop.
                 // If it returns Response, we use it.
-                
+
                 foreach ($middlewares as $mw) {
                     $mwInstance = $mw;
                     if (is_string($mw)) {
@@ -103,12 +104,12 @@ final class Router
                         }
                     }
 
-                    // Middleware signature checks
+    // Middleware signature checks
                     if (method_exists($mwInstance, 'process')) {
-                        // Adapt "process" style to our simple style if needed, 
+                        // Adapt "process" style to our simple style if needed,
                         // but better to fix middleware to be simple: run($req, $res)
                         // For now we assume our middlewares are updated to be simple callables.
-                        
+
                         // Wait, JwtAuthMiddleware is a class. We'll call a method on it or invoke.
                         // Let's assume it's callable or has handle/process.
                         // We will refactor JwtAuthMiddleware to have a `run` or `__invoke` method.
@@ -117,9 +118,9 @@ final class Router
                         $result = $mwInstance($request, $response, $routeParams);
                     } else {
                          // Fallback or error
-                         continue; 
+                         continue;
                     }
-                    
+
                     if ($result instanceof Request) {
                         $request = $result;
                         continue;
@@ -131,12 +132,11 @@ final class Router
                     }
 
                     if ($result === false) {
-                         // Legacy BSF style shortcut
+// Legacy BSF style shortcut
                          $this->emit($this->withCors($response->withStatus(401)));
-                         return;
+                        return;
                     }
                 }
-
                 try {
                     $response = $this->invokeHandler($route['handler'], $request, $response, $routeParams);
                 } catch (Throwable $e) {

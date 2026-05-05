@@ -38,11 +38,11 @@ class BettingRepository
     {
         try {
             $bet = DivineBet::find($id);
-            
+
             if (!$bet) {
                 return null;
             }
-            
+
             return $this->transformBetData($bet->toArray());
         } catch (Exception $e) {
             Logger::error("Error fetching bet {$id}: " . $e->getMessage());
@@ -57,41 +57,41 @@ class BettingRepository
     {
         try {
             $query = DivineBet::query();
-            
-            // Apply filters
+
+    // Apply filters
             if (!empty($filters['playerId'])) {
                 $query->where('player_id', $filters['playerId']);
             }
-            
+
             if (!empty($filters['betType'])) {
                 $query->where('bet_type', $filters['betType']);
             }
-            
+
             if (!empty($filters['status'])) {
                 $query->where('status', $filters['status']);
             }
-            
+
             if (!empty($filters['targetId'])) {
                 $query->where('target_id', $filters['targetId']);
             }
-            
+
             if (!empty($filters['confidence'])) {
                 $query->where('confidence', $filters['confidence']);
             }
-            
+
             if (!empty($filters['timeframe'])) {
                 $query->where('timeframe', $filters['timeframe']);
             }
-            
+
             if (!empty($filters['minStake'])) {
                 $query->where('divine_favor_stake', '>=', $filters['minStake']);
             }
-            
+
             if (!empty($filters['maxStake'])) {
                 $query->where('divine_favor_stake', '<=', $filters['maxStake']);
             }
-            
-            // Add ordering and pagination
+
+    // Add ordering and pagination
             $bets = $query
                 ->orderBy('created_at', 'desc')
                 ->skip($offset)
@@ -116,17 +116,17 @@ class BettingRepository
                 return true;
             }
 
-            // Check in heroes
+    // Check in heroes
             if (Hero::find($targetId)) {
                 return true;
             }
 
-            // Check in regions
+    // Check in regions
             if (Region::find($targetId)) {
                 return true;
             }
 
-            // Check in landmarks
+    // Check in landmarks
             if (Landmark::find($targetId)) {
                 return true;
             }
@@ -146,7 +146,7 @@ class BettingRepository
         try {
             $targets = [];
 
-            // Get sample settlements
+    // Get sample settlements
             $settlements = Settlement::take(3)->get(['id', 'name']);
             foreach ($settlements as $settlement) {
                 $targets['settlement'][] = [
@@ -156,7 +156,7 @@ class BettingRepository
                 ];
             }
 
-            // Get sample heroes
+    // Get sample heroes
             $heroes = Hero::take(3)->get(['id', 'name']);
             foreach ($heroes as $hero) {
                 $targets['hero'][] = [
@@ -166,7 +166,7 @@ class BettingRepository
                 ];
             }
 
-            // Get sample regions
+    // Get sample regions
             $regions = Region::take(3)->get(['id', 'name']);
             foreach ($regions as $region) {
                 $targets['region'][] = [
@@ -176,7 +176,7 @@ class BettingRepository
                 ];
             }
 
-            // Get sample landmarks
+    // Get sample landmarks
             $landmarks = Landmark::take(3)->get(['id', 'name']);
             foreach ($landmarks as $landmark) {
                 $targets['landmark'][] = [
@@ -230,7 +230,7 @@ class BettingRepository
         $limit = $filters['limit'] ?? 20;
         $offset = $filters['offset'] ?? 0;
         unset($filters['limit'], $filters['offset']);
-        
+
         return $this->fetchAllDivineBets($filters, $limit, $offset);
     }
 
@@ -323,7 +323,7 @@ class BettingRepository
                 'createdAt' => $bet['created_at'],
                 'updatedAt' => $bet['updated_at']
             ];
-            
+
             return $transformed;
         } catch (Exception $e) {
             Logger::error("Error in transformBetData: " . $e->getMessage());

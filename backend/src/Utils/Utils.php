@@ -5,7 +5,7 @@ namespace App\Utils;
 class Utils
 {
     private static bool $isTestMode;
-    
+
     public static function isTestMode(): bool
     {
         if (!isset(self::$isTestMode)) {

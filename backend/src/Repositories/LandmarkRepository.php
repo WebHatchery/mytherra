@@ -9,7 +9,7 @@ use App\Repositories\DatabaseService;
 class LandmarkRepository extends BaseRepository
 {
     protected string $table = 'landmarks';
-    
+
     public function __construct(DatabaseService $db)
     {
         parent::__construct($db);
@@ -45,7 +45,7 @@ class LandmarkRepository extends BaseRepository
     {
         $sql = "SELECT * FROM landmarks WHERE 1=1";
         $params = [];
-        
+
         if (!empty($filters['type'])) {
             $sql .= " AND type = :type";
             $params[':type'] = $filters['type'];
@@ -80,7 +80,7 @@ class LandmarkRepository extends BaseRepository
             $params[':min_magic_level'] = $filters['minMagicLevel'];
         }
 
-        // Add ordering and pagination
+    // Add ordering and pagination
         $sql .= " ORDER BY magic_level DESC, danger_level DESC";
         $sql .= " LIMIT :limit OFFSET :offset";
         $params[':limit'] = $limit;
@@ -136,7 +136,7 @@ class LandmarkRepository extends BaseRepository
         $sql = "SELECT * FROM landmarks WHERE 1=1";
         $params = [];
 
-        // Focus on undiscovered or recently discovered landmarks
+    // Focus on undiscovered or recently discovered landmarks
         $sql .= " AND (
             discovered_year IS NULL OR
             magic_level >= 50 OR
@@ -157,7 +157,7 @@ class LandmarkRepository extends BaseRepository
             }
         }
 
-        // Order by potential for interesting discoveries
+    // Order by potential for interesting discoveries
         $sql .= " ORDER BY (magic_level + danger_level) DESC";
         $sql .= " LIMIT :limit";
         $params[':limit'] = $filters['limit'] ?? 5;
@@ -177,7 +177,7 @@ class LandmarkRepository extends BaseRepository
             discovery_notes = :discovery_notes,
             updated_at = NOW()
             WHERE id = :id";
-            
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':id' => $landmarkId,
@@ -195,7 +195,7 @@ class LandmarkRepository extends BaseRepository
             last_visited_year = :last_visited_year,
             updated_at = NOW()
             WHERE id = :id";
-            
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':id' => $landmarkId,
@@ -213,7 +213,7 @@ class LandmarkRepository extends BaseRepository
             discovery_notes = CONCAT(COALESCE(discovery_notes, ''), :notes),
             updated_at = NOW()
             WHERE id = :id";
-            
+
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':id' => $landmarkId,

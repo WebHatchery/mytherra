@@ -30,8 +30,8 @@ abstract class BettingBaseRepository extends BaseRepository
     {
         try {
             $baseMultiplier = 1.0;
-            
-            // Apply confidence level multiplier
+
+    // Apply confidence level multiplier
             if (isset($betData['confidence_level'])) {
                 $sql = "SELECT multiplier FROM bet_confidence_configs WHERE confidence_level = :level";
                 $stmt = $this->db->prepare($sql);
@@ -42,7 +42,7 @@ abstract class BettingBaseRepository extends BaseRepository
                 }
             }
 
-            // Apply timeframe multiplier
+    // Apply timeframe multiplier
             if (isset($betData['timeframe'])) {
                 $sql = "SELECT multiplier FROM bet_timeframe_modifiers WHERE timeframe = :timeframe";
                 $stmt = $this->db->prepare($sql);
@@ -68,7 +68,7 @@ abstract class BettingBaseRepository extends BaseRepository
                     resolved_at = NOW(),
                     outcome = :outcome 
                     WHERE bet_id = :bet_id";
-                    
+
             $params = [
                 ':status' => 'resolved',
                 ':outcome' => $outcome,

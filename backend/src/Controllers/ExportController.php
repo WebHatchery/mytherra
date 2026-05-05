@@ -21,7 +21,7 @@ class ExportController
     public function exportFull(Request $request, Response $response): Response
     {
         $data = $this->exportService->exportFullSnapshot();
-        
+
         return $this->downloadResponse($response, $data, 'mytherra-world-snapshot.json');
     }
 
@@ -31,7 +31,7 @@ class ExportController
     public function exportByType(Request $request, Response $response, array $args): Response
     {
         $type = $args['type'] ?? '';
-        
+
         try {
             $data = $this->exportService->exportByType($type);
             return $this->downloadResponse($response, $data, "mytherra-{$type}-export.json");
@@ -69,9 +69,9 @@ class ExportController
     private function downloadResponse(Response $response, array $data, string $filename): Response
     {
         $json = json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-        
+
         $response->getBody()->write($json);
-        
+
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withHeader('Content-Disposition', "attachment; filename=\"{$filename}\"")
@@ -84,7 +84,7 @@ class ExportController
     private function jsonResponse(Response $response, array $data, int $status = 200): Response
     {
         $response->getBody()->write(json_encode($data));
-        
+
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus($status);

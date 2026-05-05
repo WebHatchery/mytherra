@@ -9,14 +9,16 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class GameState extends Model
 {
     protected $table = 'game_states';
-    
+
     protected $fillable = [
         'singleton_id',
         'current_year'
     ];
 
     protected $primaryKey = 'singleton_id';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [

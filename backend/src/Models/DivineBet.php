@@ -8,9 +8,11 @@ use InvalidArgumentException;
 class DivineBet extends Model
 {
     protected $table = 'divine_bets';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
-    
+
     protected $fillable = [
         'id',
         'player_id',
@@ -279,7 +281,7 @@ class DivineBet extends Model
         if (!$this->isActive()) {
             return false;
         }
-        
+
         $betAge = $currentYear - $this->placed_year;
         return $betAge >= $this->timeframe;
     }
@@ -325,7 +327,7 @@ class DivineBet extends Model
         $winProbability = 1.0 / $this->current_odds;
         $potentialReturn = $this->potential_payout - $this->divine_favor_stake;
         $expectedReturn = ($winProbability * $potentialReturn) - ((1 - $winProbability) * $this->divine_favor_stake);
-        
+
         return ($expectedReturn / $this->divine_favor_stake) * 100;
     }
 
@@ -354,21 +356,23 @@ class DivineBet extends Model
             throw new InvalidArgumentException("Invalid odds value: {$newOdds}");
         }
 
-        // Apply a max change of 20% to avoid wild fluctuations
+    // Apply a max change of 20% to avoid wild fluctuations
         $maxChange = $this->current_odds * 0.2;
         $this->current_odds = max(
             min($newOdds, $this->current_odds + $maxChange),
             $this->current_odds - $maxChange
         );
 
-        // Ensure minimum odds of 1.1
+    // Ensure minimum odds of 1.1
         $this->current_odds = max($this->current_odds, 1.1);
 
-        // Recalculate potential payout
+    // Recalculate potential payout
         $this->potential_payout = $this->calculatePotentialPayout();
 
         return $this->save();
-    }    /**
+    }
+
+    /**
      * Create database table for divine bets
      */
     public static function createTable()
@@ -401,7 +405,7 @@ class DivineBet extends Model
                 INDEX idx_divine_bets_timeframe (timeframe)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         ";
-        
+
         $db->query($sql);
     }
 
@@ -415,27 +419,27 @@ class DivineBet extends Model
             throw new InvalidArgumentException("Invalid bet type: {$this->bet_type}");
         }
 
-        // Validate confidence
+    // Validate confidence
         if (!self::validateConfidence($this->confidence)) {
             throw new InvalidArgumentException("Invalid confidence level: {$this->confidence}");
         }
 
-        // Validate status
+    // Validate status
         if (!self::validateStatus($this->status)) {
             throw new InvalidArgumentException("Invalid status: {$this->status}");
         }
 
-        // Validate timeframe
+    // Validate timeframe
         if (!self::validateTimeframe($this->timeframe)) {
             throw new InvalidArgumentException("Invalid timeframe: {$this->timeframe}. Must be between 1 and 50 years.");
         }
 
-        // Validate stake
+    // Validate stake
         if (!self::validateStake($this->divine_favor_stake)) {
             throw new InvalidArgumentException("Invalid stake: {$this->divine_favor_stake}. Must be between 1 and 1000.");
         }
 
-        // Validate odds
+    // Validate odds
         if (!self::validateOdds($this->current_odds)) {
             throw new InvalidArgumentException("Invalid odds: {$this->current_odds}. Must be at least 1.1.");
         }

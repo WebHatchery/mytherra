@@ -10,12 +10,17 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class Landmark extends Model
 {
     protected $table = 'landmarks';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
-    public $timestamps = true;    protected $fillable = [
+
+    public $timestamps = true;
+
+    protected $fillable = [
         'id',
         'region_id',
-        'name', 
+        'name',
         'type',
         'description',
         'status',
@@ -25,7 +30,9 @@ class Landmark extends Model
         'last_visited_year',
         'associated_events',
         'traits'
-    ];    protected $casts = [
+    ];
+
+    protected $casts = [
         'magic_level' => 'integer',
         'danger_level' => 'integer',
         'discovered_year' => 'integer',
@@ -35,36 +42,36 @@ class Landmark extends Model
     ];
 
     // Landmark types enum
-    const TYPE_TEMPLE = 'temple';
-    const TYPE_RUIN = 'ruin';
-    const TYPE_FOREST = 'forest';
-    const TYPE_MOUNTAIN = 'mountain';
-    const TYPE_RIVER = 'river';
-    const TYPE_MONUMENT = 'monument';
-    const TYPE_DUNGEON = 'dungeon';
-    const TYPE_TOWER = 'tower';
-    const TYPE_BATTLEFIELD = 'battlefield';
-    const TYPE_GROVE = 'grove';
+    public const TYPE_TEMPLE = 'temple';
+    public const TYPE_RUIN = 'ruin';
+    public const TYPE_FOREST = 'forest';
+    public const TYPE_MOUNTAIN = 'mountain';
+    public const TYPE_RIVER = 'river';
+    public const TYPE_MONUMENT = 'monument';
+    public const TYPE_DUNGEON = 'dungeon';
+    public const TYPE_TOWER = 'tower';
+    public const TYPE_BATTLEFIELD = 'battlefield';
+    public const TYPE_GROVE = 'grove';
 
     // Landmark statuses enum
-    const STATUS_PRISTINE = 'pristine';
-    const STATUS_WEATHERED = 'weathered';
-    const STATUS_CORRUPTED = 'corrupted';
-    const STATUS_BLESSED = 'blessed';
-    const STATUS_HAUNTED = 'haunted';
-    const STATUS_ACTIVE = 'active';
+    public const STATUS_PRISTINE = 'pristine';
+    public const STATUS_WEATHERED = 'weathered';
+    public const STATUS_CORRUPTED = 'corrupted';
+    public const STATUS_BLESSED = 'blessed';
+    public const STATUS_HAUNTED = 'haunted';
+    public const STATUS_ACTIVE = 'active';
 
     // Landmark traits enum
-    const TRAIT_ANCIENT = 'ancient';
-    const TRAIT_DRAGON_LAIR = 'dragon_lair';
-    const TRAIT_PORTAL = 'portal';
-    const TRAIT_CURSED_GROUND = 'cursed_ground';
-    const TRAIT_HOLY_SITE = 'holy_site';
-    const TRAIT_HIDDEN = 'hidden';
-    const TRAIT_MAGICAL = 'magical';
-    const TRAIT_STRATEGIC = 'strategic';
-    const TRAIT_HISTORICAL = 'historical';
-    const TRAIT_ABUNDANT = 'abundant';    /**
+    public const TRAIT_ANCIENT = 'ancient';
+    public const TRAIT_DRAGON_LAIR = 'dragon_lair';
+    public const TRAIT_PORTAL = 'portal';
+    public const TRAIT_CURSED_GROUND = 'cursed_ground';
+    public const TRAIT_HOLY_SITE = 'holy_site';
+    public const TRAIT_HIDDEN = 'hidden';
+    public const TRAIT_MAGICAL = 'magical';
+    public const TRAIT_STRATEGIC = 'strategic';
+    public const TRAIT_HISTORICAL = 'historical';
+    public const TRAIT_ABUNDANT = 'abundant';    /**
      * Relationship with Region model
      */
     public function region(): BelongsTo
@@ -86,7 +93,9 @@ class Landmark extends Model
     public function landmarkStatus(): BelongsTo
     {
         return $this->belongsTo(LandmarkStatus::class, 'status', 'code');
-    }// Database-driven methods (replaces hardcoded arrays)
+    }
+
+    // Database-driven methods (replaces hardcoded arrays)
     public static function getValidTypes()
     {
         return LandmarkType::getTypeCodes();
@@ -154,27 +163,27 @@ class Landmark extends Model
     {
         $errors = [];
 
-        // Validate type
+    // Validate type
         if (!in_array($this->type, self::getValidTypes())) {
             $errors[] = "Invalid landmark type: {$this->type}";
         }
 
-        // Validate status
+    // Validate status
         if (!in_array($this->status, self::getValidStatuses())) {
             $errors[] = "Invalid landmark status: {$this->status}";
         }
 
-        // Validate magic level
+    // Validate magic level
         if ($this->magicLevel < 0 || $this->magicLevel > 100) {
             $errors[] = "Magic level must be between 0 and 100";
         }
 
-        // Validate danger level
+    // Validate danger level
         if ($this->dangerLevel < 0 || $this->dangerLevel > 100) {
             $errors[] = "Danger level must be between 0 and 100";
         }
 
-        // Validate traits
+    // Validate traits
         if ($this->traits) {
             $validTraits = self::getValidTraits();
             foreach ($this->traits as $trait) {
@@ -192,10 +201,18 @@ class Landmark extends Model
      */
     public function getMagicLevelDescription()
     {
-        if ($this->magicLevel >= 80) return 'Extremely Magical';
-        if ($this->magicLevel >= 60) return 'Highly Magical';
-        if ($this->magicLevel >= 40) return 'Moderately Magical';
-        if ($this->magicLevel >= 20) return 'Slightly Magical';
+        if ($this->magicLevel >= 80) {
+            return 'Extremely Magical';
+        }
+        if ($this->magicLevel >= 60) {
+            return 'Highly Magical';
+        }
+        if ($this->magicLevel >= 40) {
+            return 'Moderately Magical';
+        }
+        if ($this->magicLevel >= 20) {
+            return 'Slightly Magical';
+        }
         return 'Mundane';
     }
 
@@ -204,10 +221,18 @@ class Landmark extends Model
      */
     public function getDangerLevelDescription()
     {
-        if ($this->dangerLevel >= 80) return 'Extremely Dangerous';
-        if ($this->dangerLevel >= 60) return 'Highly Dangerous';
-        if ($this->dangerLevel >= 40) return 'Moderately Dangerous';
-        if ($this->dangerLevel >= 20) return 'Slightly Dangerous';
+        if ($this->dangerLevel >= 80) {
+            return 'Extremely Dangerous';
+        }
+        if ($this->dangerLevel >= 60) {
+            return 'Highly Dangerous';
+        }
+        if ($this->dangerLevel >= 40) {
+            return 'Moderately Dangerous';
+        }
+        if ($this->dangerLevel >= 20) {
+            return 'Slightly Dangerous';
+        }
         return 'Safe';
     }
 
@@ -240,7 +265,7 @@ class Landmark extends Model
      */
     public function isAncient()
     {
-        return $this->hasTrait(self::TRAIT_ANCIENT) || 
+        return $this->hasTrait(self::TRAIT_ANCIENT) ||
                $this->type === self::TYPE_RUIN ||
                $this->type === self::TYPE_MONUMENT;
     }
@@ -270,7 +295,7 @@ class Landmark extends Model
      */
     public function isAccessible()
     {
-        return !$this->hasTrait(self::TRAIT_HIDDEN) && 
+        return !$this->hasTrait(self::TRAIT_HIDDEN) &&
                $this->status !== self::STATUS_CORRUPTED;
     }
 
@@ -280,8 +305,8 @@ class Landmark extends Model
     public function getInfluenceScore()
     {
         $baseScore = 10;
-        
-        // Type-based influence
+
+    // Type-based influence
         $typeInfluence = [
             self::TYPE_TEMPLE => 15,
             self::TYPE_TOWER => 12,
@@ -297,19 +322,35 @@ class Landmark extends Model
 
         $baseScore += $typeInfluence[$this->type] ?? 5;
 
-        // Trait-based modifiers
-        if ($this->hasTrait(self::TRAIT_ANCIENT)) $baseScore += 5;
-        if ($this->hasTrait(self::TRAIT_MAGICAL)) $baseScore += 4;
-        if ($this->hasTrait(self::TRAIT_HOLY_SITE)) $baseScore += 6;
-        if ($this->hasTrait(self::TRAIT_STRATEGIC)) $baseScore += 3;
-        if ($this->hasTrait(self::TRAIT_PORTAL)) $baseScore += 8;
+    // Trait-based modifiers
+        if ($this->hasTrait(self::TRAIT_ANCIENT)) {
+            $baseScore += 5;
+        }
+        if ($this->hasTrait(self::TRAIT_MAGICAL)) {
+            $baseScore += 4;
+        }
+        if ($this->hasTrait(self::TRAIT_HOLY_SITE)) {
+            $baseScore += 6;
+        }
+        if ($this->hasTrait(self::TRAIT_STRATEGIC)) {
+            $baseScore += 3;
+        }
+        if ($this->hasTrait(self::TRAIT_PORTAL)) {
+            $baseScore += 8;
+        }
 
-        // Status modifiers
-        if ($this->status === self::STATUS_BLESSED) $baseScore += 5;
-        if ($this->status === self::STATUS_CORRUPTED) $baseScore += 3;
-        if ($this->status === self::STATUS_HAUNTED) $baseScore += 2;
+    // Status modifiers
+        if ($this->status === self::STATUS_BLESSED) {
+            $baseScore += 5;
+        }
+        if ($this->status === self::STATUS_CORRUPTED) {
+            $baseScore += 3;
+        }
+        if ($this->status === self::STATUS_HAUNTED) {
+            $baseScore += 2;
+        }
 
-        // Magic and danger level influence
+    // Magic and danger level influence
         $baseScore += intval($this->magicLevel / 20);
         $baseScore += intval($this->dangerLevel / 25);
 
@@ -356,18 +397,25 @@ class Landmark extends Model
         ];
 
         return $defaults[$type] ?? 40;
-    }    /**
+    }
+
+    /**
      * Create database table
-     */    public static function createTable()
+     */
+    public static function createTable()
     {
         if (!Schema::schema()->hasTable('landmarks')) {
             Schema::schema()->create('landmarks', function (Blueprint $table) {
                 $table->string('id')->primary();
                 $table->string('region_id');
                 $table->string('name');
-                $table->string('type'); // Changed from enum to string for flexibility
+                $table->string('type');
+
+    // Changed from enum to string for flexibility
                 $table->text('description');
-                $table->string('status')->default('pristine'); // Changed from enum to string
+                $table->string('status')->default('pristine');
+
+    // Changed from enum to string
                 $table->integer('magic_level')->default(0);
                 $table->integer('danger_level')->default(0);
                 $table->integer('discovered_year')->nullable();
@@ -376,10 +424,10 @@ class Landmark extends Model
                 $table->json('traits')->nullable();
                 $table->timestamps();
 
-                // Foreign key constraints
+    // Foreign key constraints
                 $table->foreign('region_id')->references('id')->on('regions')->onDelete('cascade');
-                
-                // Indexes for performance
+
+    // Indexes for performance
                 $table->index('region_id');
                 $table->index('type');
                 $table->index('status');

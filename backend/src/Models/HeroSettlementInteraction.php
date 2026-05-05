@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class HeroSettlementInteraction extends Model
 {
     protected $table = 'hero_settlement_interactions';
-    
+
     protected $fillable = [
         'id',
         'hero_id',
@@ -30,6 +30,7 @@ class HeroSettlementInteraction extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     /**
@@ -173,7 +174,7 @@ class HeroSettlementInteraction extends Model
                 $table->foreign('landmark_id')->references('id')->on('landmarks')->onDelete('set null');
                 $table->foreign('interaction_type')->references('code')->on('hero_settlement_interaction_types');
 
-                // Add indexes
+    // Add indexes
                 $table->index('hero_id');
                 $table->index('settlement_id');
                 $table->index('landmark_id');
@@ -193,7 +194,7 @@ class HeroSettlementInteraction extends Model
             throw new \InvalidArgumentException("Invalid interaction type: {$this->interaction_type}");
         }
 
-        // Validate target (settlement or landmark)
+    // Validate target (settlement or landmark)
         if (!$this->validateTarget()) {
             throw new \InvalidArgumentException("Either settlement_id or landmark_id must be provided");
         }

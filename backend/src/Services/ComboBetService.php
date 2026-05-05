@@ -12,7 +12,7 @@ class ComboBetService
     /**
      * Create a combo bet from multiple individual bets
      * All linked bets must win for the combo to pay out
-     * 
+     *
      * @param array $betIds Array of existing bet IDs to combine
      * @param int $totalStake Total divine favor stake for the combo
      * @return array Combo bet details
@@ -27,9 +27,9 @@ class ComboBetService
             throw new \InvalidArgumentException('Combo bets cannot combine more than 5 bets');
         }
 
-        // Fetch all bets and validate they exist and are active
+    // Fetch all bets and validate they exist and are active
         $bets = DivineBet::whereIn('id', $betIds)->get();
-        
+
         if ($bets->count() !== count($betIds)) {
             throw new \InvalidArgumentException('One or more bets not found');
         }
@@ -40,17 +40,17 @@ class ComboBetService
             }
         }
 
-        // Calculate combined odds (multiply all individual odds)
+    // Calculate combined odds (multiply all individual odds)
         $combinedOdds = 1.0;
         foreach ($bets as $bet) {
             $combinedOdds *= $bet->current_odds;
         }
 
-        // Apply combo bonus (5% increase per additional bet beyond 2)
+    // Apply combo bonus (5% increase per additional bet beyond 2)
         $comboBonus = 1.0 + (0.05 * (count($betIds) - 2));
         $finalOdds = round($combinedOdds * $comboBonus, 2);
 
-        // Calculate potential payout
+    // Calculate potential payout
         $potentialPayout = (int) round($totalStake * $finalOdds);
 
         $gameState = GameState::first();
@@ -67,14 +67,14 @@ class ComboBetService
             'created_at' => now()->toIso8601String()
         ];
 
-        // Store combo bet (we'll create a simple model for this)
+    // Store combo bet (we'll create a simple model for this)
         // For now, return the data - can be persisted to a combo_bets table
         return $comboBetData;
     }
 
     /**
      * Resolve a combo bet by checking all linked bets
-     * 
+     *
      * @param array $comboBetData The combo bet configuration
      * @return array Resolution result
      */
@@ -94,13 +94,13 @@ class ComboBetService
                 'status' => $bet->status,
                 'won' => $won
             ];
-            
+
             if (!$won) {
                 $allWon = false;
             }
         }
 
-        // Check if any bets are still active
+    // Check if any bets are still active
         $hasActiveBets = $bets->where('status', 'active')->count() > 0;
 
         if ($hasActiveBets) {
@@ -114,7 +114,7 @@ class ComboBetService
 
         return [
             'status' => $allWon ? 'won' : 'lost',
-            'message' => $allWon 
+            'message' => $allWon
                 ? 'All bets won! Combo payout awarded!'
                 : 'One or more bets lost. Combo bet failed.',
             'individual_results' => $results,

@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class ResourceNodeType extends Model
 {
     protected $table = 'resource_node_types';
-    
+
     protected $fillable = [
         'name',
         'code',
@@ -109,13 +109,13 @@ class ResourceNodeType extends Model
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
-                // Indexes
+    // Indexes
                 $table->index('code');
                 $table->index('is_active');
                 $table->index('resource_category');
             });
 
-            // Seed default data
+    // Seed default data
             self::seedDefaultData();
         }
     }

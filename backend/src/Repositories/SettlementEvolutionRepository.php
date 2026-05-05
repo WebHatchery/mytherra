@@ -24,7 +24,7 @@ class SettlementEvolutionRepository
     public function getSettlementTypes(): array
     {
         $types = SettlementTypeConfig::all()->keyBy('code');
-        return $types->map(function($type) {
+        return $types->map(function ($type) {
             return [
                 'CODE' => $type->code,
                 'DESCRIPTION' => $type->description,
@@ -41,8 +41,8 @@ class SettlementEvolutionRepository
     public function getBuildingTypes(): array
     {
         $buildings = BuildingTypeConfig::all();
-        return $buildings->groupBy('category')->map(function($categoryBuildings) {
-            return $categoryBuildings->keyBy('code')->map(function($building) {
+        return $buildings->groupBy('category')->map(function ($categoryBuildings) {
+            return $categoryBuildings->keyBy('code')->map(function ($building) {
                 return [
                     'CODE' => $building->code,
                     'NAME' => $building->name,

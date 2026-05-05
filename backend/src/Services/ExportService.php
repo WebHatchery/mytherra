@@ -20,7 +20,7 @@ class ExportService
     public function exportFullSnapshot(): array
     {
         $gameState = GameState::first();
-        
+
         return [
             'exportedAt' => now()->toIso8601String(),
             'version' => '1.0',

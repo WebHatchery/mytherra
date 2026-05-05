@@ -9,13 +9,14 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class Player extends Model
 {
     protected $table = 'players';
-    
+
     protected $fillable = [
         'id',
         'divine_favor'
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [

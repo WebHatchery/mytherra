@@ -60,7 +60,7 @@ class StatisticsController
             'success' => true,
             'data' => $data
         ]));
-        
+
         return $response
             ->withHeader('Content-Type', 'application/json')
             ->withStatus($status);

@@ -14,15 +14,15 @@ class LaravelBootstrap
     {
         $container = Container::getInstance();
 
-        // Set up Cache facade
+    // Set up Cache facade
         $container->singleton('files', function () {
             return new Filesystem();
         });
 
         $container->singleton('cache', function () use ($container) {
             $cacheManager = new CacheManager($container);
-            
-            // Configure file cache driver
+
+    // Configure file cache driver
             $cachePath = __DIR__ . '/../../storage/cache';
             if (!is_dir($cachePath)) {
                 mkdir($cachePath, 0777, true);
@@ -36,11 +36,11 @@ class LaravelBootstrap
             return $cacheManager;
         });
 
-        // Set up Cache alias
+    // Set up Cache alias
         $container->alias('cache', \Illuminate\Contracts\Cache\Factory::class);
         $container->alias('cache', \Illuminate\Contracts\Cache\Repository::class);
 
-        // Set the facade root
+    // Set the facade root
         Facade::setFacadeApplication($container);
     }
 }

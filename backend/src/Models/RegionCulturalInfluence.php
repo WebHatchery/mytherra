@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class RegionCulturalInfluence extends Model
 {
     protected $table = 'region_cultural_influences';
-    
+
     protected $fillable = [
         'id',
         'name',
@@ -23,6 +23,7 @@ class RegionCulturalInfluence extends Model
     ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $casts = [
@@ -51,11 +52,11 @@ class RegionCulturalInfluence extends Model
                 $table->decimal('stability_modifier', 5, 2)->default(1.0);
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
-                
+
                 $table->index(['is_active']);
                 $table->index(['code']);
             });
-            
+
             self::seedDefaultInfluences();
         }
     }

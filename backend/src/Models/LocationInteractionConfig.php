@@ -37,7 +37,7 @@ class LocationInteractionConfig
                 )
             ");
 
-            // Create location_type_interactions table (specific interactions for each location type)
+    // Create location_type_interactions table (specific interactions for each location type)
             self::$db->exec("
                 CREATE TABLE IF NOT EXISTS location_type_interactions (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -54,7 +54,7 @@ class LocationInteractionConfig
                 )
             ");
 
-            // Create region_status_modifiers table
+    // Create region_status_modifiers table
             self::$db->exec("
                 CREATE TABLE IF NOT EXISTS region_status_modifiers (
                     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -140,7 +140,7 @@ class LocationInteractionConfig
                 $stmt->execute($type);
             }
 
-            // Seed location type interactions
+    // Seed location type interactions
             $locationInteractions = [
                 // Wilderness interactions
                 [
@@ -216,7 +216,7 @@ class LocationInteractionConfig
                 $stmt->execute($interaction);
             }
 
-            // Seed region status modifiers
+    // Seed region status modifiers
             $statusModifiers = [
                 [
                     'status_code' => 'peaceful',

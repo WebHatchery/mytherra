@@ -9,7 +9,8 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class GameEvent extends Model
 {
     protected $table = 'game_events';
-      protected $fillable = [
+
+    protected $fillable = [
         'id',
         'title',
         'description',
@@ -20,15 +21,16 @@ class GameEvent extends Model
         'related_region_ids',
         'related_hero_ids',
         'year'
-    ];
+      ];
 
     protected $casts = [
         'related_region_ids' => 'array',
         'related_hero_ids' => 'array',
         'year' => 'integer'
-    ];
+      ];
 
     protected $keyType = 'string';
+
     public $incrementing = false;    public static function createTable()
     {
         if (!Schema::schema()->hasTable('game_events')) {
@@ -44,11 +46,11 @@ class GameEvent extends Model
                 $table->json('related_hero_ids')->nullable();
                 $table->integer('year')->nullable();
                 $table->timestamps();
-                
-                // Foreign key constraints
+
+    // Foreign key constraints
                 $table->foreign('region_id')->references('id')->on('regions')->onDelete('set null');
-                
-                // Indexes for performance
+
+    // Indexes for performance
                 $table->index('region_id');
                 $table->index('type');
                 $table->index('status');

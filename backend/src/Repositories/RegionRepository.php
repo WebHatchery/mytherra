@@ -41,40 +41,44 @@ class RegionRepository
             Logger::error("Error fetching regions by IDs: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Get all regions optionally filtered by properties
      */
     public function getAllRegions($filters = [], $limit = 20, $offset = 0)
     {
         try {
             $query = Region::query();
-            
-            // Apply filters using Eloquent
+
+    // Apply filters using Eloquent
             if (!empty($filters['status'])) {
                 $query->where('status', $filters['status']);
             }
-            
+
             if (!empty($filters['corruptionLevel'])) {
                 $query->where('corruption_level', $filters['corruptionLevel']);
             }
-            
+
             if (!empty($filters['culturalInfluence'])) {
                 $query->where('cultural_influence', $filters['culturalInfluence']);
             }
-            
-            // Apply ordering and pagination
+
+    // Apply ordering and pagination
             $regions = $query
                 ->orderBy('name', 'ASC')
                 ->skip($offset)
                 ->take($limit)
                 ->get();
-            
+
             return $regions->map->toArray()->all();
         } catch (Exception $e) {
             Logger::error("Error fetching regions: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Save or update a region
      */
     public function saveRegion($regionData)
@@ -123,7 +127,9 @@ class RegionRepository
             Logger::error("Error creating region: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Update region's corruption level
      */
     public function updateCorruptionLevel($regionId, $newLevel)
@@ -159,7 +165,9 @@ class RegionRepository
             Logger::error("Error updating cultural influence: " . $e->getMessage());
             throw $e;
         }
-    }    /**
+    }
+
+    /**
      * Get regions where betting opportunities are available
      */
     public function getRegionsForBetting($filters = [])
@@ -167,8 +175,8 @@ class RegionRepository
         try {
             $query = Region::query();
 
-            // Add filters for regions that are more likely to have interesting events
-            $query->where(function($q) {
+    // Add filters for regions that are more likely to have interesting events
+            $query->where(function ($q) {
                 $q->where('corruption_level', '>', 30)
                   ->orWhere('cultural_influence', '>', 60)
                   ->orWhereIn('status', ['unstable', 'changing', 'contested']);
@@ -183,7 +191,7 @@ class RegionRepository
             }
 
             $limit = $filters['limit'] ?? 5;
-            
+
             $regions = $query
                 ->orderByRaw('(corruption_level + cultural_influence) DESC')
                 ->take($limit)

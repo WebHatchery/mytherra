@@ -15,7 +15,9 @@ class GameConfigService
     private static $cache = [];
     private const CACHE_PREFIX = 'game_config:';
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
     public static function getInstance(): self
     {
@@ -32,12 +34,12 @@ class GameConfigService
     {
         $cacheKey = self::CACHE_PREFIX . "{$category}.{$key}";
 
-        // Try to get from cache first
+    // Try to get from cache first
         if (isset(self::$cache[$cacheKey])) {
             return self::$cache[$cacheKey];
         }
 
-        // Not in cache, get from database
+    // Not in cache, get from database
         try {
             $config = GameConfig::where('category', $category)
                 ->where('key', $key)
@@ -52,7 +54,7 @@ class GameConfigService
             error_log("Error fetching config {$category}.{$key}: " . $error->getMessage());
         }
 
-        // Return default value if provided
+    // Return default value if provided
         if ($defaultValue !== null) {
             self::$cache[$cacheKey] = $defaultValue;
             return $defaultValue;
@@ -88,8 +90,8 @@ class GameConfigService
                 $key = $config->key;
                 $value = $this->getTypedValue($config);
                 $result[$key] = $value;
-                
-                // Update cache
+
+    // Update cache
                 $cacheKey = self::CACHE_PREFIX . "{$category}.{$key}";
                 self::$cache[$cacheKey] = $value;
             }
@@ -123,7 +125,7 @@ class GameConfigService
                 ]
             );
 
-            // Update cache
+    // Update cache
             $cacheKey = self::CACHE_PREFIX . "{$category}.{$key}";
             self::$cache[$cacheKey] = $value;
         } catch (\Exception $error) {

@@ -9,12 +9,13 @@ use App\Traits\ApiResponseTrait;
 use App\Helpers\Logger;
 
 class StatusController
-{    
+{
     use ApiResponseTrait;
 
     public function __construct(
         private StatusActions $statusActions
-    ) {}
+    ) {
+    }
 
     /**
      * Get game status
@@ -22,7 +23,7 @@ class StatusController
     public function getGameStatus(Request $request, Response $response): Response
     {
         Logger::debug("GET /api/status endpoint called");
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->statusActions->fetchGameStatus(),
@@ -66,7 +67,7 @@ class StatusController
                 '/site-status'
             ]
         ];
-        
+
         return $this->jsonResponse($response, $apiStatus);
     }
 

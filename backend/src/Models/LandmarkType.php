@@ -10,7 +10,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class LandmarkType extends Model
 {
     protected $table = 'landmark_types';
-    
+
     protected $fillable = [
         'name',
         'code',
@@ -93,12 +93,12 @@ class LandmarkType extends Model
                 $table->boolean('is_active')->default(true);
                 $table->timestamps();
 
-                // Indexes
+    // Indexes
                 $table->index('code');
                 $table->index('is_active');
             });
 
-            // Seed default data
+    // Seed default data
             self::seedDefaultData();
         }
     }

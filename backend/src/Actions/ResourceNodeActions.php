@@ -14,7 +14,8 @@ class ResourceNodeActions
 {
     public function __construct(
         private ResourceNodeRepository $resourceNodeRepository
-    ) {}
+    ) {
+    }
 
     /**
      * Fetch all resource nodes with optional filtering
@@ -27,38 +28,38 @@ class ResourceNodeActions
     {
         try {
             $query = ResourceNode::query();
-            
-            // Apply filters
+
+    // Apply filters
             if (!empty($filters['regionId'])) {
                 $query->where('regionId', $filters['regionId']);
             }
-            
+
             if (!empty($filters['settlementId'])) {
                 $query->where('settlementId', $filters['settlementId']);
             }
-            
+
             if (!empty($filters['type'])) {
                 $query->where('type', $filters['type']);
             }
-            
+
             if (!empty($filters['status'])) {
                 $query->where('status', $filters['status']);
             }
-            
+
             if (!empty($filters['minOutput'])) {
                 $query->where('output', '>=', $filters['minOutput']);
             }
-            
+
             if (!empty($filters['maxOutput'])) {
                 $query->where('output', '<=', $filters['maxOutput']);
             }
-            
-            // Apply pagination
+
+    // Apply pagination
             $limit = $filters['limit'] ?? 20;
             $offset = $filters['offset'] ?? 0;
-            
+
             $resourceNodes = $query->skip($offset)->take($limit)->get();
-            
+
             return $resourceNodes->map(fn($node) => $node->toArray())->all();
         } catch (\Exception $error) {
             Logger::error('Error fetching resource nodes', [
@@ -81,7 +82,7 @@ class ResourceNodeActions
     {
         try {
             $node = $this->resourceNodeRepository->getById($nodeId);
-            
+
             if (!$node) {
                 Logger::info("Resource node not found", ['nodeId' => $nodeId]);
                 throw new ResourceNotFoundException("Resource node not found: {$nodeId}");
@@ -90,7 +91,7 @@ class ResourceNodeActions
             if (!($node instanceof ResourceNode)) {
                 throw new \RuntimeException("Invalid resource node data returned from repository");
             }
-            
+
             return $node->toArray();
         } catch (ResourceNotFoundException $error) {
             throw $error;
@@ -114,15 +115,15 @@ class ResourceNodeActions
     {
         try {
             $node = new ResourceNode($nodeData);
-            
-            // Validate the resource node
+
+    // Validate the resource node
             $errors = $node->validate();
             if (!empty($errors)) {
                 throw new \RuntimeException('Validation failed: ' . implode(', ', $errors));
             }
-            
+
             $node->save();
-            
+
             Logger::info("Successfully created resource node", ['id' => $node->id]);
             return $node->toArray();
         } catch (\Exception $error) {
@@ -147,7 +148,7 @@ class ResourceNodeActions
     {
         try {
             $node = $this->resourceNodeRepository->getById($nodeId);
-            
+
             if (!$node) {
                 Logger::info("Resource node not found", ['nodeId' => $nodeId]);
                 throw new ResourceNotFoundException("Resource node not found: {$nodeId}");
@@ -156,17 +157,17 @@ class ResourceNodeActions
             if (!($node instanceof ResourceNode)) {
                 throw new \RuntimeException("Invalid resource node data returned from repository");
             }
-            
+
             $node->fill($updateData);
-            
-            // Validate the resource node
+
+    // Validate the resource node
             $errors = $node->validate();
             if (!empty($errors)) {
                 throw new \RuntimeException('Validation failed: ' . implode(', ', $errors));
             }
-            
+
             $node->save();
-            
+
             Logger::info("Successfully updated resource node", ['id' => $nodeId]);
             return $node->toArray();
         } catch (ResourceNotFoundException $error) {
@@ -193,7 +194,7 @@ class ResourceNodeActions
     {
         try {
             $node = $this->resourceNodeRepository->getById($nodeId);
-            
+
             if (!$node) {
                 Logger::info("Resource node not found", ['nodeId' => $nodeId]);
                 throw new ResourceNotFoundException("Resource node not found: {$nodeId}");
@@ -202,9 +203,9 @@ class ResourceNodeActions
             if (!($node instanceof ResourceNode)) {
                 throw new \RuntimeException("Invalid resource node data returned from repository");
             }
-            
+
             $node->delete();
-            
+
             Logger::info("Successfully deleted resource node", ['id' => $nodeId]);
             return true;
         } catch (ResourceNotFoundException $error) {

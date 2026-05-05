@@ -14,7 +14,8 @@ class HeroActions
 {
     public function __construct(
         private HeroRepository $heroRepository
-    ) {}
+    ) {
+    }
 
     /**
      * Fetch all heroes with optional filters
@@ -27,9 +28,9 @@ class HeroActions
     {
         try {
             $heroes = $this->heroRepository->getAllHeroes($filters);
-            
+
             return array_map(
-                fn($hero) => $this->enrichHeroData($hero), 
+                fn($hero) => $this->enrichHeroData($hero),
                 $heroes
             );
         } catch (\Exception $error) {
@@ -51,9 +52,9 @@ class HeroActions
      */
     public function fetchHeroById(string $heroId): array
     {
-        try {            
+        try {
             $hero = $this->heroRepository->getById($heroId);
-            
+
             if (!$hero) {
                 Logger::info("Hero not found", ['heroId' => $heroId]);
                 throw new ResourceNotFoundException("Hero not found: {$heroId}");
@@ -62,7 +63,7 @@ class HeroActions
             if (!($hero instanceof Hero)) {
                 throw new \RuntimeException("Invalid hero data returned from repository");
             }
-            
+
             return $this->enrichHeroData($hero);
         } catch (ResourceNotFoundException $error) {
             throw $error;

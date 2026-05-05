@@ -13,7 +13,8 @@ class RegionController
 
     public function __construct(
         private RegionActions $regionActions
-    ) {}
+    ) {
+    }
 
     /**
      * Get all regions
@@ -34,9 +35,11 @@ class RegionController
             'fetching regions',
             'Region not found'
         );
-    }    /**
+    }
+
+    /**
      * Get region by ID
-     */    
+     */
     public function getRegionById(Request $request, Response $response, array $args): Response
     {
         return $this->handleApiAction(
@@ -53,7 +56,7 @@ class RegionController
     public function getRegionLandmarks(Request $request, Response $response, array $args): Response
     {
         $regionId = $args['id'];
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->regionActions->getLandmarksByRegion($regionId),

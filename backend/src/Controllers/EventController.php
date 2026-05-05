@@ -14,7 +14,8 @@ class EventController
 
     public function __construct(
         private EventActions $eventActions
-    ) {}
+    ) {
+    }
 
     /**
      * Get all events with optional filtering
@@ -22,7 +23,7 @@ class EventController
     public function getAllEvents(Request $request, Response $response): Response
     {
         Logger::debug("GET /api/events endpoint called");
-        
+
         $queryParams = $request->getQueryParams();
         $filters = [
             'type' => $queryParams['type'] ?? null,
@@ -32,7 +33,7 @@ class EventController
             'limit' => isset($queryParams['limit']) ? min((int)$queryParams['limit'], 100) : 20,
             'offset' => isset($queryParams['offset']) ? (int)$queryParams['offset'] : 0
         ];
-        
+
         return $this->handleApiAction(
             $response,
             fn() => $this->eventActions->fetchAllEvents($filters),

@@ -9,7 +9,7 @@ use Illuminate\Database\Capsule\Manager as Schema;
 class EvolutionParameter extends Model
 {
     protected $table = 'evolution_parameters';
-    
+
     protected $fillable = [
         'parameter',
         'value',
