@@ -27,6 +27,7 @@ spl_autoload_register(function (string $class): void {
 }, true, true);
 
 use Dotenv\Dotenv;
+use App\Core\Environment;
 use App\Repositories\DatabaseService;
 use App\Utils\ContainerConfig;
 use App\Core\Router;
@@ -40,11 +41,19 @@ $dotenv = Dotenv::createImmutable($dotenvPath);
 $dotenv->load();
 
 // Add required environment variables
-$required_env_vars = ['DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD'];
+$required_env_vars = [
+    'DB_HOST',
+    'DB_PORT',
+    'DB_CONNECTION',
+    'DB_NAME',
+    'DB_USER',
+    'DB_PASSWORD',
+    'JWT_SECRET',
+    'WEB_HATCHERY_LOGIN_URL',
+    'WEB_HATCHERY_REGISTER_URL',
+];
 foreach ($required_env_vars as $var) {
-    if (!isset($_ENV[$var])) {
-        throw new \RuntimeException("Missing required environment variable: {$var}");
-    }
+    Environment::required($var);
 }
 
 // Create DI Container
@@ -57,8 +66,9 @@ $db = DatabaseService::getInstance();
 $router = new Router($container);
 
 // Set base path for subdirectory deployment
-if (isset($_ENV['APP_BASE_PATH']) && $_ENV['APP_BASE_PATH']) {
-    $router->setBasePath(rtrim($_ENV['APP_BASE_PATH'], '/'));
+$configuredBasePath = Environment::optional('APP_BASE_PATH');
+if ($configuredBasePath !== null) {
+    $router->setBasePath(rtrim($configuredBasePath, '/'));
 } else {
     // Auto-detect base path
     $requestPath = $_SERVER['REQUEST_URI'] ?? '';

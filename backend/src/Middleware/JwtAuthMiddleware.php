@@ -2,6 +2,7 @@
 
 namespace App\Middleware;
 
+use App\Core\Environment;
 use App\Core\Request;
 use App\Core\Response;
 use Firebase\JWT\JWT;
@@ -26,14 +27,10 @@ class JwtAuthMiddleware
         }
 
         $token = trim((string) $matches[1]);
-        $secret = $_ENV['JWT_SECRET'] ?? '';
-        if (empty($secret)) {
-             return $this->unauthorizedResponse($response, 'Server configuration error');
-        }
-
         JWT::$leeway = 31536000;
 
         try {
+            $secret = Environment::required('JWT_SECRET');
             $decoded = JWT::decode($token, new Key($secret, 'HS256'));
             $decodedArray = (array) $decoded;
             $roles = $decodedArray['roles'] ?? ['user'];
@@ -74,14 +71,11 @@ class JwtAuthMiddleware
 
     private function unauthorizedResponse(Response $response, string $message = 'Unauthorized'): Response
     {
-        $portalBaseUrl = rtrim((string) ($_ENV['AUTH_PORTAL_BASE_URL'] ?? ''), '/');
-        $loginUrl = $_ENV['WEB_HATCHERY_LOGIN_URL'] ?? ($portalBaseUrl !== '' ? $portalBaseUrl . '/login' : '');
-
         $response->getBody()->write(json_encode([
             'success' => false,
             'message' => $message,
             'error_code' => 'UNAUTHORIZED',
-            'login_url' => $loginUrl
+            'login_url' => Environment::required('WEB_HATCHERY_LOGIN_URL')
         ]));
         
         return $response

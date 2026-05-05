@@ -24,8 +24,8 @@ export const getAuthHeaders = async (): Promise<HeadersInit> => {
   try {
     const storage = localStorage.getItem('auth-storage');
     if (storage) {
-      const parsed = JSON.parse(storage) as { state?: { token?: string } };
-      token = parsed.state?.token ?? null;
+      const parsed = JSON.parse(storage) as { state?: { token?: string; user?: { is_guest?: boolean } } };
+      token = parsed.state?.user?.is_guest ? null : (parsed.state?.token ?? null);
     }
 
     if (!token) {

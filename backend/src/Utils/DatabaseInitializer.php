@@ -2,6 +2,7 @@
 
 namespace App\Utils;
 
+use App\Core\Environment;
 use Illuminate\Database\Capsule\Manager as Capsule;
 
 class DatabaseInitializer
@@ -13,11 +14,11 @@ class DatabaseInitializer
         // If no config provided, use environment variables
         if ($config === null) {
             $config = [
-                'driver'    => $_ENV['DB_CONNECTION'] ?? 'mysql',
-                'host'      => $_ENV['DB_HOST'] ?? 'localhost',
-                'database'  => $_ENV['DB_DATABASE'] ?? 'mytherra',
-                'username'  => $_ENV['DB_USERNAME'] ?? 'root',
-                'password'  => $_ENV['DB_PASSWORD'] ?? '',
+                'driver'    => Environment::required('DB_CONNECTION'),
+                'host'      => Environment::required('DB_HOST'),
+                'database'  => Environment::required('DB_NAME'),
+                'username'  => Environment::required('DB_USER'),
+                'password'  => Environment::required('DB_PASSWORD'),
                 'charset'   => 'utf8',
                 'collation' => 'utf8_unicode_ci',
                 'prefix'    => '',

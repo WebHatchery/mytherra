@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Core\Environment;
 use App\Models\User;
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -12,7 +13,7 @@ class AuthService
 
     public function __construct()
     {
-        $this->jwtSecret = $_ENV['JWT_SECRET'] ?? '';
+        $this->jwtSecret = Environment::required('JWT_SECRET');
     }
 
     public function validateToken(string $token): array

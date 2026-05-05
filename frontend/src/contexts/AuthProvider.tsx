@@ -35,7 +35,8 @@ const readFrontpageToken = (): string | null => {
   try {
     const storage = localStorage.getItem('auth-storage');
     if (!storage) return null;
-    const parsed = JSON.parse(storage) as { state?: { token?: string } };
+    const parsed = JSON.parse(storage) as { state?: { token?: string; user?: Partial<User> } };
+    if (parsed.state?.user?.is_guest) return null;
     return parsed.state?.token ?? null;
   } catch {
     return null;
@@ -79,35 +80,6 @@ const withRedirectParam = (urlValue: string): string => {
     return url.toString();
   } catch {
     return urlValue;
-  }
-};
-
-const appendQueryParam = (urlValue: string, key: string, value: string): string => {
-  try {
-    const url = new URL(urlValue, window.location.origin);
-    url.searchParams.set(key, value);
-    return url.toString();
-  } catch {
-    return urlValue;
-  }
-};
-
-const readGuestUserIdFromUrl = (): string | null => {
-  try {
-    const value = new URL(window.location.href).searchParams.get('guest_user_id') || '';
-    return value.trim() || null;
-  } catch {
-    return null;
-  }
-};
-
-const removeGuestUserIdFromUrl = (): void => {
-  try {
-    const url = new URL(window.location.href);
-    url.searchParams.delete('guest_user_id');
-    window.history.replaceState({}, '', url.toString());
-  } catch {
-    // ignore
   }
 };
 
@@ -172,10 +144,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const getLinkAccountUrl = useCallback(() => {
-    const guestUserId = user?.guest_user_id || (user?.is_guest ? user.id : null);
-    const base = withRedirectParam(import.meta.env.VITE_WEB_HATCHERY_SIGNUP_URL || '/signup');
-    return guestUserId ? appendQueryParam(base, 'guest_user_id', String(guestUserId)) : base;
-  }, [user]);
+    const signupUrl = import.meta.env.VITE_WEB_HATCHERY_SIGNUP_URL;
+    if (!signupUrl) {
+      throw new Error('VITE_WEB_HATCHERY_SIGNUP_URL is required');
+    }
+    return withRedirectParam(signupUrl);
+  }, []);
 
   const initializeUser = useCallback(async (authToken: string | null, mode: 'frontpage' | 'guest' | null) => {
     if (!authToken) {
@@ -244,24 +218,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, [token]);
 
   useEffect(() => {
-    const guestUserId = readGuestUserIdFromUrl();
-    if (!guestUserId || hasAttemptedGuestLinkRef.current) return;
+    const guestSession = readGuestSession();
+    if (!guestSession?.token || hasAttemptedGuestLinkRef.current) return;
     if (authMode !== 'frontpage' || !token || !user || user.is_guest) return;
     hasAttemptedGuestLinkRef.current = true;
 
     (async () => {
       try {
-        await apiClient.post('/auth/link-guest', { guest_user_id: guestUserId }, {
+        await apiClient.post('/auth/link-guest', { guest_token: guestSession.token }, {
           headers: { Authorization: `Bearer ${token}` }
         });
         clearGuestSession();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to link guest account');
       } finally {
-        removeGuestUserIdFromUrl();
+        await initializeUser(token, 'frontpage');
       }
     })();
-  }, [authMode, token, user]);
+  }, [authMode, initializeUser, token, user]);
 
   const logout = useCallback(() => {
     if (authMode === 'guest') {

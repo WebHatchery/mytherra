@@ -2,10 +2,12 @@
 
 namespace App\Controllers;
 
+use App\Core\Environment;
 use App\Core\Response;
 use App\Core\Request;
 use App\Models\User;
 use Firebase\JWT\JWT;
+use Firebase\JWT\Key;
 
 class AuthController
 {
@@ -14,8 +16,20 @@ class AuthController
 
     public function __construct()
     {
-        $this->authPortalBaseUrl = $_ENV['AUTH_PORTAL_BASE_URL'] ?? 'http://localhost:8000';
+        $this->authPortalBaseUrl = rtrim(Environment::required('WEB_HATCHERY_LOGIN_URL'), '/');
         $this->authService = new \App\Services\AuthService();
+    }
+
+    public function getLoginInfo(Request $request, Response $response): Response
+    {
+        $response->getBody()->write(json_encode([
+            'success' => true,
+            'data' => [
+                'login_url' => Environment::required('WEB_HATCHERY_LOGIN_URL'),
+            ]
+        ]));
+
+        return $response->withHeader('Content-Type', 'application/json');
     }
 
     public function callback(Request $request, Response $response): Response
@@ -74,14 +88,7 @@ class AuthController
 
     public function createGuestSession(Request $request, Response $response): Response
     {
-        $jwtSecret = trim((string) ($_ENV['JWT_SECRET'] ?? ''));
-        if ($jwtSecret === '') {
-            $response->getBody()->write(json_encode([
-                'success' => false,
-                'message' => 'Guest session is unavailable'
-            ]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
-        }
+        $jwtSecret = Environment::required('JWT_SECRET');
 
         $guestExternalId = 'guest_' . bin2hex(random_bytes(16));
         $guestUser = User::createOrUpdateFromAuthData([
@@ -96,8 +103,6 @@ class AuthController
 
         $now = time();
         $claims = [
-            'iss' => $_ENV['JWT_ISSUER'] ?? 'webhatchery',
-            'aud' => $_ENV['JWT_AUDIENCE'] ?? ($_ENV['APP_URL'] ?? 'mytherra-app'),
             'iat' => $now,
             'nbf' => $now - 5,
             'exp' => $now + (60 * 60 * 24 * 365),
@@ -151,9 +156,23 @@ class AuthController
         }
 
         $payload = json_decode((string) $request->getBody(), true) ?: [];
-        $guestUserId = trim((string) ($payload['guest_user_id'] ?? ''));
-        if ($guestUserId === '' || !str_starts_with($guestUserId, 'guest_')) {
-            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Invalid guest_user_id']));
+        $guestToken = trim((string) ($payload['guest_token'] ?? ''));
+        if ($guestToken === '') {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Invalid guest_token']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        try {
+            $decodedGuest = JWT::decode($guestToken, new Key(Environment::required('JWT_SECRET'), 'HS256'));
+            $guestClaims = (array) $decodedGuest;
+        } catch (\Throwable $exception) {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Invalid guest token']));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
+        }
+
+        $guestUserId = (string) ($guestClaims['sub'] ?? $guestClaims['user_id'] ?? '');
+        if ($guestUserId === '' || !str_starts_with($guestUserId, 'guest_') || empty($guestClaims['is_guest'])) {
+            $response->getBody()->write(json_encode(['success' => false, 'message' => 'Guest token is not a guest session']));
             return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
         }
 
@@ -209,12 +228,7 @@ class AuthController
     {
         $queryParams = $request->getQueryParams();
         $returnUrl = $queryParams['return_url'] ?? null;
-        $params = [];
-        if ($returnUrl) {
-            $params['redirect'] = urlencode($returnUrl);
-        }
-        $queryString = !empty($params) ? '?' . http_build_query($params) : '';
-        $loginUrl = $this->authPortalBaseUrl . '/login' . $queryString;
+        $loginUrl = $this->withRedirect(Environment::required('WEB_HATCHERY_LOGIN_URL'), is_string($returnUrl) ? $returnUrl : null);
 
         $response->getBody()->write(json_encode(['success' => true, 'data' => ['login_url' => $loginUrl]]));
         return $response->withHeader('Content-Type', 'application/json');
@@ -224,12 +238,10 @@ class AuthController
     {
         $queryParams = $request->getQueryParams();
         $returnUrl = $queryParams['return_url'] ?? null;
-        $params = [];
-        if ($returnUrl) {
-            $params['redirect'] = urlencode($returnUrl);
-        }
-        $queryString = !empty($params) ? '?' . http_build_query($params) : '';
-        $registerUrl = $this->authPortalBaseUrl . '/register' . $queryString;
+        $registerUrl = $this->withRedirect(
+            Environment::required('WEB_HATCHERY_REGISTER_URL'),
+            is_string($returnUrl) ? $returnUrl : null
+        );
 
         $response->getBody()->write(json_encode(['success' => true, 'data' => ['register_url' => $registerUrl]]));
         return $response->withHeader('Content-Type', 'application/json');
@@ -281,5 +293,15 @@ class AuthController
             'auth_type' => $isGuest ? 'guest' : 'frontpage',
             'guest_user_id' => $isGuest ? ($authUser['user_id'] ?? null) : null,
         ];
+    }
+
+    private function withRedirect(string $urlValue, ?string $returnUrl): string
+    {
+        if ($returnUrl === null || trim($returnUrl) === '') {
+            return $urlValue;
+        }
+
+        $separator = str_contains($urlValue, '?') ? '&' : '?';
+        return $urlValue . $separator . http_build_query(['redirect' => $returnUrl]);
     }
 }

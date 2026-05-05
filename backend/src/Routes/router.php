@@ -24,6 +24,7 @@ return function (Router $router): void {
         return $response->withHeader('Content-Type', 'application/json');
     });
 
+    $router->get($api . '/auth/login-info', [AuthController::class, 'getLoginInfo']);
     $router->get($api . '/auth/login-url', [AuthController::class, 'getLoginUrl']);
     $router->get($api . '/auth/register-url', [AuthController::class, 'getRegisterUrl']);
     $router->get($api . '/auth/callback', [AuthController::class, 'callback']);

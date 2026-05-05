@@ -2,6 +2,7 @@
 
 namespace App\Repositories;
 
+use App\Core\Environment;
 use PDO;
 use Illuminate\Database\Capsule\Manager as Capsule;
 
@@ -44,13 +45,18 @@ class DatabaseService {
      * Creates the database if it doesn't exist
      */
     public function createDatabaseIfNotExists(): void {
-        $dbName = $_ENV['DB_NAME'] ?? 'mytherra';
+        $host = Environment::required('DB_HOST');
+        $port = Environment::required('DB_PORT');
+        $dbName = Environment::required('DB_NAME');
+        $user = Environment::required('DB_USER');
+        $password = Environment::required('DB_PASSWORD');
+
         try {
             // Create initial connection without database
             $pdo = new PDO(
-                'mysql:host=' . ($_ENV['DB_HOST'] ?? 'localhost') . ';port=' . ($_ENV['DB_PORT'] ?? 3306),
-                $_ENV['DB_USER'] ?? 'root',
-                $_ENV['DB_PASSWORD'] ?? '',
+                "mysql:host={$host};port={$port}",
+                $user,
+                $password,
                 [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
             );
             
@@ -76,7 +82,7 @@ class DatabaseService {
             throw $e;
         }
 
-        $dbName = $_ENV['DB_NAME'] ?? 'mytherra';
+        $dbName = Environment::required('DB_NAME');
         $tableKey = "Tables_in_{$dbName}";
 
         if (empty($tables)) {
@@ -207,16 +213,11 @@ class DatabaseService {
         }
     }    private function initDatabase(): void {
         // Get required database configuration
-        $host = $_ENV['DB_HOST'] ?? $_SERVER['DB_HOST'] ?? null;
-        $port = $_ENV['DB_PORT'] ?? $_SERVER['DB_PORT'] ?? null;
-        $dbname = $_ENV['DB_NAME'] ?? $_SERVER['DB_NAME'] ?? null;
-        $user = $_ENV['DB_USER'] ?? $_SERVER['DB_USER'] ?? null;
-        $password = $_ENV['DB_PASSWORD'] ?? $_SERVER['DB_PASSWORD'] ?? null;
-        
-        // Validate all required parameters are present
-        if (!$host || !$port || !$dbname || !$user || !$password) {
-            throw new \RuntimeException('Missing required database configuration');
-        }
+        $host = Environment::required('DB_HOST');
+        $port = Environment::required('DB_PORT');
+        $dbname = Environment::required('DB_NAME');
+        $user = Environment::required('DB_USER');
+        $password = Environment::required('DB_PASSWORD');
 
         // Set up PDO connection
         $this->pdo = new PDO(

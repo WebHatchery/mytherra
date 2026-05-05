@@ -1,7 +1,11 @@
 import axios from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const GUEST_AUTH_STORAGE_KEY = 'mytherra-guest-session';
+
+if (!BASE_URL) {
+    throw new Error('VITE_API_BASE_URL is required for Mytherra frontend');
+}
 
 const readToken = (): string | null => {
     try {
@@ -9,7 +13,8 @@ const readToken = (): string | null => {
         if (authStorageStr) {
             const authData = JSON.parse(authStorageStr);
             const token = authData?.state?.token;
-            if (typeof token === 'string' && token.trim() !== '') {
+            const user = authData?.state?.user;
+            if (user?.is_guest !== true && typeof token === 'string' && token.trim() !== '') {
                 return token;
             }
         }
@@ -50,9 +55,7 @@ apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            const loginUrl =
-                error.response?.data?.login_url ||
-                import.meta.env.VITE_WEB_HATCHERY_LOGIN_URL;
+            const loginUrl = error.response?.data?.login_url;
 
             if (loginUrl) {
                 try {
