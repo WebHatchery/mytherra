@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 // f:\WebDevelopment\Mytherra\backend\src\Actions\BettingActions.php
 
 namespace App\Actions;

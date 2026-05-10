@@ -15,26 +15,3 @@ export interface User {
   auth_type?: 'frontpage' | 'guest';
   guest_user_id?: string | null;
 }
-
-export interface AuthResponse {
-  success: boolean;
-  message: string;
-  data?: {
-    token: string;
-    user: User;
-  };
-}
-
-export interface LoginUrlResponse {
-  success: boolean;
-  data: {
-    login_url: string;
-  };
-}
-
-export interface RegisterUrlResponse {
-  success: boolean;
-  data: {
-    register_url: string;
-  };
-}

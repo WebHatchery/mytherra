@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 $centralAutoload = __DIR__ . '/../../../vendor/autoload.php';
 if (!file_exists($centralAutoload)) {
     throw new \RuntimeException('Central vendor autoload not found at ' . $centralAutoload);
@@ -49,6 +51,7 @@ $required_env_vars = [
     'DB_USER',
     'DB_PASSWORD',
     'JWT_SECRET',
+    'CORS_ALLOWED_ORIGINS',
     'WEB_HATCHERY_LOGIN_URL',
     'WEB_HATCHERY_REGISTER_URL',
 ];
@@ -82,15 +85,6 @@ if ($configuredBasePath !== null) {
             break;
         }
     }
-}
-
-// Handle CORS preflight
-if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'OPTIONS') {
-    header('Access-Control-Allow-Origin: *');
-    header('Access-Control-Allow-Headers: Content-Type, Accept, Origin, Authorization');
-    header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-    http_response_code(200);
-    exit;
 }
 
 // Load routes

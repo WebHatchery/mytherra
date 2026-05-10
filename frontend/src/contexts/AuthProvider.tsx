@@ -3,6 +3,16 @@ import type { User } from '../entities/auth';
 import { AuthContext, type Preferences } from './authContext';
 import { setTokenProvider } from './authHeaders';
 import { apiClient } from '../api/apiClient';
+import {
+  clearFrontpageAuth,
+  clearGuestSession,
+  persistFrontpageToken,
+  persistLoginUrl,
+  readFrontpageToken,
+  readFrontpageUser,
+  readGuestSession,
+  saveGuestSession,
+} from '../utils/authStorage';
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -12,7 +22,6 @@ interface PortalUrlResponse {
   success: boolean;
   data?: {
     login_url?: string;
-    register_url?: string;
   };
 }
 
@@ -23,55 +32,6 @@ interface SessionResponse {
   } & Partial<User>;
   message?: string;
 }
-
-const GUEST_AUTH_STORAGE_KEY = 'mytherra-guest-session';
-
-interface GuestStoredSession {
-  token: string;
-  user: User;
-}
-
-const readFrontpageToken = (): string | null => {
-  try {
-    const storage = localStorage.getItem('auth-storage');
-    if (!storage) return null;
-    const parsed = JSON.parse(storage) as { state?: { token?: string; user?: Partial<User> } };
-    if (parsed.state?.user?.is_guest) return null;
-    return parsed.state?.token ?? null;
-  } catch {
-    return null;
-  }
-};
-
-const readFrontpageUser = (): Partial<User> | null => {
-  try {
-    const storage = localStorage.getItem('auth-storage');
-    if (!storage) return null;
-    const parsed = JSON.parse(storage) as { state?: { user?: Partial<User> } };
-    return parsed.state?.user ?? null;
-  } catch {
-    return null;
-  }
-};
-
-const readGuestSession = (): GuestStoredSession | null => {
-  try {
-    const raw = localStorage.getItem(GUEST_AUTH_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as GuestStoredSession;
-    return parsed?.token && parsed?.user ? parsed : null;
-  } catch {
-    return null;
-  }
-};
-
-const saveGuestSession = (session: GuestStoredSession): void => {
-  localStorage.setItem(GUEST_AUTH_STORAGE_KEY, JSON.stringify(session));
-};
-
-const clearGuestSession = (): void => {
-  localStorage.removeItem(GUEST_AUTH_STORAGE_KEY);
-};
 
 const withRedirectParam = (urlValue: string): string => {
   try {
@@ -97,21 +57,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = useCallback(async () => {
     try {
-      const response = await apiClient.get<PortalUrlResponse>(`/auth/login-url?return_url=${encodeURIComponent(window.location.href)}`);
+      const response = await apiClient.get<PortalUrlResponse>('/auth/login-info');
       const loginUrl = response.data.data?.login_url;
-      if (response.data.success && loginUrl) window.location.href = loginUrl;
+      if (response.data.success && loginUrl) {
+        const targetUrl = withRedirectParam(loginUrl);
+        persistLoginUrl(targetUrl);
+        window.location.href = targetUrl;
+      }
     } catch (err) {
       console.error('Failed to get login URL', err);
-    }
-  }, []);
-
-  const register = useCallback(async () => {
-    try {
-      const response = await apiClient.get<PortalUrlResponse>(`/auth/register-url?return_url=${encodeURIComponent(window.location.href)}`);
-      const registerUrl = response.data.data?.register_url;
-      if (response.data.success && registerUrl) window.location.href = registerUrl;
-    } catch (err) {
-      console.error('Failed to get register URL', err);
     }
   }, []);
 
@@ -198,8 +152,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (urlToken) {
       setToken(urlToken);
       setAuthMode('frontpage');
-      const authState = { state: { token: urlToken, isAuthenticated: true, user: null }, version: 0 };
-      localStorage.setItem('auth-storage', JSON.stringify(authState));
+      persistFrontpageToken(urlToken);
       window.history.replaceState({}, document.title, window.location.pathname);
       void initializeUser(urlToken, 'frontpage');
       return;
@@ -244,7 +197,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     setToken(null);
     setAuthMode(null);
-    localStorage.removeItem('auth-storage');
+    clearFrontpageAuth();
   }, [authMode]);
 
   const refreshUser = useCallback(async () => {
@@ -274,7 +227,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     error,
     authMode,
     login,
-    register,
     continueAsGuest,
     getLinkAccountUrl,
     logout,
@@ -282,7 +234,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     updatePreferences,
     isAdmin,
     hasRole,
-  }), [authMode, continueAsGuest, error, getLinkAccountUrl, hasRole, isAdmin, isLoading, login, logout, refreshUser, register, token, updatePreferences, user]);
+  }), [authMode, continueAsGuest, error, getLinkAccountUrl, hasRole, isAdmin, isLoading, login, logout, refreshUser, token, updatePreferences, user]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

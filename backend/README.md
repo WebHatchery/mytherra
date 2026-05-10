@@ -156,13 +156,18 @@ The database schema is identical to the Node.js version:
 
 ## Environment Variables
 
-- `DB_HOST` - Database host (default: localhost)
-- `DB_PORT` - Database port (default: 3306)
-- `DB_NAME` - Database name (default: mytherra)
-- `DB_USER` - Database username (default: root)
+- `DB_HOST` - Database host
+- `DB_PORT` - Database port
+- `DB_CONNECTION` - Database driver
+- `DB_NAME` - Database name
+- `DB_USER` - Database username
 - `DB_PASSWORD` - Database password
-- `PORT` - Server port (default: 5002)
-- `DEBUG` - Enable debug mode (default: true)
+- `CORS_ALLOWED_ORIGINS` - Comma-separated list of allowed browser origins
+- `JWT_SECRET` - Shared WebHatchery JWT signing secret
+- `WEB_HATCHERY_LOGIN_URL` - Shared WebHatchery login URL returned with 401 responses
+- `WEB_HATCHERY_REGISTER_URL` - Shared WebHatchery registration URL used by account-link UI
+- `PORT` - Server port
+- `DEBUG` - Enable debug mode
 
 ## Testing
 

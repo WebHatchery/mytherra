@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Middleware;
 
 use App\Core\Environment;
@@ -15,7 +17,7 @@ class JwtAuthMiddleware
     {
     }
 
-    public function __invoke(Request $request, Response $response, array $args)
+    public function __invoke(Request $request, Response $response, array $args): Request|Response
     {
         $authHeader = $request->getHeaderLine('Authorization');
         if (empty($authHeader)) {
@@ -27,18 +29,20 @@ class JwtAuthMiddleware
         }
 
         $token = trim((string) $matches[1]);
-        JWT::$leeway = 31536000;
+        JWT::$leeway = 60;
 
         try {
             $secret = Environment::required('JWT_SECRET');
             $decoded = JWT::decode($token, new Key($secret, 'HS256'));
             $decodedArray = (array) $decoded;
-            $roles = $decodedArray['roles'] ?? ['user'];
-            $primaryRole = is_array($roles) ? ($roles[0] ?? 'user') : $roles;
+            $roles = $this->normalizeRoles($decodedArray['roles'] ?? ['user']);
+            $primaryRole = $roles[0] ?? 'user';
             $authType = $decodedArray['auth_type'] ?? 'frontpage';
             $isGuest = !empty($decodedArray['is_guest']) || $authType === 'guest';
+            $userId = $decodedArray['sub'] ?? $decodedArray['user_id'] ?? null;
             $authUser = [
-                'user_id' => $decodedArray['sub'] ?? $decodedArray['user_id'] ?? null,
+                'id' => $userId,
+                'user_id' => $userId,
                 'email' => $decodedArray['email'] ?? null,
                 'username' => $decodedArray['username'] ?? null,
                 'display_name' => $decodedArray['display_name'] ?? ($decodedArray['username'] ?? null),
@@ -65,8 +69,31 @@ class JwtAuthMiddleware
                 ->withAttribute('user', $localUser);
         } catch (\Exception $e) {
             error_log('JwtAuthMiddleware: local user sync failed - ' . $e->getMessage());
-            return $this->unauthorizedResponse($response, 'User creation failed: ' . $e->getMessage());
+            return $this->unauthorizedResponse($response, 'User synchronization failed');
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeRoles(mixed $roles): array
+    {
+        if (is_string($roles)) {
+            return [$roles];
+        }
+
+        if (!is_array($roles)) {
+            return ['user'];
+        }
+
+        $normalized = [];
+        foreach ($roles as $role) {
+            if (is_string($role) && $role !== '') {
+                $normalized[] = $role;
+            }
+        }
+
+        return $normalized === [] ? ['user'] : array_values(array_unique($normalized));
     }
 
     private function unauthorizedResponse(Response $response, string $message = 'Unauthorized'): Response

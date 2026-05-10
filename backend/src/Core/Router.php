@@ -70,6 +70,11 @@ final class Router
         $uri = $_SERVER['REQUEST_URI'] ?? '/';
         $path = explode('?', $uri)[0];
 
+        if ($method === 'OPTIONS') {
+            $this->emit($this->withCors((new Response())->withStatus(204)));
+            return;
+        }
+
         if (!empty($this->basePath) && strpos($path, $this->basePath) === 0) {
             $path = substr($path, strlen($this->basePath));
         }
@@ -140,9 +145,10 @@ final class Router
                 try {
                     $response = $this->invokeHandler($route['handler'], $request, $response, $routeParams);
                 } catch (Throwable $e) {
+                    error_log('Router handler error: ' . $e->getMessage());
                     $response = $this->writeJson((new Response())->withStatus(500), [
                         'success' => false,
-                        'message' => 'Internal server error: ' . $e->getMessage()
+                        'message' => 'Internal server error'
                     ]);
                 }
 
@@ -185,10 +191,32 @@ final class Router
 
     private function withCors(Response $response): Response
     {
+        $origin = $this->resolveAllowedOrigin();
+
         return $response
-            ->withHeader('Access-Control-Allow-Origin', '*')
+            ->withHeader('Access-Control-Allow-Origin', $origin)
             ->withHeader('Access-Control-Allow-Headers', 'Content-Type, Accept, Origin, Authorization')
-            ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            ->withHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            ->withHeader('Vary', 'Origin');
+    }
+
+    private function resolveAllowedOrigin(): string
+    {
+        $configuredOrigins = array_values(array_filter(
+            array_map('trim', explode(',', Environment::required('CORS_ALLOWED_ORIGINS'))),
+            static fn(string $origin): bool => $origin !== ''
+        ));
+
+        if ($configuredOrigins === []) {
+            throw new \RuntimeException('CORS_ALLOWED_ORIGINS must contain at least one origin.');
+        }
+
+        $requestOrigin = $_SERVER['HTTP_ORIGIN'] ?? '';
+        if (is_string($requestOrigin) && in_array($requestOrigin, $configuredOrigins, true)) {
+            return $requestOrigin;
+        }
+
+        return $configuredOrigins[0];
     }
 
     private function emit(Response $response): void

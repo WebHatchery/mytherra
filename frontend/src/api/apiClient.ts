@@ -1,37 +1,11 @@
 import axios from 'axios';
+import { persistLoginUrl, readActiveToken } from '../utils/authStorage';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const GUEST_AUTH_STORAGE_KEY = 'mytherra-guest-session';
 
 if (!BASE_URL) {
     throw new Error('VITE_API_BASE_URL is required for Mytherra frontend');
 }
-
-const readToken = (): string | null => {
-    try {
-        const authStorageStr = localStorage.getItem('auth-storage');
-        if (authStorageStr) {
-            const authData = JSON.parse(authStorageStr);
-            const token = authData?.state?.token;
-            const user = authData?.state?.user;
-            if (user?.is_guest !== true && typeof token === 'string' && token.trim() !== '') {
-                return token;
-            }
-        }
-
-        const guestStorageStr = localStorage.getItem(GUEST_AUTH_STORAGE_KEY);
-        if (guestStorageStr) {
-            const guestData = JSON.parse(guestStorageStr) as { token?: string | null };
-            if (typeof guestData?.token === 'string' && guestData.token.trim() !== '') {
-                return guestData.token;
-            }
-        }
-    } catch (error) {
-        console.warn('Failed to parse auth token from local storage', error);
-    }
-
-    return null;
-};
 
 export const apiClient = axios.create({
     baseURL: BASE_URL,
@@ -42,7 +16,7 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
     (config) => {
-        const token = readToken();
+        const token = readActiveToken();
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -59,17 +33,7 @@ apiClient.interceptors.response.use(
 
             if (loginUrl) {
                 try {
-                    const raw = localStorage.getItem('auth-storage');
-                    const parsed = raw ? JSON.parse(raw) : {};
-                    const state = parsed?.state ?? {};
-                    const next = {
-                        ...parsed,
-                        state: {
-                            ...state,
-                            loginUrl,
-                        },
-                    };
-                    localStorage.setItem('auth-storage', JSON.stringify(next));
+                    persistLoginUrl(loginUrl);
                     window.dispatchEvent(new CustomEvent('webhatchery:login-required', { detail: { loginUrl } }));
                 } catch (storageError) {
                     console.warn('Failed to persist login URL to auth storage', storageError);

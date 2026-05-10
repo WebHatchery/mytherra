@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Middleware;
 
 use App\Core\Request;
@@ -7,38 +9,28 @@ use App\Core\Response;
 
 class AdminAuthMiddleware
 {
-    /**
-     * @param Request $request
-     * @param Response $response
-     * @param array $args
-     * @return Request|Response
-     */
-    public function __invoke(Request $request, Response $response, array $args)
+    public function __invoke(Request $request, Response $response, array $args): Request|Response
     {
-        $user = $request->getAttribute('user');
+        $authUser = $request->getAttribute('auth_user');
 
-        if (!$user) {
+        if (!is_array($authUser)) {
             return $this->forbiddenResponse($response, 'User not authenticated');
         }
 
-    // Check if user has admin role
-        // This depends on your User model structure. Assuming 'role' attribute or similar.
-        // Mytherra User model might have getRole() or public property.
-        // Let's assume standardized array access from JwtAuthMiddleware 'user' attribute usually is an array or object?
-        // JwtAuthMiddleware sets 'user' as result of createOrUpdateLocalUser (likely an array or User model).
-
-        $role = null;
-        if (is_array($user)) {
-            $role = $user['role'] ?? 'user';
-        } elseif (is_object($user)) {
-             $role = $user->role ?? 'user';
+        if (!empty($authUser['is_guest'])) {
+            return $this->forbiddenResponse($response, 'Guest sessions cannot perform admin actions');
         }
 
-        if ($role !== 'admin') {
+        $roles = $authUser['roles'] ?? [];
+        if (!is_array($roles)) {
+            $roles = [(string) $roles];
+        }
+
+        $role = (string) ($authUser['role'] ?? 'user');
+        if ($role !== 'admin' && !in_array('admin', $roles, true)) {
             return $this->forbiddenResponse($response, 'Admin access required');
         }
 
-    // Return request to continue
         return $request;
     }
 

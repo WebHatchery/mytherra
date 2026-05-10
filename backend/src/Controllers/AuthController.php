@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Controllers;
 
 use App\Core\Environment;
@@ -11,15 +13,6 @@ use Firebase\JWT\Key;
 
 class AuthController
 {
-    private string $authPortalBaseUrl;
-    private $authService;
-
-    public function __construct()
-    {
-        $this->authPortalBaseUrl = rtrim(Environment::required('WEB_HATCHERY_LOGIN_URL'), '/');
-        $this->authService = new \App\Services\AuthService();
-    }
-
     public function getLoginInfo(Request $request, Response $response): Response
     {
         $response->getBody()->write(json_encode([
@@ -30,39 +23,6 @@ class AuthController
         ]));
 
         return $response->withHeader('Content-Type', 'application/json');
-    }
-
-    public function callback(Request $request, Response $response): Response
-    {
-        $queryParams = $request->getQueryParams();
-        $token = $queryParams['token'] ?? null;
-
-        if (!$token) {
-            $response->getBody()->write(json_encode(['success' => false, 'message' => 'No token provided']));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus(400);
-        }
-
-        try {
-            $authUser = $this->authService->validateToken($token);
-            $localUser = $this->authService->syncUser($authUser);
-
-            $response->getBody()->write(json_encode([
-                'success' => true,
-                'message' => 'Authentication successful',
-                'data' => [
-                    'token' => $token,
-                    'user' => $this->serializeUser($localUser, $authUser)
-                ]
-            ]));
-
-            return $response->withHeader('Content-Type', 'application/json');
-        } catch (\Exception $e) {
-            error_log('Auth callback error: ' . $e->getMessage());
-            $status = strpos($e->getMessage(), 'Invalid token') !== false ? 401 : 500;
-            $message = $status === 401 ? 'Invalid token' : 'Authentication failed';
-            $response->getBody()->write(json_encode(['success' => false, 'message' => $message]));
-            return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
-        }
     }
 
     public function getCurrentUser(Request $request, Response $response): Response
@@ -112,6 +72,7 @@ class AuthController
             'display_name' => $guestUser->display_name ?: 'Guest Oracle',
             'email' => '',
             'role' => 'guest',
+            'roles' => ['guest'],
             'auth_type' => 'guest',
             'is_guest' => true,
         ];
@@ -223,29 +184,6 @@ class AuthController
         return $response->withHeader('Content-Type', 'application/json');
     }
 
-    public function getLoginUrl(Request $request, Response $response): Response
-    {
-        $queryParams = $request->getQueryParams();
-        $returnUrl = $queryParams['return_url'] ?? null;
-        $loginUrl = $this->withRedirect(Environment::required('WEB_HATCHERY_LOGIN_URL'), is_string($returnUrl) ? $returnUrl : null);
-
-        $response->getBody()->write(json_encode(['success' => true, 'data' => ['login_url' => $loginUrl]]));
-        return $response->withHeader('Content-Type', 'application/json');
-    }
-
-    public function getRegisterUrl(Request $request, Response $response): Response
-    {
-        $queryParams = $request->getQueryParams();
-        $returnUrl = $queryParams['return_url'] ?? null;
-        $registerUrl = $this->withRedirect(
-            Environment::required('WEB_HATCHERY_REGISTER_URL'),
-            is_string($returnUrl) ? $returnUrl : null
-        );
-
-        $response->getBody()->write(json_encode(['success' => true, 'data' => ['register_url' => $registerUrl]]));
-        return $response->withHeader('Content-Type', 'application/json');
-    }
-
     public function updatePreferences(Request $request, Response $response): Response
     {
         $localUser = $request->getAttribute('user');
@@ -265,13 +203,6 @@ class AuthController
         $response->getBody()->write(json_encode(['success' => true, 'message' => 'Preferences updated successfully', 'data' => ['preferences' => $localUser->game_preferences]]));
         return $response->withHeader('Content-Type', 'application/json');
     }
-
-    public function logout(Request $request, Response $response): Response
-    {
-        $response->getBody()->write(json_encode(['success' => true, 'message' => 'Logged out successfully']));
-        return $response->withHeader('Content-Type', 'application/json');
-    }
-
     private function serializeUser(User $user, array $authUser): array
     {
         $isGuest = (bool) ($authUser['is_guest'] ?? false) || (($authUser['auth_type'] ?? 'frontpage') === 'guest');
@@ -292,15 +223,5 @@ class AuthController
             'auth_type' => $isGuest ? 'guest' : 'frontpage',
             'guest_user_id' => $isGuest ? ($authUser['user_id'] ?? null) : null,
         ];
-    }
-
-    private function withRedirect(string $urlValue, ?string $returnUrl): string
-    {
-        if ($returnUrl === null || trim($returnUrl) === '') {
-            return $urlValue;
-        }
-
-        $separator = str_contains($urlValue, '?') ? '&' : '?';
-        return $urlValue . $separator . http_build_query(['redirect' => $returnUrl]);
     }
 }

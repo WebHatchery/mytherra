@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Core;
 
 class Request
@@ -10,19 +12,22 @@ class Request
     private array $attributes = [];
     private string $method;
     private string $uri;
+    private string $body;
 
     public function __construct(
         string $method,
         string $uri,
         array $queryParams = [],
         array $parsedBody = [],
-        array $headers = []
+        array $headers = [],
+        string $body = ''
     ) {
         $this->method = $method;
         $this->uri = $uri;
         $this->queryParams = $queryParams;
         $this->parsedBody = $parsedBody;
         $this->headers = $headers;
+        $this->body = $body;
     }
 
     public static function createFromGlobals(): self
@@ -56,7 +61,7 @@ class Request
             }
         }
 
-        return new self($method, $uri, $queryParams, $parsedBody, $headers);
+        return new self($method, $uri, $queryParams, $parsedBody, $headers, $input ?: '');
     }
 
     public function getQueryParams(): array
@@ -67,6 +72,11 @@ class Request
     public function getParsedBody(): array|null
     {
         return $this->parsedBody;
+    }
+
+    public function getBody(): string
+    {
+        return $this->body;
     }
 
     public function getHeaderLine(string $name): string
