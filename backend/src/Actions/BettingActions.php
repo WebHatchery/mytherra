@@ -12,6 +12,14 @@ use App\Services\OddsCalculationService;
 use App\Services\DivineBettingService;
 use App\Core\Exceptions\ResourceNotFoundException;
 use App\Utils\Logger;
+use App\Models\DivineBet;
+use App\Models\Hero;
+use App\Models\Landmark;
+use App\Models\Player;
+use App\Models\Region;
+use App\Models\ResourceNode;
+use App\Models\Settlement;
+use App\Services\GameLoopService;
 
 class BettingActions
 {
@@ -24,12 +32,27 @@ class BettingActions
      */
     public function createDivineBet($betData)
     {
+        $player = null;
+        $stake = (int)$betData['divineFavorStake'];
+        $stakeSpent = false;
+
         try {
 // Validate target entity exists
             $targetExists = $this->repository->validateTargetEntity($betData['targetId']);
             if (!$targetExists) {
                 throw new Exception("Target entity with ID {$betData['targetId']} not found");
             }
+
+            $playerId = $betData['playerId'] ?? 'SINGLE_PLAYER';
+            $player = Player::firstOrCreate(
+                ['id' => $playerId],
+                ['divine_favor' => 100]
+            );
+
+            if (!$player->spendDivineFavor($stake)) {
+                throw new Exception("Insufficient divine favor to stake {$stake}");
+            }
+            $stakeSpent = true;
 
     // Calculate odds and potential payout
             $oddsResult = $this->oddsCalculator->calculateBetOdds($betData['betType'], $betData['targetId'], $betData['timeframe'], $betData['confidence']);
@@ -42,7 +65,7 @@ class BettingActions
 
     // Create bet using repository
             $bet = [
-                'player_id' => $betData['playerId'] ?? 'SINGLE_PLAYER',
+                'player_id' => $playerId,
                 'bet_type' => $betData['betType'],
                 'target_id' => $betData['targetId'],
                 'description' => $betData['description'],
@@ -57,6 +80,9 @@ class BettingActions
             $betId = $this->repository->createBet($bet);
             return $this->repository->getBetById($betId);
         } catch (Exception $e) {
+            if ($player && $stakeSpent) {
+                $player->addDivineFavor($stake);
+            }
             Logger::error("Error creating divine bet: " . $e->getMessage());
             throw $e;
         }
@@ -109,7 +135,7 @@ class BettingActions
     public function fetchSpeculationEvents($filters = [])
     {
         try {
-            return $this->repository->getSpeculationEvents($filters);
+            return $this->buildSpeculationEvents();
         } catch (Exception $e) {
             Logger::error("Error fetching speculation events: " . $e->getMessage());
             throw $e;
@@ -176,7 +202,7 @@ class BettingActions
     public function processExpiredBets()
     {
         try {
-            return $this->repository->processExpiredBets($this->getCurrentGameYear());
+            return (new GameLoopService())->processActiveBets($this->getCurrentGameYear());
         } catch (Exception $e) {
             Logger::error("Error processing expired bets: " . $e->getMessage());
             throw $e;
@@ -199,16 +225,198 @@ class BettingActions
         switch ($betType) {
             case 'settlement_growth':
             case 'settlement_transformation':
-                return $sampleTargets['settlement'] ?? 'sample-settlement-id';
+            case 'prosperity_threshold':
+                return $sampleTargets['settlement'][0]['id'] ?? 'sample-settlement-id';
             case 'landmark_discovery':
-                return $sampleTargets['landmark'] ?? 'sample-landmark-id';
+                return $sampleTargets['landmark'][0]['id'] ?? $sampleTargets['region'][0]['id'] ?? 'sample-landmark-id';
             case 'hero_settlement_bond':
             case 'hero_location_visit':
-                return $sampleTargets['hero'] ?? 'sample-hero-id';
+            case 'hero_level_milestone':
+            case 'hero_death':
+                return $sampleTargets['hero'][0]['id'] ?? 'sample-hero-id';
             case 'corruption_spread':
-                return $sampleTargets['region'] ?? 'sample-region-id';
+            case 'region_danger_change':
+                return $sampleTargets['region'][0]['id'] ?? 'sample-region-id';
             default:
                 return 'sample-id';
         }
+    }
+
+    private function buildSpeculationEvents(): array
+    {
+        $events = [];
+
+        foreach (Settlement::orderBy('prosperity', 'desc')->take(3)->get() as $settlement) {
+            $events[] = $this->makeSpeculationEvent(
+                'settlement-growth-' . $settlement->id,
+                'Settlement Growth: ' . $settlement->name,
+                "{$settlement->name} has {$settlement->population} people and prosperity {$settlement->prosperity}. Will it become a major settlement?",
+                'settlement_growth',
+                $settlement->id,
+                $settlement->region_id,
+                2,
+                6,
+                [
+                    $this->makeBettingOption('growth-major', "Back {$settlement->name} to grow into a major settlement", $settlement->id, 'settlement_growth', 10, 6, 'possible')
+                ]
+            );
+
+            $events[] = $this->makeSpeculationEvent(
+                'prosperity-threshold-' . $settlement->id,
+                'Prosperity Threshold: ' . $settlement->name,
+                "{$settlement->name} is at prosperity {$settlement->prosperity}. Will it reach prosperity 80?",
+                'prosperity_threshold',
+                $settlement->id,
+                $settlement->region_id,
+                1,
+                5,
+                [
+                    $this->makeBettingOption('prosperity-80', "{$settlement->name} reaches prosperity 80", $settlement->id, 'prosperity_threshold', 10, 5, 'possible')
+                ]
+            );
+        }
+
+        foreach (Hero::orderBy('level', 'desc')->take(3)->get() as $hero) {
+            $events[] = $this->makeSpeculationEvent(
+                'hero-milestone-' . $hero->id,
+                'Hero Milestone: ' . $hero->name,
+                "{$hero->name} is level {$hero->level}. Will they reach a meaningful milestone?",
+                'hero_level_milestone',
+                $hero->id,
+                $hero->region_id,
+                1,
+                5,
+                [
+                    $this->makeBettingOption('hero-level-5', "{$hero->name} reaches level 5 or higher", $hero->id, 'hero_level_milestone', 8, 5, 'possible')
+                ]
+            );
+
+            $events[] = $this->makeSpeculationEvent(
+                'hero-death-' . $hero->id,
+                'Hero Mortality: ' . $hero->name,
+                "{$hero->name} is {$hero->age} years old and level {$hero->level}. Will death find them?",
+                'hero_death',
+                $hero->id,
+                $hero->region_id,
+                1,
+                8,
+                [
+                    $this->makeBettingOption('hero-dies', "{$hero->name} dies within the prediction window", $hero->id, 'hero_death', 12, 8, 'long_shot')
+                ]
+            );
+        }
+
+        foreach (Region::orderBy('chaos', 'desc')->take(3)->get() as $region) {
+            $events[] = $this->makeSpeculationEvent(
+                'corruption-spread-' . $region->id,
+                'Corruption Spread: ' . $region->name,
+                "{$region->name} has chaos {$region->chaos} and danger {$region->danger_level}. Will corruption overtake it?",
+                'corruption_spread',
+                $region->id,
+                $region->id,
+                2,
+                7,
+                [
+                    $this->makeBettingOption('region-corrupts', "{$region->name} becomes cursed or war-torn", $region->id, 'corruption_spread', 10, 7, 'possible')
+                ]
+            );
+
+            $events[] = $this->makeSpeculationEvent(
+                'danger-change-' . $region->id,
+                'Danger Extreme: ' . $region->name,
+                "{$region->name} currently has danger {$region->danger_level}. Will it reach an extreme danger state?",
+                'region_danger_change',
+                $region->id,
+                $region->id,
+                1,
+                6,
+                [
+                    $this->makeBettingOption('danger-extreme', "{$region->name} reaches extreme danger", $region->id, 'region_danger_change', 8, 6, 'possible')
+                ]
+            );
+        }
+
+        foreach (Landmark::whereNull('discovered_year')->take(2)->get() as $landmark) {
+            $events[] = $this->makeSpeculationEvent(
+                'landmark-discovery-' . $landmark->id,
+                'Landmark Discovery: ' . $landmark->name,
+                "{$landmark->name} remains hidden. Will mortals uncover it?",
+                'landmark_discovery',
+                $landmark->id,
+                $landmark->region_id,
+                1,
+                6,
+                [
+                    $this->makeBettingOption('landmark-found', "{$landmark->name} is discovered", $landmark->id, 'landmark_discovery', 12, 6, 'long_shot')
+                ]
+            );
+        }
+
+        foreach (ResourceNode::whereIn('status', ['active', 'contested', 'corrupted'])->take(2)->get() as $resource) {
+            $events[] = $this->makeSpeculationEvent(
+                'resource-disruption-' . $resource->id,
+                'Resource Disruption: ' . $resource->name,
+                "{$resource->name} produces {$resource->output} output and is {$resource->status}. Will corruption spread here?",
+                'corruption_spread',
+                $resource->id,
+                $resource->region_id,
+                1,
+                5,
+                [
+                    $this->makeBettingOption('resource-corrupted', "{$resource->name} becomes corrupted", $resource->id, 'corruption_spread', 10, 5, 'possible')
+                ]
+            );
+        }
+
+        return array_slice($events, 0, 12);
+    }
+
+    private function makeSpeculationEvent(
+        string $id,
+        string $title,
+        string $description,
+        string $betType,
+        string $targetId,
+        ?string $regionId,
+        int $minimumYears,
+        int $maximumYears,
+        array $options
+    ): array {
+        return [
+            'id' => $id,
+            'title' => $title,
+            'description' => $description,
+            'eventType' => $betType,
+            'targetId' => $targetId,
+            'regionId' => $regionId,
+            'timeframe' => [
+                'minimum' => $minimumYears,
+                'maximum' => $maximumYears
+            ],
+            'bettingOptions' => $options,
+            'createdAt' => date('c')
+        ];
+    }
+
+    private function makeBettingOption(
+        string $id,
+        string $description,
+        string $targetId,
+        string $betType,
+        int $minimumStake,
+        int $timeframe,
+        string $confidence
+    ): array {
+        $oddsResult = $this->oddsCalculator->calculateBetOdds($betType, $targetId, $timeframe, $confidence);
+        $odds = (float)$oddsResult['odds'];
+
+        return [
+            'id' => $id,
+            'description' => $description,
+            'targetId' => $targetId,
+            'currentOdds' => $odds,
+            'minimumStake' => $minimumStake,
+            'potentialPayout' => (int)floor($minimumStake * (float)$oddsResult['potentialPayout'])
+        ];
     }
 }

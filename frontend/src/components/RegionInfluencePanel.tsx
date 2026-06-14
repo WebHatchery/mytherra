@@ -14,17 +14,11 @@ const RegionInfluencePanel: React.FC<RegionInfluencePanelProps> = ({
   currentDivineFavor,
   onActionSuccess,
 }) => {
-  const { handleInfluenceAction, getButtonClass, isLoadingAction } = useInfluenceActions(
-    currentDivineFavor,
-    onActionSuccess
-  );
+  const { handleInfluenceAction, getButtonClass, isLoadingAction, actionMessage } =
+    useInfluenceActions(currentDivineFavor, onActionSuccess);
 
   return (
-    <BaseInfluencePanel
-      currentDivineFavor={currentDivineFavor}
-      onActionSuccess={onActionSuccess}
-      title="Regional Divine Influence"
-    >
+    <BaseInfluencePanel title="Regional Divine Influence" actionMessage={actionMessage}>
       {selectedRegion ? (
         <div className="text-center">
           <p className="mb-3 text-lg">

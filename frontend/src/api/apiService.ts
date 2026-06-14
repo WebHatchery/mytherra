@@ -12,6 +12,17 @@ import { ApiError } from './types';
 export interface GameStatus {
   currentYear: number;
   divineFavor: number; // Added divineFavor
+  simulation?: {
+    enabled: boolean;
+    lastTickAt: string | null;
+    lastTickResult: unknown;
+    queue: {
+      jobs: number | null;
+      failedJobs: number | null;
+      available: boolean;
+      error?: string;
+    };
+  };
 }
 
 export interface ApiErrorBody {
@@ -31,7 +42,9 @@ const isWrappedApiResponse = <T>(value: unknown): value is WrappedApiResponse<T>
   return 'success' in value && 'data' in value;
 };
 
-const isAxiosLikeError = (error: unknown): error is {
+const isAxiosLikeError = (
+  error: unknown
+): error is {
   code?: string;
   message?: string;
   response?: {
@@ -72,7 +85,10 @@ async function fetchData<T>(path: string): Promise<T> {
     // Otherwise return the parsed response directly
     return data as T;
   } catch (error: unknown) {
-    if (isAxiosLikeError(error) && (error.code === 'ECONNABORTED' || error.message === 'canceled')) {
+    if (
+      isAxiosLikeError(error) &&
+      (error.code === 'ECONNABORTED' || error.message === 'canceled')
+    ) {
       throw new Error(`Request timeout for ${path}`);
     }
 
@@ -125,20 +141,175 @@ async function postData<T, R>(path: string, body: T): Promise<R> {
   }
 }
 
+const isRecordValue = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const asStringArray = (value: unknown): string[] => {
+  if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
+  return [];
+};
+
+const normalizeRegion = (value: Region | Record<string, unknown>): Region => {
+  const source = value as Record<string, unknown>;
+  return {
+    ...(value as Region),
+    id: String(source.id ?? ''),
+    name: String(source.name ?? ''),
+    color: String(source.color ?? '#64748b'),
+    prosperity: Number(source.prosperity ?? 0),
+    chaos: Number(source.chaos ?? 0),
+    magicAffinity: Number(source.magicAffinity ?? source.magic_affinity ?? 0),
+    status: String(source.status ?? 'peaceful') as Region['status'],
+    eventIds: asStringArray(source.eventIds ?? source.event_ids),
+    populationTotal:
+      source.populationTotal !== undefined || source.population_total !== undefined
+        ? Number(source.populationTotal ?? source.population_total)
+        : undefined,
+    regionalTraits: asStringArray(source.regionalTraits ?? source.regional_traits),
+    climateType: (source.climateType ?? source.climate_type) as Region['climateType'],
+    tradeRoutes: asStringArray(source.tradeRoutes ?? source.trade_routes),
+    culturalInfluence:
+      typeof (source.culturalInfluence ?? source.cultural_influence) === 'string'
+        ? String(source.culturalInfluence ?? source.cultural_influence)
+        : undefined,
+    divineResonance:
+      source.divineResonance !== undefined || source.divine_resonance !== undefined
+        ? Number(source.divineResonance ?? source.divine_resonance)
+        : undefined,
+    dangerLevel:
+      source.dangerLevel !== undefined || source.danger_level !== undefined
+        ? Number(source.dangerLevel ?? source.danger_level)
+        : undefined,
+    tags: asStringArray(source.tags),
+  };
+};
+
+const normalizeHero = (value: Hero | Record<string, unknown>): Hero => {
+  const source = value as Record<string, unknown>;
+  return {
+    ...(value as Hero),
+    id: String(source.id ?? ''),
+    name: String(source.name ?? ''),
+    regionId: String(source.regionId ?? source.region_id ?? ''),
+    role: String(source.role ?? 'undecided') as Hero['role'],
+    description: String(source.description ?? ''),
+    feats: asStringArray(source.feats),
+    level: source.level !== undefined ? Number(source.level) : undefined,
+    age: source.age !== undefined ? Number(source.age) : undefined,
+    isAlive:
+      source.isAlive !== undefined || source.is_alive !== undefined
+        ? Boolean(source.isAlive ?? source.is_alive)
+        : undefined,
+    deathReason:
+      typeof (source.deathReason ?? source.death_reason) === 'string'
+        ? String(source.deathReason ?? source.death_reason)
+        : undefined,
+    status: source.status as Hero['status'],
+    personalityTraits: asStringArray(source.personalityTraits ?? source.personality_traits),
+    alignment: isRecordValue(source.alignment)
+      ? {
+          good: Number(source.alignment.good ?? 50),
+          chaotic: Number(source.alignment.chaotic ?? 50),
+          lastChange:
+            typeof source.alignment.lastChange === 'string'
+              ? source.alignment.lastChange
+              : undefined,
+        }
+      : undefined,
+    influenceActionCosts: isRecordValue(source.influenceActionCosts)
+      ? (source.influenceActionCosts as Hero['influenceActionCosts'])
+      : undefined,
+  };
+};
+
+const normalizeSettlement = (value: Settlement | Record<string, unknown>): Settlement => {
+  const source = value as Record<string, unknown>;
+  return {
+    ...(value as Settlement),
+    id: String(source.id ?? ''),
+    regionId: String(source.regionId ?? source.region_id ?? ''),
+    name: String(source.name ?? ''),
+    type: String(source.type ?? 'village') as Settlement['type'],
+    population: Number(source.population ?? 0),
+    prosperity: Number(source.prosperity ?? 0),
+    defensibility: Number(source.defensibility ?? 0),
+    status: String(source.status ?? 'stable') as Settlement['status'],
+    specializations: asStringArray(source.specializations),
+    events: asStringArray(source.events),
+    foundedYear: Number(source.foundedYear ?? source.founded_year ?? 1),
+    lastEventYear:
+      source.lastEventYear !== undefined || source.last_event_year !== undefined
+        ? Number(source.lastEventYear ?? source.last_event_year)
+        : undefined,
+    traits: asStringArray(source.traits),
+  };
+};
+
+const normalizeLandmark = (value: Landmark | Record<string, unknown>): Landmark => {
+  const source = value as Record<string, unknown>;
+  return {
+    ...(value as Landmark),
+    id: String(source.id ?? ''),
+    regionId: String(source.regionId ?? source.region_id ?? ''),
+    name: String(source.name ?? ''),
+    type: String(source.type ?? 'monument') as Landmark['type'],
+    description: String(source.description ?? ''),
+    status: String(source.status ?? 'weathered') as Landmark['status'],
+    magicLevel: Number(source.magicLevel ?? source.magic_level ?? 0),
+    dangerLevel: Number(source.dangerLevel ?? source.danger_level ?? 0),
+    discoveredYear:
+      source.discoveredYear !== undefined || source.discovered_year !== undefined
+        ? Number(source.discoveredYear ?? source.discovered_year)
+        : undefined,
+    lastVisitedYear:
+      source.lastVisitedYear !== undefined || source.last_visited_year !== undefined
+        ? Number(source.lastVisitedYear ?? source.last_visited_year)
+        : undefined,
+    associatedEvents: asStringArray(source.associatedEvents ?? source.associated_events),
+    traits: asStringArray(source.traits),
+  };
+};
+
+const normalizeResourceNode = (value: ResourceNode | Record<string, unknown>): ResourceNode => {
+  const source = value as Record<string, unknown>;
+  return {
+    ...(value as ResourceNode),
+    id: String(source.id ?? ''),
+    regionId: String(source.regionId ?? source.region_id ?? ''),
+    settlementId:
+      typeof (source.settlementId ?? source.settlement_id) === 'string'
+        ? String(source.settlementId ?? source.settlement_id)
+        : undefined,
+    type: String(source.type ?? 'mine') as ResourceNode['type'],
+    name: String(source.name ?? ''),
+    outputValue: Number(source.outputValue ?? source.output ?? 0),
+    status: String(source.status ?? 'active') as ResourceNode['status'],
+  };
+};
+
 export const getRegions = (): Promise<Region[]> => {
-  return fetchData<Region[]>('regions');
+  return fetchData<Array<Region | Record<string, unknown>>>('regions').then(regions =>
+    regions.map(normalizeRegion)
+  );
 };
 
 export const getRegionById = (id: string): Promise<Region | Record<string, unknown>> => {
-  return fetchData<Region | Record<string, unknown>>(`regions/${id}`);
+  return fetchData<Region | Record<string, unknown>>(`regions/${id}`).then(region =>
+    isRecordValue(region) ? normalizeRegion(region) : region
+  );
 };
 
 export const getHeroes = (): Promise<Hero[]> => {
-  return fetchData<Hero[]>('heroes');
+  return fetchData<Array<Hero | Record<string, unknown>>>('heroes').then(heroes =>
+    heroes.map(normalizeHero)
+  );
 };
 
 export const getHeroById = (id: string): Promise<Hero | Record<string, unknown>> => {
-  return fetchData<Hero | Record<string, unknown>>(`heroes/${id}`);
+  return fetchData<Hero | Record<string, unknown>>(`heroes/${id}`).then(hero =>
+    isRecordValue(hero) ? normalizeHero(hero) : hero
+  );
 };
 
 export const getGameEvents = (
@@ -196,11 +367,15 @@ export const sendInfluenceAction = (
 
 // ===== Settlement API =====
 export const getSettlements = (): Promise<Settlement[]> => {
-  return fetchData<Settlement[]>('settlements');
+  return fetchData<Array<Settlement | Record<string, unknown>>>('settlements').then(settlements =>
+    settlements.map(normalizeSettlement)
+  );
 };
 
 export const getSettlementById = (id: string): Promise<Settlement | Record<string, unknown>> => {
-  return fetchData<Settlement | Record<string, unknown>>(`settlements/${id}`);
+  return fetchData<Settlement | Record<string, unknown>>(`settlements/${id}`).then(settlement =>
+    isRecordValue(settlement) ? normalizeSettlement(settlement) : settlement
+  );
 };
 
 // ===== Building API =====
@@ -214,22 +389,30 @@ export const getBuildingById = (id: string): Promise<Building | Record<string, u
 
 // ===== Landmark API =====
 export const getLandmarks = (): Promise<Landmark[]> => {
-  return fetchData<Landmark[]>('landmarks');
+  return fetchData<Array<Landmark | Record<string, unknown>>>('landmarks').then(landmarks =>
+    landmarks.map(normalizeLandmark)
+  );
 };
 
 export const getLandmarkById = (id: string): Promise<Landmark | Record<string, unknown>> => {
-  return fetchData<Landmark | Record<string, unknown>>(`landmarks/${id}`);
+  return fetchData<Landmark | Record<string, unknown>>(`landmarks/${id}`).then(landmark =>
+    isRecordValue(landmark) ? normalizeLandmark(landmark) : landmark
+  );
 };
 
 // ===== Resource Node API =====
 export const getResourceNodes = (): Promise<ResourceNode[]> => {
-  return fetchData<ResourceNode[]>('resource-nodes');
+  return fetchData<Array<ResourceNode | Record<string, unknown>>>('resource-nodes').then(nodes =>
+    nodes.map(normalizeResourceNode)
+  );
 };
 
 export const getResourceNodeById = (
   id: string
 ): Promise<ResourceNode | Record<string, unknown>> => {
-  return fetchData<ResourceNode | Record<string, unknown>>(`resource-nodes/${id}`);
+  return fetchData<ResourceNode | Record<string, unknown>>(`resource-nodes/${id}`).then(node =>
+    isRecordValue(node) ? normalizeResourceNode(node) : node
+  );
 };
 
 // ===== Divine Betting API =====

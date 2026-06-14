@@ -164,7 +164,7 @@ const DivineBettingPanel: React.FC<DivineBettingPanelProps> = ({
                         onClick={() => {
                           const betData: CreateDivineBetPayload = {
                             betType: event.eventType,
-                            targetId: event.id,
+                            targetId: option.targetId || event.targetId || event.id,
                             description: option.description,
                             timeframe: event.timeframe.maximum,
                             confidence: 'possible',

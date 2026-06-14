@@ -92,4 +92,43 @@ class StatusController
             'Failed to fetch status'
         );
     }
+
+    public function runGameTick(Request $request, Response $response): Response
+    {
+        Logger::debug("POST /api/admin/game-loop/tick endpoint called");
+
+        $body = json_decode((string)$request->getBody(), true) ?: [];
+        $advanceYear = array_key_exists('advanceYear', $body) ? (bool)$body['advanceYear'] : true;
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->statusActions->runGameTick($advanceYear),
+            'running game tick',
+            'Failed to run game tick'
+        );
+    }
+
+    public function startGameLoop(Request $request, Response $response): Response
+    {
+        Logger::debug("POST /api/admin/game-loop/start endpoint called");
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->statusActions->startGameLoop(),
+            'starting game loop',
+            'Failed to start game loop'
+        );
+    }
+
+    public function stopGameLoop(Request $request, Response $response): Response
+    {
+        Logger::debug("POST /api/admin/game-loop/stop endpoint called");
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->statusActions->stopGameLoop(),
+            'stopping game loop',
+            'Failed to stop game loop'
+        );
+    }
 }

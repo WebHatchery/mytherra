@@ -1,5 +1,5 @@
 {
-  "name": "mytherra",
+  "name": "@webhatchery/game-mytherra-frontend",
   "private": true,
   "version": "1.0.0",
   "description": "A simulation-style web game where players influence a magical world filled with evolving regions, dynamic events, and rising heroes.",

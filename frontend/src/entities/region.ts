@@ -10,7 +10,20 @@ export interface Region {
   prosperity: number; // Scale of 0-100
   chaos: number; // Scale of 0-100
   magicAffinity: number; // Scale of 0-100
-  status: 'peaceful' | 'corrupt' | 'abandoned' | 'warring';
+  status:
+    | 'peaceful'
+    | 'corrupt'
+    | 'abandoned'
+    | 'warring'
+    | 'flourishing'
+    | 'prosperous'
+    | 'stable'
+    | 'turbulent'
+    | 'declining'
+    | 'war_torn'
+    | 'mysterious'
+    | 'blessed'
+    | 'cursed';
   eventIds: string[]; // IDs of events that have occurred in this region
   influenceActionCosts?: {
     blessRegion?: number;

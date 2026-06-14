@@ -16,19 +16,24 @@ use App\Models\ResourceNode;
 
 class ExportService
 {
+    private function timestamp(): string
+    {
+        return (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM);
+    }
+
     /**
      * Export full world snapshot
      */
     public function exportFullSnapshot(): array
     {
-        $gameState = GameState::first();
+        $gameState = GameState::getCurrent();
 
         return [
-            'exportedAt' => now()->toIso8601String(),
+            'exportedAt' => $this->timestamp(),
             'version' => '1.0',
             'gameState' => [
                 'era' => $gameState->era ?? 1,
-                'year' => $gameState->year ?? 1,
+                'year' => $gameState->current_year ?? 1,
                 'tick' => $gameState->tick ?? 0,
             ],
             'regions' => $this->exportRegions(),
@@ -63,7 +68,7 @@ class ExportService
         }
 
         return [
-            'exportedAt' => now()->toIso8601String(),
+            'exportedAt' => $this->timestamp(),
             'type' => $type,
             'data' => $this->{$methodMap[$type]}()
         ];
@@ -137,11 +142,11 @@ class ExportService
                 return [
                     'id' => $settlement->id,
                     'name' => $settlement->name,
-                    'region_id' => $settlement->regionId,
+                    'region_id' => $settlement->region_id,
                     'type' => $settlement->type,
                     'population' => $settlement->population,
                     'prosperity' => $settlement->prosperity,
-                    'defense' => $settlement->defense,
+                    'defensibility' => $settlement->defensibility,
                     'status' => $settlement->status,
                     'building_count' => $settlement->buildings->count()
                 ];
@@ -159,7 +164,7 @@ class ExportService
                 return [
                     'id' => $building->id,
                     'name' => $building->name,
-                    'settlement_id' => $building->settlementId,
+                    'settlement_id' => $building->settlement_id,
                     'type' => $building->type,
                     'condition' => $building->condition,
                     'status' => $building->status
@@ -178,10 +183,10 @@ class ExportService
                 return [
                     'id' => $landmark->id,
                     'name' => $landmark->name,
-                    'region_id' => $landmark->regionId,
+                    'region_id' => $landmark->region_id,
                     'type' => $landmark->type,
                     'status' => $landmark->status,
-                    'is_discovered' => $landmark->is_discovered
+                    'discovered_year' => $landmark->discovered_year
                 ];
             })
             ->toArray();
@@ -198,9 +203,11 @@ class ExportService
                     'id' => $node->id,
                     'name' => $node->name,
                     'region_id' => $node->region_id,
+                    'settlement_id' => $node->settlement_id,
                     'type' => $node->type,
                     'status' => $node->status,
-                    'yield_rate' => $node->yield_rate
+                    'output' => $node->output,
+                    'effective_output' => $node->getEffectiveOutput()
                 ];
             })
             ->toArray();
@@ -215,14 +222,21 @@ class ExportService
             ->map(function ($bet) {
                 return [
                     'id' => $bet->id,
-                    'player_id' => $bet->playerId,
-                    'bet_type' => $bet->betType,
-                    'target_id' => $bet->targetId,
+                    'player_id' => $bet->player_id,
+                    'bet_type' => $bet->bet_type,
+                    'target_id' => $bet->target_id,
                     'description' => $bet->description,
-                    'amount' => $bet->amount,
+                    'timeframe' => $bet->timeframe,
+                    'confidence' => $bet->confidence,
+                    'divine_favor_stake' => $bet->divine_favor_stake,
+                    'potential_payout' => $bet->potential_payout,
+                    'current_odds' => $bet->current_odds,
                     'status' => $bet->status,
+                    'placed_year' => $bet->placed_year,
+                    'resolved_year' => $bet->resolved_year,
+                    'resolution_notes' => $bet->resolution_notes,
                     'placed_at' => $bet->created_at?->toIso8601String(),
-                    'resolved_at' => $bet->resolved_at?->toIso8601String()
+                    'updated_at' => $bet->updated_at?->toIso8601String()
                 ];
             })
             ->toArray();
@@ -240,9 +254,11 @@ class ExportService
                 return [
                     'id' => $event->id,
                     'type' => $event->type,
+                    'title' => $event->title,
                     'description' => $event->description,
-                    'region_id' => $event->regionId,
-                    'hero_id' => $event->heroId,
+                    'region_id' => $event->region_id,
+                    'related_region_ids' => $event->related_region_ids,
+                    'related_hero_ids' => $event->related_hero_ids,
                     'year' => $event->year,
                     'created_at' => $event->created_at?->toIso8601String()
                 ];

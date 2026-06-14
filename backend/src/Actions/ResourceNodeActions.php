@@ -33,11 +33,11 @@ class ResourceNodeActions
 
     // Apply filters
             if (!empty($filters['regionId'])) {
-                $query->where('regionId', $filters['regionId']);
+                $query->where('region_id', $filters['regionId']);
             }
 
             if (!empty($filters['settlementId'])) {
-                $query->where('settlementId', $filters['settlementId']);
+                $query->where('settlement_id', $filters['settlementId']);
             }
 
             if (!empty($filters['type'])) {
@@ -60,7 +60,12 @@ class ResourceNodeActions
             $limit = $filters['limit'] ?? 20;
             $offset = $filters['offset'] ?? 0;
 
-            $resourceNodes = $query->skip($offset)->take($limit)->get();
+            $resourceNodes = $query
+                ->orderBy('output', 'desc')
+                ->orderBy('name', 'asc')
+                ->skip($offset)
+                ->take($limit)
+                ->get();
 
             return $resourceNodes->map(fn($node) => $node->toArray())->all();
         } catch (\Exception $error) {
@@ -83,15 +88,11 @@ class ResourceNodeActions
     public function fetchResourceNodeById(string $nodeId): array
     {
         try {
-            $node = $this->resourceNodeRepository->getById($nodeId);
+            $node = ResourceNode::find($nodeId);
 
             if (!$node) {
                 Logger::info("Resource node not found", ['nodeId' => $nodeId]);
                 throw new ResourceNotFoundException("Resource node not found: {$nodeId}");
-            }
-
-            if (!($node instanceof ResourceNode)) {
-                throw new \RuntimeException("Invalid resource node data returned from repository");
             }
 
             return $node->toArray();
@@ -116,13 +117,8 @@ class ResourceNodeActions
     public function createResourceNode(array $nodeData): array
     {
         try {
+            $nodeData = $this->normalizeResourceNodeData($nodeData);
             $node = new ResourceNode($nodeData);
-
-    // Validate the resource node
-            $errors = $node->validate();
-            if (!empty($errors)) {
-                throw new \RuntimeException('Validation failed: ' . implode(', ', $errors));
-            }
 
             $node->save();
 
@@ -149,24 +145,15 @@ class ResourceNodeActions
     public function updateResourceNode(string $nodeId, array $updateData): array
     {
         try {
-            $node = $this->resourceNodeRepository->getById($nodeId);
+            $node = ResourceNode::find($nodeId);
 
             if (!$node) {
                 Logger::info("Resource node not found", ['nodeId' => $nodeId]);
                 throw new ResourceNotFoundException("Resource node not found: {$nodeId}");
             }
 
-            if (!($node instanceof ResourceNode)) {
-                throw new \RuntimeException("Invalid resource node data returned from repository");
-            }
-
+            $updateData = $this->normalizeResourceNodeData($updateData);
             $node->fill($updateData);
-
-    // Validate the resource node
-            $errors = $node->validate();
-            if (!empty($errors)) {
-                throw new \RuntimeException('Validation failed: ' . implode(', ', $errors));
-            }
 
             $node->save();
 
@@ -195,15 +182,11 @@ class ResourceNodeActions
     public function deleteResourceNode(string $nodeId): bool
     {
         try {
-            $node = $this->resourceNodeRepository->getById($nodeId);
+            $node = ResourceNode::find($nodeId);
 
             if (!$node) {
                 Logger::info("Resource node not found", ['nodeId' => $nodeId]);
                 throw new ResourceNotFoundException("Resource node not found: {$nodeId}");
-            }
-
-            if (!($node instanceof ResourceNode)) {
-                throw new \RuntimeException("Invalid resource node data returned from repository");
             }
 
             $node->delete();
@@ -219,5 +202,25 @@ class ResourceNodeActions
             ]);
             throw new \RuntimeException('Failed to delete resource node', 0, $error);
         }
+    }
+
+    private function normalizeResourceNodeData(array $data): array
+    {
+        if (array_key_exists('regionId', $data)) {
+            $data['region_id'] = $data['regionId'];
+            unset($data['regionId']);
+        }
+
+        if (array_key_exists('settlementId', $data)) {
+            $data['settlement_id'] = $data['settlementId'];
+            unset($data['settlementId']);
+        }
+
+        if (array_key_exists('outputValue', $data)) {
+            $data['output'] = $data['outputValue'];
+            unset($data['outputValue']);
+        }
+
+        return $data;
     }
 }

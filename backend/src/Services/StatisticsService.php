@@ -19,11 +19,11 @@ class StatisticsService
      */
     public function getGameSummary(): array
     {
-        $gameState = GameState::first();
+        $gameState = GameState::getCurrent();
 
         return [
             'currentEra' => $gameState->era ?? 1,
-            'currentYear' => $gameState->year ?? 1,
+            'currentYear' => $gameState->current_year ?? 1,
             'totalHeroes' => Hero::count(),
             'livingHeroes' => Hero::where('is_alive', true)->count(),
             'totalRegions' => Region::count(),

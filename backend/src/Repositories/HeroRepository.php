@@ -232,7 +232,7 @@ class HeroRepository
                 'hero_id' => $heroId,
                 'settlement_id' => $settlementId,
                 'interaction_type' => $interactionType,
-                'interaction_date' => now()
+                'interaction_date' => date('Y-m-d H:i:s')
             ]);
         } catch (Exception $e) {
             Logger::error("Error recording settlement interaction: " . $e->getMessage());

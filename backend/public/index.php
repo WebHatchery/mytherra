@@ -2,11 +2,23 @@
 
 declare(strict_types=1);
 
-$centralAutoload = __DIR__ . '/../../../vendor/autoload.php';
-if (!file_exists($centralAutoload)) {
-    throw new \RuntimeException('Central vendor autoload not found at ' . $centralAutoload);
+$autoloadCandidates = [
+    __DIR__ . '/../../../vendor/autoload.php',
+    __DIR__ . '/../vendor/autoload.php',
+];
+
+$autoloadPath = null;
+foreach ($autoloadCandidates as $candidate) {
+    if (file_exists($candidate)) {
+        $autoloadPath = $candidate;
+        break;
+    }
 }
-$loader = require $centralAutoload;
+
+if ($autoloadPath === null) {
+    throw new \RuntimeException('Composer autoload not found. Run composer install for the backend or shared workspace.');
+}
+$loader = require $autoloadPath;
 //$loader->addPsr4('App\\', __DIR__ . '/../src/', true); // Disabled to prevent conflicts
 
 // Local autoloader MUST be registered AFTER composer to ensure it prepends successfully

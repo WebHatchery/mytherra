@@ -226,6 +226,11 @@ class ContainerConfig
                     $container->get(LandmarkActions::class)
                 );
             },
+            ResourceNodeController::class => function ($container) {
+                return new ResourceNodeController(
+                    $container->get(ResourceNodeActions::class)
+                );
+            },
             BettingController::class => function ($container) {
                 return new BettingController(
                     $container->get(BettingActions::class),

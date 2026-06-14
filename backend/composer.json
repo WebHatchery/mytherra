@@ -20,7 +20,8 @@
     },
     "autoload": {
         "psr-4": {
-            "App\\": "src/"
+            "App\\": "src/",
+            "App\\Scripts\\": "scripts/"
         }
     },
     "autoload-dev": {
@@ -30,6 +31,7 @@
     },
     "scripts": {
         "start": "php -S localhost:5002 -t public",
+        "game:tick": "php scripts/runGameTick.php",
         "test": "phpunit",
         "test:setup": "@php -r \"file_exists('tests/.env.testing') || copy('tests/.env.testing.example', 'tests/.env.testing');\"",
         "test:init": [

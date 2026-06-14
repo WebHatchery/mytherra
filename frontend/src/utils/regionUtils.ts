@@ -30,7 +30,15 @@ export const getSettlementSummary = (
       acc[settlement.type] += 1;
       return acc;
     },
-    { city: 0, town: 0, village: 0, hamlet: 0 }
+    {
+      city: 0,
+      town: 0,
+      village: 0,
+      hamlet: 0,
+      metropolis: 0,
+      outpost: 0,
+      stronghold: 0,
+    }
   );
 };
 

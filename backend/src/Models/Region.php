@@ -230,7 +230,7 @@ class Region extends Model
      */
     public function settlements()
     {
-        return $this->hasMany(Settlement::class, 'regionId', 'id');
+        return $this->hasMany(Settlement::class, 'region_id', 'id');
     }
 
     /**
@@ -238,7 +238,7 @@ class Region extends Model
      */
     public function landmarks()
     {
-        return $this->hasMany(Landmark::class, 'regionId', 'id');
+        return $this->hasMany(Landmark::class, 'region_id', 'id');
     }
 
     /**

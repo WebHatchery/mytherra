@@ -14,17 +14,11 @@ const HeroInfluencePanel: React.FC<HeroInfluencePanelProps> = ({
   currentDivineFavor,
   onActionSuccess,
 }) => {
-  const { handleInfluenceAction, getButtonClass, isLoadingAction } = useInfluenceActions(
-    currentDivineFavor,
-    onActionSuccess
-  );
+  const { handleInfluenceAction, getButtonClass, isLoadingAction, actionMessage } =
+    useInfluenceActions(currentDivineFavor, onActionSuccess);
 
   return (
-    <BaseInfluencePanel
-      currentDivineFavor={currentDivineFavor}
-      onActionSuccess={onActionSuccess}
-      title="Heroic Divine Influence"
-    >
+    <BaseInfluencePanel title="Heroic Divine Influence" actionMessage={actionMessage}>
       {selectedHero ? (
         <div className="text-center">
           <p className="mb-3 text-lg">

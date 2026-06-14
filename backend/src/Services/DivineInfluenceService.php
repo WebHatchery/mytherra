@@ -305,7 +305,7 @@ class DivineInfluenceService
                 'type' => 'divine_influence',
                 'status' => 'completed',
                 'region_id' => $targetType === 'region' ? $targetId : null,
-                'timestamp' => now(),
+                'timestamp' => date('c'),
                 'year' => $this->getCurrentGameYear()
             ]);
         } catch (\Exception $e) {

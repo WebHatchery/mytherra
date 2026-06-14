@@ -36,8 +36,8 @@ class EnvironmentManager
     {
         $required = [
             'DB_HOST',
-            'DB_DATABASE',
-            'DB_USERNAME',
+            'DB_NAME',
+            'DB_USER',
             'DB_PASSWORD'
         ];
 

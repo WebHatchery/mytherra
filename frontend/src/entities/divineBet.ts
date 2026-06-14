@@ -36,11 +36,12 @@ export interface SpeculationEvent {
   id: string;
   title: string;
   description: string;
+  targetId?: string;
   regionId?: string;
   settlementId?: string;
   landmarkId?: string;
   heroId?: string;
-  eventType: 'prediction' | 'influence_opportunity' | 'observation_point';
+  eventType: DivineBet['betType'];
   timeframe: {
     minimum: number; // Earliest possible resolution (years)
     maximum: number; // Latest possible resolution (years)
@@ -57,6 +58,7 @@ export interface SpeculationEvent {
 export interface BettingOption {
   id: string;
   description: string;
+  targetId?: string;
   currentOdds: number;
   minimumStake: number;
   potentialPayout: number;

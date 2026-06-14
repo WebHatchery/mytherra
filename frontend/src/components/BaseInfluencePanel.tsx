@@ -1,21 +1,16 @@
 import React, { type ReactNode } from 'react';
-import { useInfluenceActions } from '../hooks/useInfluenceActions';
 
 interface BaseInfluencePanelProps {
-  currentDivineFavor: number;
-  onActionSuccess: () => void;
   title?: string;
+  actionMessage?: string | null;
   children: ReactNode;
 }
 
 const BaseInfluencePanel: React.FC<BaseInfluencePanelProps> = ({
-  currentDivineFavor,
-  onActionSuccess,
   title = 'Divine Influence',
+  actionMessage = null,
   children,
 }) => {
-  const { actionMessage } = useInfluenceActions(currentDivineFavor, onActionSuccess);
-
   return (
     <div className="p-4 bg-gray-800 text-white rounded-lg shadow-xl mt-6">
       <h2 className="text-2xl font-bold mb-4 text-center">{title}</h2>

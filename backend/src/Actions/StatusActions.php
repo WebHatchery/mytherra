@@ -6,17 +6,19 @@ namespace App\Actions;
 
 use App\Models\GameState;
 use App\Models\Player;
-use App\Models\GameConfig;
 use App\Services\GameConfigService;
+use App\Services\GameLoopService;
 use App\Utils\Logger;
 
 class StatusActions
 {
     private GameConfigService $configService;
+    private GameLoopService $gameLoopService;
 
     public function __construct(GameConfigService $configService)
     {
         $this->configService = $configService;
+        $this->gameLoopService = new GameLoopService($configService);
     }
 
     /**
@@ -65,7 +67,8 @@ class StatusActions
 
             return [
                 'currentYear' => $gameState->current_year,
-                'divineFavor' => $player->divine_favor
+                'divineFavor' => $player->divine_favor,
+                'simulation' => $this->gameLoopService->getRuntimeStatus()
             ];
         } catch (\Exception $error) {
             Logger::error('Error fetching game status', [
@@ -126,5 +129,20 @@ class StatusActions
             ]);
             throw new \RuntimeException('Failed to update divine favor', 0, $error);
         }
+    }
+
+    public function runGameTick(bool $advanceYear = true): array
+    {
+        return $this->gameLoopService->processTick($advanceYear);
+    }
+
+    public function startGameLoop(): array
+    {
+        return $this->gameLoopService->setEnabled(true);
+    }
+
+    public function stopGameLoop(): array
+    {
+        return $this->gameLoopService->setEnabled(false);
     }
 }

@@ -36,6 +36,9 @@ const getErrorMessage = (error: unknown): string => {
 };
 
 const getResponseMessage = (response: InfluenceActionResponse): string => {
+  if (response.success === false) {
+    return `Failed: ${response.message || 'Action failed'}`;
+  }
   if (typeof response.message === 'string' && response.message.length > 0) return response.message;
   return 'Action completed successfully!';
 };

@@ -54,6 +54,36 @@ class InfluenceController
         );
     }
 
+    public function applyRegionInfluenceAction(Request $request, Response $response, array $args): Response
+    {
+        Logger::debug("POST /api/influence/region/{id} endpoint called");
+
+        $body = json_decode((string)$request->getBody(), true) ?: [];
+        $action = $body['action'] ?? '';
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->influenceActions->applyFrontendInfluenceAction('region', $args['id'], $action),
+            'applying region influence action',
+            'Failed to apply region influence action'
+        );
+    }
+
+    public function applyHeroInfluenceAction(Request $request, Response $response, array $args): Response
+    {
+        Logger::debug("POST /api/influence/hero/{id} endpoint called");
+
+        $body = json_decode((string)$request->getBody(), true) ?: [];
+        $action = $body['action'] ?? '';
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->influenceActions->applyFrontendInfluenceAction('hero', $args['id'], $action),
+            'applying hero influence action',
+            'Failed to apply hero influence action'
+        );
+    }
+
     /**
      * Empower a hero with influence
      */

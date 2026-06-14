@@ -1,263 +1,262 @@
 # Mytherra Development Roadmap
 
-## Overview
-This roadmap outlines the implementation plan for Mytherra's future improvements, organized by development phases with clear priorities, timelines, and dependencies.
+Last updated: 2026-06-14
+
+This roadmap reflects the current PHP-backed Mytherra app. The PHP migration, dashboard, export foundation, guest entry, core influence routes, resource node API routes, tick runtime, and state-based betting resolution are now implemented. The near-term focus moves from migration and API parity to making simulation changes more visible, deeper, and easier for players to reason about.
+
+## Current State
+
+### Playable Foundation
+
+- PHP 8.1+ backend with MySQL persistence and Eloquent models.
+- React/TypeScript frontend with protected routes and WebHatchery/guest entry.
+- Core pages: Events, World Map, Heroes, Betting, and Dashboard.
+- Region, hero, event, settlement, building, landmark, resource node, betting, statistics, status, influence, and export backend endpoints.
+- Statistics dashboard with hero, region, financial, and summary data.
+- Full world snapshot export from the dashboard.
+- Divine betting interface with live speculation events, active bets, odds, stakes, payouts, and resolution notes.
+- Game tick runtime for regions, settlements, resources, heroes, divine favor recovery, generated events, and active bet resolution.
+- Expanded data model for settlements, landmarks, resource nodes, buildings, divine bets, influence history, and game state.
+
+### Completed Gameplay Loop Stabilization
+
+- Guest sessions can enter protected routes and fetch regions, heroes, settlements, events, betting, status, statistics, and export data.
+- Frontend influence calls now have PHP-compatible `POST /api/influence/region/{id}` and `POST /api/influence/hero/{id}` routes.
+- Resource node routes are exposed through the main PHP router.
+- Frontend API normalization handles PHP snake_case payloads for primary entities.
+- Smoke coverage checks Events, World Map, Heroes, Betting, Dashboard, guest entry, protected API surfaces, and snapshot export wiring.
+- API errors from influence actions surface to the UI instead of disappearing into console-only failures.
+- The PHP entry point supports both shared workspace Composer dependencies and backend-local `composer install`.
+
+### Completed Game Loop Runtime
+
+- `GameLoopService` advances `current_year` consistently when run normally.
+- Manual ticks are available through `php scripts/runGameTick.php`, `composer game:tick`, and `POST /api/admin/game-loop/tick`.
+- Admin start/stop controls are exposed through `POST /api/admin/game-loop/start` and `POST /api/admin/game-loop/stop`.
+- Queue tables are part of schema initialization, and `GameTickJob` respects the enabled flag before scheduling the next tick.
+- Tick results record processed regions, settlements, resources, heroes, bets, favor recovery, generated events, and errors.
+- `/api/status` exposes current year, divine favor, simulation enabled state, last tick result, and queue health.
+- Local verification confirmed ticks changed visible world state, advanced the year, generated events, recovered favor, and resolved bets.
+
+### Completed Betting Resolution
+
+- Speculation events are generated from current regions, settlements, heroes, landmarks, and resource nodes instead of static mock fixtures.
+- Bet types now include current-world predictions such as settlement growth, landmark discovery, corruption spread, hero milestones, hero death, prosperity thresholds, and resource disruption.
+- Odds are recalculated from target state, timeframe, confidence, prosperity, chaos, danger, magic affinity, and relevant hero or settlement stats.
+- Tick processing resolves active bets against actual world state and records readable win/loss/expiry notes.
+- Influence changes region and hero state, which affects future odds indirectly through the simulation.
+
+### Remaining Risks
+
+- Production worker cadence still needs an operational runbook: supervisor/cron setup, restart behavior, and alerting around failed jobs.
+- Resource node routes exist, but the current seeded local world may have no resource nodes; resource seeding and player-facing region UI should make them matter.
+- Smoke tests cover route and API wiring; add browser-level interaction tests once the UI flows settle.
+- Large simulation systems such as era endings, reincarnation, advanced magic, culture, civilization AI, and long-term legacy remain future work.
 
 ---
 
-## Immediate Priorities (Current Sprint)
-*Focus: Connecting Frontend to Backend & Core Game Loop Mechanics*
+## Next Priorities
 
-### 1. Complete Frontend Integration with PHP Backend ⭐ **URGENT**
-- Connect React frontend to new PHP API endpoints
-- Implement real-time updates for divine influence actions and world changes
-- Add frontend data visualization for settlement evolution and hero progression
+### 1. Make Simulation Changes More Visible
 
-### 2. Enhanced Era-Ending & Reincarnation Mechanics
-- Implement automatic era transitions based on world state conditions
-- Add legacy system carrying achievements and bonuses across eras
-- Create reincarnation mechanics for heroes and persistent world elements
+**Goal:** Help players understand what changed and why after each tick.
 
-### 3. Advanced Magic Discovery & Research Systems
-- Complete the magic node unlocking system with hidden knowledge paths
-- Add magical research collaboration between heroes and settlements
-- Implement world-changing magical discoveries that affect simulation behavior
+- Add a concise last-tick panel to the dashboard with changed regions, settlements, heroes, resolved bets, favor recovery, generated events, and failures.
+- Link resolved bet notes to the event or entity state that caused the result.
+- Add entity history summaries for regions, heroes, settlements, landmarks, and resource nodes.
+- Make status changes explain themselves in page copy or event text, especially when prosperity, chaos, danger, or hero status crosses thresholds.
 
----
+**Acceptance Criteria**
 
-## Phase 1: Foundation & Core Systems (Months 1-3)
-*Priority: High | Complexity: Medium | Foundation for all other features*
+- A player can run or observe a tick and understand the meaningful changes without reading raw JSON.
+- Resolved bets show the exact state or event that caused the outcome.
+- Dashboard status reflects the same year and tick state as the Events, Betting, Heroes, and World Map pages.
 
-### 1.1 Statistics Dashboard ⭐ **START HERE**
-- **Why First**: Essential for monitoring current systems and debugging future features
-- **Implementation**: 2-3 weeks
-- **Backend**: New StatisticsController, analytics models
-- **Frontend**: Dashboard page with charts (Chart.js integration)
-- **Dependencies**: None
-- **Impact**: High - enables data-driven development
+### 2. Deepen Resource and Settlement Gameplay
 
-### 1.2 Export Features 
-- **Implementation**: 1-2 weeks
-- **Backend**: Export service for JSON snapshots
-- **Frontend**: Export buttons and file management
-- **Dependencies**: Statistics Dashboard
-- **Impact**: Medium - backup/analysis capabilities
+**Goal:** Make settlements and resources feel like practical reasons to care about regions.
 
-### 1.3 Enhanced Betting System Expansion
-- **Implementation**: 2-3 weeks
-- **Backend**: More bet types, complex resolution logic
-- **Frontend**: Advanced betting interface
-- **Dependencies**: Current betting system (already functional)
-- **Impact**: High - deepens core gameplay
+- Seed resource nodes into local worlds and surface them in region detail views.
+- Let resource output, status, and disruption influence settlement growth, prosperity, danger, and betting opportunities.
+- Expand settlement growth, decline, ruin, recovery, specialization, and defense outcomes.
+- Record settlement and resource changes as readable events.
 
----
+**Acceptance Criteria**
 
-## Phase 2: World Depth & Simulation (Months 3-6)
-*Priority: High | Complexity: High | Core world-building features*
+- Every region has visible resource or settlement pressures that can change over time.
+- Resource disruption and settlement prosperity can create or resolve bets.
+- Region detail views explain why a settlement or resource changed.
 
-### 2.1 Resource Scarcity System ⭐
-- **Implementation**: 3-4 weeks
-- **Backend**: Resource models, scarcity calculations, climate effects
-- **Frontend**: Resource tracking UI, scarcity indicators  
-- **Dependencies**: Statistics Dashboard
-- **Impact**: Very High - fundamental gameplay mechanic
+### 3. Improve Betting Context and Forecasting
 
-### 2.2 Cultural Evolution System
-- **Implementation**: 4-5 weeks
-- **Backend**: Culture traits, evolution algorithms, influence tracking
-- **Frontend**: Culture visualization, influence tools
-- **Dependencies**: Resource system, enhanced statistics
-- **Impact**: Very High - creates emergent gameplay
+**Goal:** Make betting feel like informed prophecy, not blind odds shopping.
 
-### 2.3 Advanced AI Civilizations
-- **Implementation**: 5-6 weeks
-- **Backend**: Enhanced AI decision trees, tech progression
-- **Frontend**: AI behavior indicators, civilization details
-- **Dependencies**: Cultural Evolution, Resource system
-- **Impact**: Very High - improves simulation depth
+- Show current target state beside each speculation option.
+- Explain odds factors: target state, confidence, timeframe, prosperity, chaos, danger, magic affinity, and hero or settlement traits.
+- Add resolved bet filters and history summaries.
+- Tune payout ranges after observing real tick outcomes.
 
-### 2.4 Dynamic Mythology System
-- **Implementation**: 3-4 weeks
-- **Backend**: Mythology generation, legend tracking
-- **Frontend**: Mythology browser, legend impact UI
-- **Dependencies**: Cultural Evolution
-- **Impact**: High - narrative depth
+**Acceptance Criteria**
 
-### 2.5 Enhanced Era-Ending & Reincarnation
-- **Implementation**: 3-4 weeks
-- **Backend**: Era transition logic, legacy data persistence
-- **Frontend**: Era summary screens, reincarnation selection
-- **Dependencies**: Cultural Evolution, Statistics
-- **Impact**: High - long-term engagement and replayability
-
-### 2.6 Advanced Magic & Research
-- **Implementation**: 4-5 weeks
-- **Backend**: Magic node system, research trees, discovery triggers
-- **Frontend**: Research UI, magic discovery visualization
-- **Dependencies**: Resource system
-- **Impact**: Very High - strategic depth and exploration
+- Players can compare at least three meaningful signals before placing a bet.
+- Active and resolved bets remain easy to scan after multiple ticks.
+- Odds changes feel explainable from visible world state.
 
 ---
 
-## Phase 3: Divine Gameplay Enhancement (Months 6-9)
-*Priority: Medium-High | Complexity: Medium | Player empowerment*
+## Phase 1: Simulation Depth
 
-### 3.1 Mortal Champion System ⭐
-- **Implementation**: 4-5 weeks
-- **Backend**: Champion selection, empowerment mechanics, quest system
-- **Frontend**: Champion management UI, quest tracking
-- **Dependencies**: Enhanced hero system, betting system
-- **Impact**: Very High - direct player agency
+### 1.1 Settlement Evolution
 
-### 3.2 Divine Artifacts System
-- **Implementation**: 3-4 weeks
-- **Backend**: Artifact creation, effects system, theft mechanics
-- **Frontend**: Artifact crafting UI, effect visualization
-- **Dependencies**: Champion system, advanced civilizations
-- **Impact**: High - strategic depth
+- Deepen growth, decline, ruin, recovery, specialization, and defensive changes.
+- Connect settlement evolution to region prosperity, chaos, resources, landmarks, and hero presence.
+- Surface settlement change history in region detail views.
 
-### 3.3 Weather Mastery System
-- **Implementation**: 3-4 weeks
-- **Backend**: Weather models, climate effects, global impact
-- **Frontend**: Weather control interface, climate visualization
-- **Dependencies**: Resource scarcity system
-- **Impact**: High - environmental control
+### 1.2 Resource Scarcity
 
----
+- Seed resource nodes consistently and expose them through frontend region views.
+- Add depletion, contesting, corruption, recovery, and productivity effects.
+- Use resources as inputs for settlement growth, conflict, and betting opportunities.
 
-## Phase 4: Advanced Divine Powers (Months 9-12)
-*Priority: Medium | Complexity: Very High | End-game features*
+### 1.3 Region Systemic Changes
 
-### 4.1 Time Manipulation ⭐
-- **Implementation**: 6-8 weeks
-- **Backend**: Temporal mechanics, state management, rollback system
-- **Frontend**: Time control interface, temporal visualization
-- **Dependencies**: Robust statistics, save/load system
-- **Impact**: Very High - unique gameplay mechanic
+- Deepen prosperity, chaos, danger, magic affinity, and status changes beyond the current baseline tick drift.
+- Make divine resonance affect influence cost/effectiveness in ways visible to players.
+- Generate region events when major thresholds are crossed.
 
-### 4.2 Life Creation System
-- **Implementation**: 5-6 weeks
-- **Backend**: Species designer, evolution mechanics, ecosystem balance
-- **Frontend**: Species creation tool, ecosystem viewer
-- **Dependencies**: Advanced AI civilizations, resource system
-- **Impact**: High - creative empowerment
+### 1.4 Hero Lifecycle
 
-### 4.3 Dimensional Rifts
-- **Implementation**: 4-5 weeks
-- **Backend**: Portal mechanics, multi-realm management
-- **Frontend**: Portal interface, realm visualization
-- **Dependencies**: Advanced world simulation
-- **Impact**: Medium-High - strategic complexity
+- Expand the current hero aging, movement, leveling, feats, mortality, and revival loop.
+- Add clearer hero event history and region relationships.
+- Expand alignment and personality effects once the baseline lifecycle is stable.
 
 ---
 
-## Phase 5: Social & Multiplayer (Months 12-15)
-*Priority: Medium | Complexity: Very High | Multiplayer features*
+## Phase 2: Magic, Culture, and World Identity
 
-### 5.1 AI Pantheon System ⭐
-- **Implementation**: 6-8 weeks
-- **Backend**: AI deity behaviors, relationship system, negotiation
-- **Frontend**: Pantheon interface, relationship tracking
-- **Dependencies**: All core systems stable
-- **Impact**: Very High - social gameplay
+### 2.1 Magic Discovery and Research
 
-### 5.2 Pantheon Politics
-- **Implementation**: 4-5 weeks
-- **Backend**: Alliance system, conflict resolution, divine councils
-- **Frontend**: Political interface, council meetings UI
-- **Dependencies**: AI Pantheon system
-- **Impact**: High - social strategy
+- Add discoverable magic paths tied to regions, heroes, landmarks, and research guidance.
+- Track known, hidden, and emerging magical systems.
+- Make magical discoveries create durable world changes and new betting opportunities.
 
-### 5.3 Divine Avatar System
-- **Implementation**: 5-6 weeks
-- **Backend**: Avatar mechanics, physical interaction system
-- **Frontend**: Avatar customization, world interaction
-- **Dependencies**: Advanced divine powers
-- **Impact**: Medium-High - immersive presence
+### 2.2 Cultural Evolution
 
----
+- Add culture traits and cultural pressure between regions.
+- Connect culture to settlement specialization, hero roles, events, and divine influence.
+- Surface cultural drift in dashboard and region views.
 
-## Phase 6: Meta-Features & Polish (Months 15-18)
-*Priority: Low-Medium | Complexity: Medium | Quality of life*
+### 2.3 Dynamic Mythology
 
-### 6.1 Replay System
-- **Implementation**: 4-5 weeks
-- **Backend**: Event recording, playback engine
-- **Frontend**: Replay interface, event browser
-- **Dependencies**: Comprehensive statistics
-- **Impact**: Medium - analysis and sharing
+- Promote major hero feats, disasters, discoveries, and divine interventions into myths.
+- Let myths affect region identity, hero reputation, and future events.
+- Add a mythology or chronicles view once enough data exists.
 
-### 6.2 World Editor
-- **Implementation**: 6-8 weeks
-- **Backend**: World generation tools, validation system
-- **Frontend**: Drag-and-drop editor, template system
-- **Dependencies**: All core world systems
-- **Impact**: Medium - content creation
+### 2.4 Civilization Behavior
 
-### 6.3 Cosmic Events System
-- **Implementation**: 3-4 weeks
-- **Backend**: Large-scale event system, multi-realm effects
-- **Frontend**: Cosmic event interface, impact visualization
-- **Dependencies**: Multi-realm support, pantheon system
-- **Impact**: Medium - epic moments
+- Add higher-level AI behavior for settlements and regions: expansion, defense, trade, rivalry, research, and recovery.
+- Use resources, culture, landmarks, and heroes as inputs to decisions.
+- Keep behavior explainable through events and dashboard stats.
 
 ---
 
-## Phase 7: Advanced End-Game (Months 18+)
-*Priority: Low | Complexity: Very High | Advanced features*
+## Phase 3: Era and Legacy Systems
 
-### 7.1 Reality Shaping
-- **Implementation**: 8-10 weeks
-- **Backend**: Physics alteration system, reality consistency
-- **Frontend**: Reality manipulation interface
-- **Dependencies**: Time manipulation, life creation
-- **Impact**: High - ultimate divine power
+### 3.1 Era-Ending Conditions
 
-### 7.2 Historical Events System
-- **Implementation**: 5-6 weeks
-- **Backend**: Macro-event generation, world-changing mechanics
-- **Frontend**: Historical timeline, event management
-- **Dependencies**: All previous systems
-- **Impact**: Medium-High - grand narrative
+- Define world-state triggers for cataclysms, collapse, conquest, magical rupture, or divine war.
+- Show era pressure to players before the end arrives.
+- Generate an era summary from actual events and statistics.
 
----
+### 3.2 Reincarnation and Continuity
 
-## Implementation Strategy
+- Select heroes, bloodlines, landmarks, myths, and scars that persist across eras.
+- Let some divine bets span era boundaries.
+- Preserve enough history for the next era to reference the previous one.
 
-### Critical Success Factors
-1. **Start with Statistics Dashboard** - Essential for monitoring all other systems
-2. **Complete Phase 2 before Phase 3** - World simulation depth before player powers
-3. **Prototype complex systems early** - Time manipulation and AI pantheon need early validation
-4. **Maintain betting system** - It's the core working feature; enhance but don't break
+### 3.3 New Era Generation
 
-### Resource Allocation Recommendations
-- **Backend Developer**: Focus on core simulation systems (Phases 1-3)
-- **Frontend Developer**: Focus on UI/UX for new features and data visualization  
-- **Game Designer**: Balance mechanics and define AI behaviors
-- **DevOps**: Set up testing infrastructure for complex systems
-
-### Technical Prerequisites
-- **Database Optimization**: Index optimization for complex queries
-- **Caching System**: Redis for real-time world state
-- **Background Processing**: Robust queue system for simulation
-- **Testing Framework**: Comprehensive unit and integration tests
-
-### Risk Mitigation
-- **Phase 2 is Critical**: If world simulation fails, whole roadmap delays
-- **Time Manipulation is High-Risk**: Consider simplified version first
-- **AI Systems are Complex**: Start with simple behaviors, iterate
-
-### Success Metrics
-- **Phase 1**: Dashboard shows system health, exports work reliably
-- **Phase 2**: World simulation runs stably with cultural changes visible
-- **Phase 3**: Players actively engage with champions and artifacts
-- **Phase 4**: Advanced powers feel impactful without breaking simulation
-- **Phase 5**: AI pantheon creates interesting social dynamics
+- Reset or transform regions, settlements, resources, heroes, and magic rules.
+- Carry forward legacies without making the new era feel predetermined.
+- Add player-facing era history and comparison tools.
 
 ---
 
-**Estimated Total Timeline**: 18+ months
-**Team Size Recommendation**: 3-4 developers
-**Budget Priority**: Phases 1-3 are essential, Phases 4+ are enhancement
+## Phase 4: Deeper Divine Gameplay
 
-This roadmap ensures Mytherra evolves from a solid betting game into a comprehensive god simulation with deep emergent gameplay.
+### 4.1 Mortal Champion System
+
+- Let players designate or cultivate champions without direct control.
+- Add champion quests, rivalries, and higher-impact influence actions.
+- Connect champions to bets, myths, reincarnation, and era legacy.
+
+### 4.2 Divine Artifacts
+
+- Allow limited artifact creation or empowerment.
+- Make artifacts transferable, stealable, corruptible, and historically traceable.
+- Use artifacts as high-risk tools that can outlive their intended purpose.
+
+### 4.3 Weather and Environmental Influence
+
+- Add divine weather or climate nudges that affect resources, settlement survival, travel, and conflict.
+- Keep effects probabilistic and event-driven rather than direct city-builder controls.
+
+---
+
+## Phase 5: Advanced Systems
+
+### 5.1 Time Manipulation
+
+- Prototype limited temporal mechanics before full rollback or branching history.
+- Start with previews, delayed omens, or accelerated local simulation.
+- Avoid anything that undermines persistent world consistency.
+
+### 5.2 AI Pantheon
+
+- Add non-player divine actors after the mortal world simulation is stable.
+- Give AI deities clear goals, domains, relationships, and visible interventions.
+- Use pantheon politics to create multiplayer-like pressure without requiring live players.
+
+### 5.3 Replay and Timeline Tools
+
+- Build timeline views from event history, bets, and major entity state changes.
+- Support filtering by hero, region, settlement, landmark, resource, and era.
+- Use this as the foundation for sharing world histories.
+
+### 5.4 World Editor and Admin Tools
+
+- Add controlled creation/editing tools for regions, settlements, landmarks, resources, and heroes.
+- Keep admin tools separate from player-facing divine influence.
+- Include validation so edited worlds remain simulation-compatible.
+
+---
+
+## Implementation Principles
+
+- Stabilize the current loop before adding new systems.
+- Favor systems that create readable events and meaningful bets.
+- Keep divine actions probabilistic; players should influence fate, not command it.
+- Make every major simulation change inspectable through events, dashboard data, or entity history.
+- Treat automated ticks, betting resolution, and event generation as the core technical spine.
+- Prefer small vertical slices over broad model additions that are not visible in gameplay.
+
+## Suggested Order
+
+1. Dashboard last-tick visibility and resolved bet explanations.
+2. Resource seeding and region-view resource UI.
+3. Settlement/resource/region simulation depth.
+4. Betting context, odds explanations, and history filters.
+5. Hero lifecycle history and relationship visibility.
+6. Production tick worker runbook and monitoring.
+7. Magic and culture.
+8. Era-ending and legacy.
+9. Champions, artifacts, and advanced divine powers.
+
+## Success Metrics
+
+- A guest can play a complete session without developer setup beyond running the app.
+- At least one automated tick changes visible world state and records readable events.
+- Bets resolve from real simulation state and explain their outcomes.
+- Players can understand why the last tick changed important entities.
+- Every primary entity type has a player-visible reason to matter.
+- Roadmap phases produce playable changes, not just backend-only data expansion.

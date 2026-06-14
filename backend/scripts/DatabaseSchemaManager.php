@@ -65,7 +65,7 @@ class DatabaseSchemaManager
         $entityModels = [
             'GameEvent', 'GameState', 'Player', 'InfluenceHistory',
             'Region', 'Hero', 'Settlement', 'Building', 'Landmark',
-            'ResourceNode', 'DivineBet', 'HeroSettlementInteraction'
+            'ResourceNode', 'DivineBet', 'HeroSettlementInteraction', 'QueueTables'
         ];        foreach ($entityModels as $model) {
             require_once __DIR__ . "/../src/models/{$model}.php";
         }
@@ -141,7 +141,8 @@ class DatabaseSchemaManager
             'Landmark',
             'ResourceNode', 
             'DivineBet', 
-            'HeroSettlementInteraction'
+            'HeroSettlementInteraction',
+            'QueueTables'
         ];
 
         foreach ($entityTables as $model) {

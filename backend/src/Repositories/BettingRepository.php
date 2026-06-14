@@ -11,6 +11,7 @@ use App\Models\Settlement;
 use App\Models\Hero;
 use App\Models\Region;
 use App\Models\Landmark;
+use App\Models\ResourceNode;
 
 class BettingRepository
 {
@@ -133,6 +134,11 @@ class BettingRepository
                 return true;
             }
 
+    // Check in resource nodes
+            if (ResourceNode::find($targetId)) {
+                return true;
+            }
+
             return false;
         } catch (Exception $e) {
             Logger::error("Error validating target entity: " . $e->getMessage());
@@ -185,6 +191,16 @@ class BettingRepository
                     'id' => $landmark->id,
                     'name' => $landmark->name,
                     'type' => 'landmark'
+                ];
+            }
+
+    // Get sample resource nodes
+            $resources = ResourceNode::take(3)->get(['id', 'name']);
+            foreach ($resources as $resource) {
+                $targets['resource'][] = [
+                    'id' => $resource->id,
+                    'name' => $resource->name,
+                    'type' => 'resource'
                 ];
             }
 

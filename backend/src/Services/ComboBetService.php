@@ -55,7 +55,7 @@ class ComboBetService
     // Calculate potential payout
         $potentialPayout = (int) round($totalStake * $finalOdds);
 
-        $gameState = GameState::first();
+        $gameState = GameState::getCurrent();
 
         $comboBetData = [
             'id' => Uuid::uuid4()->toString(),
@@ -64,9 +64,9 @@ class ComboBetService
             'combined_odds' => $finalOdds,
             'potential_payout' => $potentialPayout,
             'status' => 'active',
-            'placed_year' => $gameState->year ?? 1,
+            'placed_year' => $gameState->current_year ?? 1,
             'individual_bet_count' => count($betIds),
-            'created_at' => now()->toIso8601String()
+            'created_at' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM)
         ];
 
     // Store combo bet (we'll create a simple model for this)

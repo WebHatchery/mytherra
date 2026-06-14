@@ -10,6 +10,8 @@ use Illuminate\Database\Capsule\Manager as Schema;
 
 class GameState extends Model
 {
+    public const SINGLETON_ID = 'GAME_STATE';
+
     protected $table = 'game_states';
 
     protected $fillable = [
@@ -40,8 +42,20 @@ class GameState extends Model
 
     public static function getCurrent()
     {
+        $state = self::find(self::SINGLETON_ID);
+        if ($state) {
+            return $state;
+        }
+
+        $legacyState = self::find('default');
+        if ($legacyState) {
+            $legacyState->singleton_id = self::SINGLETON_ID;
+            $legacyState->save();
+            return $legacyState;
+        }
+
         return self::firstOrCreate(
-            ['singleton_id' => 'GAME_STATE'],
+            ['singleton_id' => self::SINGLETON_ID],
             ['current_year' => 1]
         );
     }
