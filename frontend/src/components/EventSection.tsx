@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { GameEvent } from '../entities/event';
 
 interface EventSectionProps {
@@ -69,8 +70,9 @@ const EventSection: React.FC<EventSectionProps> = ({
       </h2>
       <div className="space-y-4">
         {events.map(event => (
-          <div
+          <Link
             key={event.id}
+            to={`/events/${event.id}`}
             className={`bg-gray-700 p-4 rounded-md border-l-2 ${getEventBorderClass(borderColor)}`}
           >
             <div className="flex justify-between items-start mb-2">
@@ -81,8 +83,11 @@ const EventSection: React.FC<EventSectionProps> = ({
                 {new Date(event.timestamp).toLocaleDateString()}
               </span>
             </div>
-            <p className="text-lg font-semibold text-white">{event.description}</p>
-          </div>
+            <p className="text-lg font-semibold text-white">{event.title || event.description}</p>
+            {event.title && event.title !== event.description && (
+              <p className="mt-1 text-sm text-gray-300">{event.description}</p>
+            )}
+          </Link>
         ))}
       </div>
     </div>

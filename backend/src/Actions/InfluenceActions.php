@@ -178,26 +178,30 @@ class InfluenceActions
             ];
         }
 
-        $costs = [
-            'Bless Region' => 15,
-            'Corrupt Region' => 15,
-            'Guide Research in Region' => 12
+        $actionKeys = [
+            'Bless Region' => 'blessRegion',
+            'Corrupt Region' => 'corruptRegion',
+            'Guide Research in Region' => 'guideResearch'
         ];
 
-        if (!isset($costs[$action])) {
+        if (!isset($actionKeys[$action])) {
             return [
                 'success' => false,
                 'message' => "Unsupported region influence action: {$action}"
             ];
         }
 
+        $actionKey = $actionKeys[$action];
+        $resonanceEffect = $region->getInfluenceEffectiveness();
+        $actionEffect = $resonanceEffect['actions'][$actionKey];
         $player = Player::getSinglePlayer();
-        $cost = $costs[$action];
+        $cost = (int)$actionEffect['cost'];
         if (!$player->spendDivineFavor($cost)) {
             return [
                 'success' => false,
                 'message' => 'Insufficient divine favor',
-                'cost' => $cost
+                'cost' => $cost,
+                'resonanceEffect' => $resonanceEffect
             ];
         }
 
@@ -208,32 +212,33 @@ class InfluenceActions
             'dangerLevel' => (int)($region->danger_level ?? 0),
             'status' => $region->status
         ];
+        $effects = $actionEffect['effects'];
 
         switch ($action) {
             case 'Bless Region':
-                $region->prosperity = min(100, (int)$region->prosperity + 8);
-                $region->chaos = max(0, (int)$region->chaos - 4);
-                $region->danger_level = max(0, (int)($region->danger_level ?? 0) - 3);
+                $region->prosperity = max(0, min(100, (int)$region->prosperity + $effects['prosperity']));
+                $region->chaos = max(0, min(100, (int)$region->chaos + $effects['chaos']));
+                $region->danger_level = max(0, min(100, (int)($region->danger_level ?? 0) + $effects['dangerLevel']));
                 if ($region->prosperity >= 80 && $region->chaos <= 30) {
                     $region->status = 'blessed';
                 }
-                $description = "Divine blessing steadied {$region->name}, lifting prosperity and calming unrest.";
+                $description = "Divine blessing resonated through {$region->name}: {$actionEffect['summary']}.";
                 break;
 
             case 'Corrupt Region':
-                $region->chaos = min(100, (int)$region->chaos + 8);
-                $region->danger_level = min(100, (int)($region->danger_level ?? 0) + 5);
-                $region->prosperity = max(0, (int)$region->prosperity - 3);
+                $region->chaos = max(0, min(100, (int)$region->chaos + $effects['chaos']));
+                $region->danger_level = max(0, min(100, (int)($region->danger_level ?? 0) + $effects['dangerLevel']));
+                $region->prosperity = max(0, min(100, (int)$region->prosperity + $effects['prosperity']));
                 if ($region->chaos >= 70 || $region->danger_level >= 70) {
                     $region->status = 'cursed';
                 }
-                $description = "A corrupting omen darkened {$region->name}, stirring chaos and danger.";
+                $description = "A corrupting omen resonated through {$region->name}: {$actionEffect['summary']}.";
                 break;
 
             case 'Guide Research in Region':
-                $region->magic_affinity = min(100, (int)$region->magic_affinity + 7);
-                $region->prosperity = min(100, (int)$region->prosperity + 2);
-                $description = "Whispers of insight guided researchers in {$region->name} toward deeper magical understanding.";
+                $region->magic_affinity = max(0, min(100, (int)$region->magic_affinity + $effects['magicAffinity']));
+                $region->prosperity = max(0, min(100, (int)$region->prosperity + $effects['prosperity']));
+                $description = "Whispers of insight resonated through {$region->name}: {$actionEffect['summary']}.";
                 break;
 
             default:
@@ -244,7 +249,7 @@ class InfluenceActions
         $region->save();
 
         $this->recordInfluenceEvent(
-            $description,
+            $description . ' ' . $resonanceEffect['summary'],
             'region_influence',
             $region->id,
             [$region->id],
@@ -253,12 +258,25 @@ class InfluenceActions
 
         return [
             'success' => true,
-            'message' => "{$action} applied to {$region->name}",
+            'message' => "{$action} applied to {$region->name}. {$resonanceEffect['summary']}",
             'cost' => $cost,
             'remainingDivineFavor' => $player->fresh()->divine_favor,
-            'target' => $region->fresh()->toArray(),
-            'before' => $before
+            'target' => $this->serializeRegion($region->refresh()),
+            'before' => $before,
+            'effectChanges' => $effects,
+            'resonanceEffect' => $resonanceEffect
         ];
+    }
+
+    private function serializeRegion(Region $region): array
+    {
+        return array_merge(
+            $region->toArray(),
+            [
+                'influenceActionCosts' => $region->getInfluenceCosts(),
+                'influenceEffectiveness' => $region->getInfluenceEffectiveness()
+            ]
+        );
     }
 
     private function applyHeroAction(string $heroId, string $action): array

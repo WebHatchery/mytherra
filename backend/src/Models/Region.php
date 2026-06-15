@@ -163,6 +163,156 @@ class Region extends Model
     }
 
     /**
+     * Get player-facing influence costs after divine resonance modifiers.
+     */
+    public function getInfluenceCosts(): array
+    {
+        $profile = $this->getInfluenceEffectiveness();
+
+        return array_map(
+            fn(int $cost): int => max(1, (int)round($cost * $profile['costMultiplier'])),
+            self::getRegionInfluenceBaseCosts()
+        );
+    }
+
+    /**
+     * Get divine resonance cost/effect metadata for region influence actions.
+     */
+    public function getInfluenceEffectiveness(): array
+    {
+        $resonance = max(0, min(100, (int)($this->divine_resonance ?? 50)));
+        $costMultiplier = round(max(0.7, min(1.3, 1 - (($resonance - 50) * 0.006))), 2);
+        $effectMultiplier = round(max(0.75, min(1.35, 1 + (($resonance - 50) * 0.007))), 2);
+        $label = $this->getDivineResonanceEffectiveness();
+        $baseCosts = self::getRegionInfluenceBaseCosts();
+        $baseEffects = self::getRegionInfluenceBaseEffects();
+        $actions = [];
+
+        foreach ($baseCosts as $actionKey => $baseCost) {
+            $effects = [];
+            foreach ($baseEffects[$actionKey] as $stat => $delta) {
+                $effects[$stat] = self::scaleInfluenceDelta($delta, $effectMultiplier);
+            }
+
+            $actions[$actionKey] = [
+                'cost' => max(1, (int)round($baseCost * $costMultiplier)),
+                'effects' => $effects,
+                'summary' => self::formatInfluenceEffectSummary($effects)
+            ];
+        }
+
+        return [
+            'divineResonance' => $resonance,
+            'tier' => self::getDivineResonanceTier($resonance),
+            'label' => $label,
+            'costMultiplier' => $costMultiplier,
+            'effectMultiplier' => $effectMultiplier,
+            'costAdjustmentPercent' => (int)round((1 - $costMultiplier) * 100),
+            'effectAdjustmentPercent' => (int)round(($effectMultiplier - 1) * 100),
+            'summary' => self::buildDivineResonanceSummary($label, $costMultiplier, $effectMultiplier),
+            'actions' => $actions
+        ];
+    }
+
+    public static function getRegionInfluenceBaseCosts(): array
+    {
+        return [
+            'blessRegion' => 15,
+            'corruptRegion' => 15,
+            'guideResearch' => 12
+        ];
+    }
+
+    public static function getRegionInfluenceBaseEffects(): array
+    {
+        return [
+            'blessRegion' => [
+                'prosperity' => 8,
+                'chaos' => -4,
+                'dangerLevel' => -3
+            ],
+            'corruptRegion' => [
+                'chaos' => 8,
+                'dangerLevel' => 5,
+                'prosperity' => -3
+            ],
+            'guideResearch' => [
+                'magicAffinity' => 7,
+                'prosperity' => 2
+            ]
+        ];
+    }
+
+    private static function getDivineResonanceTier(int $resonance): string
+    {
+        if ($resonance >= 80) {
+            return 'very_high';
+        }
+        if ($resonance >= 60) {
+            return 'high';
+        }
+        if ($resonance >= 40) {
+            return 'moderate';
+        }
+        if ($resonance >= 20) {
+            return 'low';
+        }
+        return 'very_low';
+    }
+
+    private static function buildDivineResonanceSummary(
+        string $label,
+        float $costMultiplier,
+        float $effectMultiplier
+    ): string {
+        $costAdjustment = (int)round((1 - $costMultiplier) * 100);
+        $effectAdjustment = (int)round(($effectMultiplier - 1) * 100);
+
+        if ($costAdjustment > 0 && $effectAdjustment > 0) {
+            return "{$label} resonance lowers costs by {$costAdjustment}% and amplifies effects by {$effectAdjustment}%.";
+        }
+
+        if ($costAdjustment < 0 && $effectAdjustment < 0) {
+            return "{$label} resonance raises costs by " . abs($costAdjustment) .
+                "% and dampens effects by " . abs($effectAdjustment) . '%.';
+        }
+
+        return "{$label} resonance leaves divine influence near baseline.";
+    }
+
+    private static function scaleInfluenceDelta(int $delta, float $effectMultiplier): int
+    {
+        if ($delta === 0) {
+            return 0;
+        }
+
+        $magnitude = max(1, (int)round(abs($delta) * $effectMultiplier));
+        return $delta < 0 ? -$magnitude : $magnitude;
+    }
+
+    private static function formatInfluenceEffectSummary(array $effects): string
+    {
+        $labels = [
+            'prosperity' => 'prosperity',
+            'chaos' => 'chaos',
+            'dangerLevel' => 'danger',
+            'magicAffinity' => 'magic'
+        ];
+        $parts = [];
+
+        foreach ($effects as $stat => $delta) {
+            if ($delta === 0) {
+                continue;
+            }
+
+            $sign = $delta > 0 ? '+' : '';
+            $parts[] = $sign . $delta . ' ' . ($labels[$stat] ?? $stat);
+        }
+
+        return implode(', ', $parts);
+    }
+
+    /**
      * Check if region is in crisis
      */
     public function isInCrisis(): bool

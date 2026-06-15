@@ -6,12 +6,7 @@ import SettlementList from './SettlementList';
 interface RegionSettlementsTabProps {
   settlements: Settlement[];
   onSelectSettlement?: (settlement: Settlement) => void;
-  settlementCounts: {
-    city: number;
-    town: number;
-    village: number;
-    hamlet: number;
-  };
+  settlementCounts: Partial<Record<Settlement['type'], number>>;
   totalPopulation: number;
 }
 

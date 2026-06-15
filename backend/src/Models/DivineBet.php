@@ -57,7 +57,9 @@ class DivineBet extends Model
         'hero_death',
         'region_danger_change',
         'war_outcome',
-        'prosperity_threshold'
+        'prosperity_threshold',
+        'magic_discovery',
+        'pantheon_intervention'
     ];
 
     // Confidence levels based on Node.js backend
@@ -138,6 +140,16 @@ class DivineBet extends Model
             'description' => 'A bet on a settlement reaching a prosperity threshold',
             'base_odds' => 2.4,
             'resolve_conditions' => 'Settlement prosperity reaches or exceeds target value within timeframe'
+        ],
+        'magic_discovery' => [
+            'description' => 'A bet on an emerging magic path becoming known',
+            'base_odds' => 3.6,
+            'resolve_conditions' => 'Tracked magic path becomes known through the target within timeframe'
+        ],
+        'pantheon_intervention' => [
+            'description' => 'A bet on an AI deity intervening in a pressured region',
+            'base_odds' => 3.2,
+            'resolve_conditions' => 'An AI pantheon intervention event targets the region within timeframe'
         ]
     ];
 
@@ -262,8 +274,77 @@ class DivineBet extends Model
      */
     public function calculatePotentialPayout(): int
     {
-        $stakeMultiplier = self::getStakeMultiplier($this->confidence);
-        return (int) round($this->divine_favor_stake * $this->current_odds * $stakeMultiplier);
+        return self::calculatePayoutProfile(
+            (int)$this->divine_favor_stake,
+            (float)$this->current_odds,
+            (string)$this->confidence
+        )['grossPayout'];
+    }
+
+    public function getPayoutProfile(): array
+    {
+        return self::calculatePayoutProfile(
+            (int)$this->divine_favor_stake,
+            (float)$this->current_odds,
+            (string)$this->confidence
+        );
+    }
+
+    public static function calculatePayoutProfile(
+        int $stake,
+        float $odds,
+        string $confidence,
+        ?float $stakeMultiplier = null
+    ): array {
+        $stake = max(1, $stake);
+        $odds = max(1.1, $odds);
+        $stakeMultiplier ??= self::getStakeMultiplier($confidence);
+        $rawMultiplier = $odds * $stakeMultiplier;
+        $houseEdge = match ($confidence) {
+            'long_shot' => 0.92,
+            'likely' => 0.86,
+            'near_certain' => 0.8,
+            default => 0.88,
+        };
+        $minimumMultiplier = match ($confidence) {
+            'near_certain' => 1.08,
+            'likely' => 1.15,
+            'long_shot' => 1.35,
+            default => 1.2,
+        };
+        $maximumMultiplier = match ($confidence) {
+            'near_certain' => 2.4,
+            'likely' => 3.5,
+            'long_shot' => 8.0,
+            default => 5.5,
+        };
+
+        $grossMultiplier = 1 + (($rawMultiplier - 1) * $houseEdge);
+        $grossMultiplier = max($minimumMultiplier, min($maximumMultiplier, $grossMultiplier));
+        $grossMultiplier = round($grossMultiplier, 2);
+        $grossPayout = max($stake + 1, (int)floor($stake * $grossMultiplier));
+        $netProfit = max(0, $grossPayout - $stake);
+        $probabilityPercent = round(min(95, max(1, 100 / $odds)), 1);
+        $riskBand = match (true) {
+            $odds >= 6.0 || $confidence === 'long_shot' => 'extreme',
+            $odds >= 3.5 => 'high',
+            $odds >= 2.0 || $confidence === 'possible' => 'medium',
+            default => 'low',
+        };
+
+        return [
+            'stake' => $stake,
+            'odds' => round($odds, 2),
+            'confidence' => $confidence,
+            'rawMultiplier' => round($rawMultiplier, 2),
+            'grossMultiplier' => $grossMultiplier,
+            'maximumMultiplier' => $maximumMultiplier,
+            'grossPayout' => $grossPayout,
+            'netProfit' => $netProfit,
+            'probabilityPercent' => $probabilityPercent,
+            'riskBand' => $riskBand,
+            'summary' => "Stake {$stake} for {$grossPayout} favor ({$grossMultiplier}x gross, {$netProfit} net).",
+        ];
     }
 
     /**

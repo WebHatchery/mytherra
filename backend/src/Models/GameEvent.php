@@ -22,12 +22,18 @@ class GameEvent extends Model
         'timestamp',
         'related_region_ids',
         'related_hero_ids',
+        'related_settlement_ids',
+        'related_landmark_ids',
+        'related_resource_ids',
         'year'
       ];
 
     protected $casts = [
         'related_region_ids' => 'array',
         'related_hero_ids' => 'array',
+        'related_settlement_ids' => 'array',
+        'related_landmark_ids' => 'array',
+        'related_resource_ids' => 'array',
         'year' => 'integer'
       ];
 
@@ -46,6 +52,9 @@ class GameEvent extends Model
                 $table->string('timestamp');
                 $table->json('related_region_ids')->nullable();
                 $table->json('related_hero_ids')->nullable();
+                $table->json('related_settlement_ids')->nullable();
+                $table->json('related_landmark_ids')->nullable();
+                $table->json('related_resource_ids')->nullable();
                 $table->integer('year')->nullable();
                 $table->timestamps();
 

@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { GameEvent } from '../entities/event';
-import { getGameEvents } from '../api/apiService';
+import { getGameEvents, type GameEventFilters } from '../api/apiService';
 
 interface UseEventsOptions {
   autoRefresh?: boolean;
   refreshInterval?: number;
   eventsPerPage?: number;
+  filters?: GameEventFilters;
 }
 
 interface UseEventsReturn {
@@ -24,12 +25,18 @@ interface UseEventsReturn {
 }
 
 export const useEvents = (options: UseEventsOptions = {}): UseEventsReturn => {
-  const { autoRefresh = false, refreshInterval = 30000, eventsPerPage = 20 } = options;
+  const {
+    autoRefresh = false,
+    refreshInterval = 30000,
+    eventsPerPage = 20,
+    filters = {},
+  } = options;
 
   const [events, setEvents] = useState<GameEvent[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const { regionId, heroId, settlementId, landmarkId, resourceId, era, type, status } = filters;
 
   const categorizeEvents = useCallback((events: GameEvent[]) => {
     // Hero Events: All events that have related heroes
@@ -56,7 +63,16 @@ export const useEvents = (options: UseEventsOptions = {}): UseEventsReturn => {
     async (page: number) => {
       try {
         setIsLoading(true);
-        const data = await getGameEvents(page, eventsPerPage);
+        const data = await getGameEvents(page, eventsPerPage, {
+          regionId,
+          heroId,
+          settlementId,
+          landmarkId,
+          resourceId,
+          era,
+          type,
+          status,
+        });
 
         if (Array.isArray(data)) {
           setEvents(data);
@@ -78,7 +94,7 @@ export const useEvents = (options: UseEventsOptions = {}): UseEventsReturn => {
         setIsLoading(false);
       }
     },
-    [eventsPerPage]
+    [eventsPerPage, regionId, heroId, settlementId, landmarkId, resourceId, era, type, status]
   );
 
   const refetch = useCallback(() => {

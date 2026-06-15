@@ -47,6 +47,10 @@ final class RouteSecurityTest extends TestCase
             "delete(\$api . '/landmarks/{id}'",
             "post(\$api . '/landmarks/{id}/discover'",
             "post(\$api . '/admin/process-expired-bets'",
+            "post(\$api . '/admin/era/transition'",
+            "get(\$api . '/admin/world-editor'",
+            "post(\$api . '/admin/world-editor/{entityType}'",
+            "put(\$api . '/admin/world-editor/{entityType}/{id}'",
         ];
 
         foreach ($adminOnlyRoutes as $routePrefix) {

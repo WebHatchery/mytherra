@@ -3,6 +3,26 @@
 /**
  * Represents a distinct area in the game world.
  */
+export type RegionInfluenceActionKey = 'blessRegion' | 'corruptRegion' | 'guideResearch';
+
+export interface RegionInfluenceEffectPreview {
+  cost: number;
+  effects: Partial<Record<'prosperity' | 'chaos' | 'dangerLevel' | 'magicAffinity', number>>;
+  summary: string;
+}
+
+export interface RegionInfluenceEffectiveness {
+  divineResonance: number;
+  tier: 'very_low' | 'low' | 'moderate' | 'high' | 'very_high';
+  label: string;
+  costMultiplier: number;
+  effectMultiplier: number;
+  costAdjustmentPercent: number;
+  effectAdjustmentPercent: number;
+  summary: string;
+  actions: Partial<Record<RegionInfluenceActionKey, RegionInfluenceEffectPreview>>;
+}
+
 export interface Region {
   id: string;
   name: string;
@@ -30,6 +50,7 @@ export interface Region {
     corruptRegion?: number;
     guideResearch?: number;
   };
+  influenceEffectiveness?: RegionInfluenceEffectiveness;
   // Enhanced region features
   populationTotal?: number; // Calculated from settlements
   regionalTraits?: string[]; // ['mountainous', 'coastal', 'forested', 'desert', 'magical_nexus']

@@ -32,6 +32,7 @@
     "scripts": {
         "start": "php -S localhost:5002 -t public",
         "game:tick": "php scripts/runGameTick.php",
+        "game:health": "php scripts/checkGameLoopHealth.php",
         "test": "phpunit",
         "test:setup": "@php -r \"file_exists('tests/.env.testing') || copy('tests/.env.testing.example', 'tests/.env.testing');\"",
         "test:init": [

@@ -27,6 +27,22 @@ class ExportController
         return $this->downloadResponse($response, $data, 'mytherra-world-snapshot.json');
     }
 
+    public function exportChronicleShare(Request $request, Response $response): Response
+    {
+        $queryParams = $request->getQueryParams();
+        $data = $this->exportService->exportChronicleShare([
+            'limit' => $queryParams['limit'] ?? null,
+            'era' => $queryParams['era'] ?? null,
+            'regionId' => $queryParams['regionId'] ?? $queryParams['region_id'] ?? null,
+            'heroId' => $queryParams['heroId'] ?? $queryParams['hero_id'] ?? null,
+            'settlementId' => $queryParams['settlementId'] ?? $queryParams['settlement_id'] ?? null,
+            'landmarkId' => $queryParams['landmarkId'] ?? $queryParams['landmark_id'] ?? null,
+            'resourceId' => $queryParams['resourceId'] ?? $queryParams['resource_id'] ?? null,
+        ]);
+
+        return $this->downloadResponse($response, $data, 'mytherra-chronicle-share.json');
+    }
+
     /**
      * Export by specific type
      */
@@ -59,6 +75,10 @@ class ExportController
                 'buildings' => 'All buildings',
                 'landmarks' => 'All landmarks',
                 'resources' => 'All resource nodes',
+                'civilization' => 'Civilization agendas and recent decisions',
+                'champions' => 'Mortal champion roster, outcomes, betting hooks, and legacy hooks',
+                'pantheon' => 'AI pantheon pressure, relationships, and recent interventions',
+                'chronicle' => 'Curated share package with highlights, linked entity spotlights, bets, and timeline cards',
                 'bets' => 'All divine bets',
                 'events' => 'Recent events (last 1000)'
             ]

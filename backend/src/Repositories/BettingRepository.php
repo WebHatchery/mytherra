@@ -252,6 +252,82 @@ class BettingRepository
         return $this->fetchAllDivineBets($filters, $limit, $offset);
     }
 
+    public function getBetSummary(array $filters = []): array
+    {
+        $limit = isset($filters['recentLimit']) ? max(1, min((int)$filters['recentLimit'], 10)) : 5;
+        unset($filters['recentLimit'], $filters['limit'], $filters['offset'], $filters['status']);
+
+        try {
+            $baseQuery = $this->applySummaryFilters(DivineBet::query(), $filters);
+            $statusCounts = (clone $baseQuery)
+                ->selectRaw('status, COUNT(*) as total')
+                ->groupBy('status')
+                ->pluck('total', 'status')
+                ->toArray();
+            $activeQuery = (clone $baseQuery)->where('status', 'active');
+            $resolvedQuery = (clone $baseQuery)->whereIn('status', ['won', 'lost', 'expired']);
+            $wonQuery = (clone $baseQuery)->where('status', 'won');
+            $resolvedCount = (int)(clone $resolvedQuery)->count();
+            $wonCount = (int)($statusCounts['won'] ?? 0);
+            $resolvedStake = (int)(clone $resolvedQuery)->sum('divine_favor_stake');
+            $wonPayout = (int)(clone $wonQuery)->sum('potential_payout');
+            $activeStake = (int)(clone $activeQuery)->sum('divine_favor_stake');
+            $activePotential = (int)(clone $activeQuery)->sum('potential_payout');
+            $netResolvedFavor = $wonPayout - $resolvedStake;
+
+            $topBetTypes = (clone $baseQuery)
+                ->selectRaw('bet_type, COUNT(*) as total, SUM(divine_favor_stake) as stake')
+                ->groupBy('bet_type')
+                ->orderByDesc('total')
+                ->limit(4)
+                ->get()
+                ->map(fn($row) => [
+                    'betType' => $row->bet_type,
+                    'total' => (int)$row->total,
+                    'stake' => (int)$row->stake,
+                ])
+                ->values()
+                ->all();
+
+            return [
+                'generatedAt' => date('c'),
+                'total' => (int)(clone $baseQuery)->count(),
+                'active' => (int)($statusCounts['active'] ?? 0),
+                'won' => $wonCount,
+                'lost' => (int)($statusCounts['lost'] ?? 0),
+                'expired' => (int)($statusCounts['expired'] ?? 0),
+                'activeStake' => $activeStake,
+                'activePotentialPayout' => $activePotential,
+                'resolvedStake' => $resolvedStake,
+                'wonPayout' => $wonPayout,
+                'netResolvedFavor' => $netResolvedFavor,
+                'winRatePercent' => $resolvedCount > 0 ? round(($wonCount / $resolvedCount) * 100, 1) : null,
+                'averageOdds' => round((float)((clone $baseQuery)->avg('current_odds') ?? 0), 2),
+                'topBetTypes' => $topBetTypes,
+                'recentActive' => (clone $activeQuery)
+                    ->orderByDesc('placed_year')
+                    ->orderByDesc('created_at')
+                    ->limit($limit)
+                    ->get()
+                    ->map(fn(DivineBet $bet) => $this->transformBetData($bet->toArray()))
+                    ->values()
+                    ->all(),
+                'recentResolved' => (clone $resolvedQuery)
+                    ->orderByDesc('resolved_year')
+                    ->orderByDesc('updated_at')
+                    ->limit($limit)
+                    ->get()
+                    ->map(fn(DivineBet $bet) => $this->transformBetData($bet->toArray()))
+                    ->values()
+                    ->all(),
+                'summary' => $this->buildBetSummaryText($activeStake, $activePotential, $resolvedCount, $netResolvedFavor),
+            ];
+        } catch (Exception $e) {
+            Logger::error("Error summarizing divine bets: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
     /**
      * Get speculation events for betting opportunities
      */
@@ -342,6 +418,24 @@ class BettingRepository
                 'updatedAt' => $bet['updated_at']
             ];
 
+            $payoutProfile = DivineBet::calculatePayoutProfile(
+                $transformed['divineFavorStake'],
+                $transformed['currentOdds'],
+                $transformed['confidence']
+            );
+            $storedPayout = (int)$transformed['potentialPayout'];
+            if ($storedPayout > 0 && $storedPayout !== $payoutProfile['grossPayout']) {
+                $payoutProfile['grossPayout'] = $storedPayout;
+                $payoutProfile['grossMultiplier'] = round(
+                    $storedPayout / max(1, $transformed['divineFavorStake']),
+                    2
+                );
+                $payoutProfile['netProfit'] = max(0, $storedPayout - $transformed['divineFavorStake']);
+                $payoutProfile['summary'] = "Stake {$transformed['divineFavorStake']} for {$storedPayout} favor " .
+                    "({$payoutProfile['grossMultiplier']}x gross, {$payoutProfile['netProfit']} net).";
+            }
+            $transformed['payoutProfile'] = $payoutProfile;
+
             return $transformed;
         } catch (Exception $e) {
             Logger::error("Error in transformBetData: " . $e->getMessage());
@@ -359,5 +453,42 @@ class BettingRepository
         }
 
         return array_map([$this, 'transformBetData'], $bets);
+    }
+
+    private function applySummaryFilters($query, array $filters)
+    {
+        if (!empty($filters['playerId'])) {
+            $query->where('player_id', $filters['playerId']);
+        }
+
+        if (!empty($filters['betType'])) {
+            $query->where('bet_type', $filters['betType']);
+        }
+
+        if (!empty($filters['targetId'])) {
+            $query->where('target_id', $filters['targetId']);
+        }
+
+        if (!empty($filters['confidence'])) {
+            $query->where('confidence', $filters['confidence']);
+        }
+
+        return $query;
+    }
+
+    private function buildBetSummaryText(
+        int $activeStake,
+        int $activePotential,
+        int $resolvedCount,
+        int $netResolvedFavor
+    ): string {
+        $activeText = $activeStake > 0
+            ? "{$activeStake} favor at risk for up to {$activePotential} favor"
+            : 'No active favor at risk';
+        $resolvedText = $resolvedCount > 0
+            ? "resolved net {$netResolvedFavor} favor"
+            : 'no resolved history yet';
+
+        return "{$activeText}; {$resolvedText}.";
     }
 }

@@ -43,4 +43,34 @@ class HeroController
             'Hero not found'
         );
     }
+
+    public function getChampionStatus(Request $request, Response $response): Response
+    {
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->heroActions->fetchChampionStatus(),
+            'fetching champions'
+        );
+    }
+
+    public function designateChampion(Request $request, Response $response, array $args): Response
+    {
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->heroActions->designateChampion($args['id']),
+            'designating champion'
+        );
+    }
+
+    public function cultivateChampion(Request $request, Response $response, array $args): Response
+    {
+        $body = $request->getParsedBody() ?? [];
+        $focus = is_string($body['focus'] ?? null) ? $body['focus'] : 'quest';
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->heroActions->cultivateChampion($args['id'], $focus),
+            'cultivating champion'
+        );
+    }
 }

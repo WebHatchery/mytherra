@@ -29,6 +29,9 @@ export const useHeroes = (options: UseHeroesOptions = {}): UseHeroesReturn => {
       setIsLoading(true);
       const heroesData = await getHeroes();
       setHeroes(heroesData);
+      setSelectedHero(current =>
+        current ? (heroesData.find(hero => hero.id === current.id) ?? null) : current
+      );
       setError(null);
     } catch (err) {
       if (err instanceof Error) {

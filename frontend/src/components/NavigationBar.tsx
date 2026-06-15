@@ -1,20 +1,42 @@
 // F:\WebDevelopment\Mytherra\frontend\src\components\NavigationBar.tsx
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/useAuth';
 
 const NavigationBar: React.FC = () => {
   const location = useLocation();
-  const tabs = [
+  const { isAdmin } = useAuth();
+  const baseTabs = [
     { id: 'events', label: 'Events', icon: '📜', path: '/' },
     { id: 'world', label: 'World Map', icon: '🗺️', path: '/world-map' },
     { id: 'heroes', label: 'Heroes', icon: '⚔️', path: '/heroes' },
+    { id: 'artifacts', label: 'Artifacts', icon: '◆', path: '/artifacts' },
+    { id: 'weather', label: 'Weather', icon: '☁', path: '/weather' },
+    { id: 'omens', label: 'Omens', icon: '◷', path: '/omens' },
+    { id: 'magic', label: 'Magic', icon: '✦', path: '/magic' },
+    { id: 'myths', label: 'Myths', icon: '✧', path: '/myths' },
+    { id: 'civilization', label: 'Civilization', icon: '◇', path: '/civilization' },
+    { id: 'pantheon', label: 'Pantheon', icon: '♛', path: '/pantheon' },
     { id: 'betting', label: 'Divine Betting', icon: '⚡', path: '/betting' },
+    { id: 'eras', label: 'Eras', icon: '⏳', path: '/eras' },
     { id: 'dashboard', label: 'Statistics', icon: '📊', path: '/dashboard' },
   ] as const;
+  const tabs = isAdmin()
+    ? [...baseTabs, { id: 'admin', label: 'Admin Tools', icon: '⚙', path: '/admin/world-editor' }]
+    : baseTabs;
 
   const getActiveTab = (): string => {
     if (location.pathname.includes('/heroes')) return 'heroes';
+    if (location.pathname.includes('/artifacts')) return 'artifacts';
+    if (location.pathname.includes('/weather')) return 'weather';
+    if (location.pathname.includes('/omens')) return 'omens';
+    if (location.pathname.includes('/magic')) return 'magic';
+    if (location.pathname.includes('/myths')) return 'myths';
+    if (location.pathname.includes('/civilization')) return 'civilization';
+    if (location.pathname.includes('/pantheon')) return 'pantheon';
     if (location.pathname.includes('/betting')) return 'betting';
+    if (location.pathname.includes('/eras')) return 'eras';
+    if (location.pathname.includes('/admin')) return 'admin';
     if (location.pathname.includes('/world-map')) return 'world';
     if (location.pathname.includes('/dashboard')) return 'dashboard';
     return 'events';

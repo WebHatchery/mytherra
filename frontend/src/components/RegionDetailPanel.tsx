@@ -3,19 +3,26 @@ import { Region } from '../entities/region';
 import { Settlement } from '../entities/settlement';
 import { Landmark } from '../entities/landmark';
 import { Hero } from '../entities/hero';
+import { ResourceNode } from '../entities/resourceNode';
+import type { EntityHistorySummaryResponse } from '../api/apiService';
 import RegionTabNav, { RegionTabType } from './RegionTabs/RegionTabNav';
 import RegionHeader from './RegionTabs/RegionHeader';
 import RegionOverviewTab from './RegionTabs/RegionOverviewTab';
 import RegionSettlementsTab from './RegionTabs/RegionSettlementsTab';
 import RegionLandmarksTab from './RegionTabs/RegionLandmarksTab';
 import RegionHeroesList from './RegionTabs/RegionHeroesList';
+import RegionResourcesTab from './RegionTabs/RegionResourcesTab';
+import RegionHistoryTab from './RegionTabs/RegionHistoryTab';
 
 interface RegionDetailPanelProps {
   region: Region;
   settlements: Settlement[];
   landmarks: Landmark[];
   heroes: Hero[];
+  resources: ResourceNode[];
+  historySummary?: EntityHistorySummaryResponse | null;
   loading?: boolean;
+  historyLoading?: boolean;
   onSelectSettlement?: (settlement: Settlement) => void;
   onSelectLandmark?: (landmark: Landmark) => void;
   onSelectHero?: (hero: Hero) => void;
@@ -26,7 +33,10 @@ const RegionDetailPanel: React.FC<RegionDetailPanelProps> = ({
   settlements,
   landmarks,
   heroes,
+  resources,
+  historySummary,
   loading = false,
+  historyLoading = false,
   onSelectSettlement,
   onSelectLandmark,
   onSelectHero,
@@ -50,13 +60,13 @@ const RegionDetailPanel: React.FC<RegionDetailPanelProps> = ({
   };
 
   const getSettlementSummary = () => {
-    const counts = {
-      city: settlements.filter(s => s.type === 'city').length,
-      town: settlements.filter(s => s.type === 'town').length,
-      village: settlements.filter(s => s.type === 'village').length,
-      hamlet: settlements.filter(s => s.type === 'hamlet').length,
-    };
-    return counts;
+    return settlements.reduce(
+      (counts, settlement) => {
+        counts[settlement.type] = (counts[settlement.type] ?? 0) + 1;
+        return counts;
+      },
+      {} as Partial<Record<Settlement['type'], number>>
+    );
   };
 
   const getTotalPopulation = () => {
@@ -78,8 +88,21 @@ const RegionDetailPanel: React.FC<RegionDetailPanelProps> = ({
         setActiveTab={setActiveTab}
         settlementsCount={settlements.length}
         landmarksCount={landmarks.length}
+        resourcesCount={resources.length}
         heroesCount={livingHeroesCount}
+        historyCount={
+          historySummary
+            ? [
+                ...historySummary.entities.regions,
+                ...historySummary.entities.settlements,
+                ...historySummary.entities.landmarks,
+                ...historySummary.entities.resources,
+                ...historySummary.entities.heroes,
+              ].filter(item => item.regionId === region.id || item.id === region.id).length
+            : 0
+        }
         loading={loading}
+        historyLoading={historyLoading}
       />
 
       {/* Tab Content */}
@@ -88,6 +111,7 @@ const RegionDetailPanel: React.FC<RegionDetailPanelProps> = ({
           region={region}
           settlementsCount={settlements.length}
           landmarksCount={landmarks.length}
+          resourcesCount={resources.length}
           heroesCount={heroes.length}
           totalPopulation={totalPopulation}
           loading={loading}
@@ -108,8 +132,16 @@ const RegionDetailPanel: React.FC<RegionDetailPanelProps> = ({
         <RegionLandmarksTab landmarks={landmarks} onSelectLandmark={onSelectLandmark} />
       )}
 
+      {activeTab === 'resources' && (
+        <RegionResourcesTab resources={resources} settlements={settlements} loading={loading} />
+      )}
+
       {activeTab === 'heroes' && (
         <RegionHeroesList heroes={heroes} loading={loading} onSelectHero={onSelectHero} />
+      )}
+
+      {activeTab === 'history' && (
+        <RegionHistoryTab region={region} summary={historySummary ?? null} loading={historyLoading} />
       )}
     </div>
   );

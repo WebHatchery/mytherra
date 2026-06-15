@@ -9,6 +9,7 @@ interface RegionOverviewTabProps {
   region: Region;
   settlementsCount: number;
   landmarksCount: number;
+  resourcesCount: number;
   heroesCount: number;
   totalPopulation: number;
   loading: boolean;
@@ -19,6 +20,7 @@ const RegionOverviewTab: React.FC<RegionOverviewTabProps> = ({
   region,
   settlementsCount,
   landmarksCount,
+  resourcesCount,
   heroesCount,
   totalPopulation,
   loading,
@@ -36,6 +38,7 @@ const RegionOverviewTab: React.FC<RegionOverviewTabProps> = ({
       <RegionOverviewStats
         settlementsCount={settlementsCount}
         landmarksCount={landmarksCount}
+        resourcesCount={resourcesCount}
         heroesCount={heroesCount}
         totalPopulation={totalPopulation}
         loading={loading}

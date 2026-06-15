@@ -4,6 +4,7 @@ import PageLayout from '../components/PageLayout';
 import PageHeader from '../components/PageHeader';
 import EmptyState from '../components/EmptyState';
 import HeroInfluencePanel from '../components/HeroInfluencePanel';
+import HeroChampionPanel from '../components/HeroChampionPanel';
 import { useGameStatus } from '../hooks/useGameStatus';
 import { useHeroes } from '../hooks/useHeroes';
 
@@ -35,11 +36,18 @@ const HeroesPage: React.FC = () => {
   const error = gameStatusError || heroesError;
 
   const topContent = (
-    <HeroInfluencePanel
-      selectedHero={selectedHero}
-      currentDivineFavor={gameStatus?.divineFavor || 0}
-      onActionSuccess={handleActionSuccess}
-    />
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <HeroInfluencePanel
+        selectedHero={selectedHero}
+        currentDivineFavor={gameStatus?.divineFavor || 0}
+        onActionSuccess={handleActionSuccess}
+      />
+      <HeroChampionPanel
+        selectedHero={selectedHero}
+        currentDivineFavor={gameStatus?.divineFavor || 0}
+        onActionSuccess={handleActionSuccess}
+      />
+    </div>
   );
   return (
     <PageLayout

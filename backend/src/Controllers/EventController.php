@@ -27,13 +27,21 @@ class EventController
         Logger::debug("GET /api/events endpoint called");
 
         $queryParams = $request->getQueryParams();
+        $limit = isset($queryParams['limit']) ? min(max((int)$queryParams['limit'], 1), 100) : 20;
+        $page = isset($queryParams['page']) ? max((int)$queryParams['page'], 1) : 1;
+        $offset = isset($queryParams['offset']) ? max((int)$queryParams['offset'], 0) : (($page - 1) * $limit);
+
         $filters = [
             'type' => $queryParams['type'] ?? null,
             'status' => $queryParams['status'] ?? null,
-            'regionId' => $queryParams['regionId'] ?? null,
-            'heroId' => $queryParams['heroId'] ?? null,
-            'limit' => isset($queryParams['limit']) ? min((int)$queryParams['limit'], 100) : 20,
-            'offset' => isset($queryParams['offset']) ? (int)$queryParams['offset'] : 0
+            'regionId' => $queryParams['regionId'] ?? $queryParams['region_id'] ?? null,
+            'heroId' => $queryParams['heroId'] ?? $queryParams['hero_id'] ?? null,
+            'settlementId' => $queryParams['settlementId'] ?? $queryParams['settlement_id'] ?? null,
+            'landmarkId' => $queryParams['landmarkId'] ?? $queryParams['landmark_id'] ?? null,
+            'resourceId' => $queryParams['resourceId'] ?? $queryParams['resource_id'] ?? null,
+            'era' => $queryParams['era'] ?? null,
+            'limit' => $limit,
+            'offset' => $offset
         ];
 
         return $this->handleApiAction(

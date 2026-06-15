@@ -8,7 +8,24 @@ describe('frontend gameplay smoke wiring', () => {
   it('registers the primary protected game routes', () => {
     const appSource = readFileSync(src('App.tsx'), 'utf8');
 
-    for (const route of ['"/"', '"/dashboard"', '"/world-map"', '"/heroes"', '"/betting"']) {
+    for (const route of [
+      '"/"',
+      '"/dashboard"',
+      '"/events"',
+      '"/events/:id"',
+      '"/world-map"',
+      '"/heroes"',
+      '"/artifacts"',
+      '"/weather"',
+      '"/omens"',
+      '"/magic"',
+      '"/myths"',
+      '"/civilization"',
+      '"/pantheon"',
+      '"/betting"',
+      '"/eras"',
+      '"/admin/world-editor"',
+    ]) {
       expect(appSource).toContain(`path=${route}`);
     }
   });
@@ -27,11 +44,32 @@ describe('frontend gameplay smoke wiring', () => {
     for (const endpoint of [
       'regions',
       'heroes',
-      'events?page=',
+      'artifacts',
+      '`artifacts/${artifactId}/empower`',
+      '`artifacts/${artifactId}/transfer`',
+      '`artifacts/${artifactId}/stabilize`',
+      'weather',
+      'weather/nudge',
+      'omens',
+      'magic',
+      'magic/research',
+      'myths',
+      'myths/promote',
+      'civilization',
+      'civilization/advance',
+      'pantheon',
+      'champions',
+      'admin/world-editor',
+      '`heroes/${heroId}/champion`',
+      '`heroes/${heroId}/champion/cultivate`',
+      '`events?${params.toString()}`',
+      '`events/${id}`',
       'settlements',
       'landmarks',
       'resource-nodes',
+      '`history/summary${suffix}`',
       'bets',
+      'bets/summary',
       'speculation-events',
       'betting-odds',
       'influence/region/${payload.entityId}',
@@ -43,11 +81,363 @@ describe('frontend gameplay smoke wiring', () => {
 
   it('keeps dashboard statistics and export wired', () => {
     const dashboardSource = readFileSync(src('pages', 'Dashboard.tsx'), 'utf8');
+    const eraPanelSource = readFileSync(src('components', 'DashboardEraPressurePanel.tsx'), 'utf8');
+    const legacyPanelSource = readFileSync(
+      src('components', 'DashboardEraLegacyPanel.tsx'),
+      'utf8'
+    );
+    const transitionPanelSource = readFileSync(
+      src('components', 'DashboardEraTransitionPanel.tsx'),
+      'utf8'
+    );
+    const comparisonPanelSource = readFileSync(
+      src('components', 'DashboardEraComparisonPanel.tsx'),
+      'utf8'
+    );
+    const lastTickSource = readFileSync(src('components', 'DashboardLastTickPanel.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
 
     expect(dashboardSource).toContain('statisticsService.getSummary()');
     expect(dashboardSource).toContain('statisticsService.getHeroStats()');
     expect(dashboardSource).toContain('statisticsService.getRegionStats()');
     expect(dashboardSource).toContain('statisticsService.getFinancialStats()');
-    expect(dashboardSource).toContain("apiClient.get('/export/full'");
+    expect(dashboardSource).toContain("downloadExport('/export/full'");
+    expect(dashboardSource).toContain("'/export/chronicle-share'");
+    expect(dashboardSource).toContain('Export Chronicle');
+    expect(dashboardSource).toContain('mytherra-chronicle-share.json');
+    expect(dashboardSource).toContain('DashboardEraPressurePanel');
+    expect(dashboardSource).toContain('DashboardEraLegacyPanel');
+    expect(dashboardSource).toContain('DashboardEraTransitionPanel');
+    expect(dashboardSource).toContain('DashboardEraComparisonPanel');
+    expect(dashboardSource).toContain('DashboardCivilizationPanel');
+    expect(dashboardSource).toContain('DashboardPantheonPanel');
+    expect(eraPanelSource).toContain('Era Pressure');
+    expect(eraPanelSource).toContain('eraPressure.triggers');
+    expect(eraPanelSource).toContain('Timeline');
+    expect(legacyPanelSource).toContain('Era Legacy');
+    expect(legacyPanelSource).toContain('heroLegacies');
+    expect(legacyPanelSource).toContain('eraSpanningBets');
+    expect(transitionPanelSource).toContain('Era Rollover');
+    expect(transitionPanelSource).toContain('transitionEra');
+    expect(transitionPanelSource).toContain('Era History');
+    expect(transitionPanelSource).toContain('New foundations');
+    expect(comparisonPanelSource).toContain('Era Comparison');
+    expect(comparisonPanelSource).toContain('currentSnapshot');
+    expect(comparisonPanelSource).toContain('No completed era comparison has been recorded.');
+    expect(lastTickSource).toContain('tick.eraPressure');
+    expect(lastTickSource).toContain('tick.eraLegacy');
+    expect(lastTickSource).toContain('tick.eraTransition');
+    expect(lastTickSource).toContain('tick.civilization');
+    expect(lastTickSource).toContain('tick.pantheon');
+    expect(lastTickSource).toContain('tick.champions');
+    expect(lastTickSource).toContain('tick.divineTools');
+    expect(lastTickSource).toContain('Champion Outcomes');
+    expect(lastTickSource).toContain('Divine Tool Consequences');
+    expect(lastTickSource).toContain('Pantheon Interventions');
+    expect(apiSource).toContain('EraPressureSummary');
+    expect(apiSource).toContain('EraLegacySummary');
+    expect(apiSource).toContain('EraTransitionSummary');
+    expect(apiSource).toContain('EraComparisonSummary');
+    expect(apiSource).toContain('EraGeneratedContent');
+    expect(apiSource).toContain('CivilizationStatusResponse');
+    expect(apiSource).toContain('PantheonStatusResponse');
+    expect(apiSource).toContain('PantheonTickSummary');
+    expect(apiSource).toContain('GameTickDivineToolsSummary');
+  });
+
+  it('keeps admin world editor separate and wired to admin routes', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const pageSource = readFileSync(src('pages', 'AdminWorldEditorPage.tsx'), 'utf8');
+
+    expect(appSource).toContain('AdminWorldEditorPage');
+    expect(navSource).toContain("path: '/admin/world-editor'");
+    expect(navSource).toContain('isAdmin()');
+    expect(apiSource).toContain('getAdminWorldEditor');
+    expect(apiSource).toContain('createAdminWorldEntity');
+    expect(apiSource).toContain('updateAdminWorldEntity');
+    expect(apiSource).toContain('putData');
+    expect(pageSource).toContain('World Editor');
+    expect(pageSource).toContain('Admin Access Required');
+    expect(pageSource).toContain('Create ${ENTITY_SINGULAR[selectedType]}');
+    expect(pageSource).toContain('Save ${ENTITY_SINGULAR[selectedType]}');
+    expect(pageSource).toContain('ENTITY_TYPES');
+  });
+
+  it('keeps the era chronicle page wired to status data', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const erasSource = readFileSync(src('pages', 'ErasPage.tsx'), 'utf8');
+
+    expect(appSource).toContain('ErasPage');
+    expect(navSource).toContain("path: '/eras'");
+    expect(navSource).toContain("'eras'");
+    expect(erasSource).toContain('Era Chronicle');
+    expect(erasSource).toContain('selectedView');
+    expect(erasSource).toContain('getGameStatus');
+    expect(erasSource).toContain('transitionDelta');
+    expect(erasSource).toContain('New Era Foundations');
+    expect(erasSource).toContain('Generation Event');
+  });
+
+  it('keeps era timeline filtering wired across events and eras', () => {
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const hookSource = readFileSync(src('hooks', 'useEvents.ts'), 'utf8');
+    const eventsSource = readFileSync(src('pages', 'EventsPage.tsx'), 'utf8');
+    const erasSource = readFileSync(src('pages', 'ErasPage.tsx'), 'utf8');
+
+    expect(apiSource).toContain('era?: string');
+    expect(hookSource).toContain('resourceId, era, type, status');
+    expect(eventsSource).toContain("searchParams.get('era')");
+    expect(eventsSource).toContain("updateFilter('era'");
+    expect(eventsSource).toContain('Era ${era}');
+    expect(erasSource).toContain('Current Era Timeline');
+    expect(erasSource).toContain('/events?era=${transition?.currentEra ?? 1}');
+    expect(erasSource).toContain('/events?era=${entry.completedEra}');
+  });
+
+  it('keeps divine artifact gameplay wired to the artifacts page', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const artifactEntitySource = readFileSync(src('entities', 'artifact.ts'), 'utf8');
+    const artifactsPageSource = readFileSync(src('pages', 'ArtifactsPage.tsx'), 'utf8');
+
+    expect(appSource).toContain('ArtifactsPage');
+    expect(navSource).toContain("path: '/artifacts'");
+    expect(apiSource).toContain('getArtifacts');
+    expect(apiSource).toContain('createArtifact');
+    expect(apiSource).toContain('empowerArtifact');
+    expect(apiSource).toContain('transferArtifact');
+    expect(apiSource).toContain('stabilizeArtifact');
+    expect(apiSource).toContain('normalizeDivineArtifact');
+    expect(artifactEntitySource).toContain('DivineArtifact');
+    expect(artifactEntitySource).toContain('ArtifactHistoryEntry');
+    expect(artifactsPageSource).toContain('Divine Artifacts');
+    expect(artifactsPageSource).toContain('Forge Artifact');
+    expect(artifactsPageSource).toContain('Artifact History');
+  });
+
+  it('keeps divine weather gameplay wired to the weather page', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const weatherEntitySource = readFileSync(src('entities', 'weather.ts'), 'utf8');
+    const weatherPageSource = readFileSync(src('pages', 'WeatherPage.tsx'), 'utf8');
+
+    expect(appSource).toContain('WeatherPage');
+    expect(navSource).toContain("path: '/weather'");
+    expect(apiSource).toContain('getWeatherStatus');
+    expect(apiSource).toContain('nudgeWeather');
+    expect(apiSource).toContain('normalizeWeatherInfluenceEntry');
+    expect(weatherEntitySource).toContain('WeatherInfluenceEntry');
+    expect(weatherEntitySource).toContain('WeatherStatusResponse');
+    expect(weatherPageSource).toContain('Divine Weather');
+    expect(weatherPageSource).toContain('Weather Pattern');
+    expect(weatherPageSource).toContain('Settlement Effects');
+    expect(weatherPageSource).toContain('Resource Effects');
+  });
+
+  it('keeps temporal omen gameplay wired to the omens page', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const omenEntitySource = readFileSync(src('entities', 'temporalOmen.ts'), 'utf8');
+    const omensPageSource = readFileSync(src('pages', 'TemporalOmensPage.tsx'), 'utf8');
+
+    expect(appSource).toContain('TemporalOmensPage');
+    expect(navSource).toContain("path: '/omens'");
+    expect(apiSource).toContain('getTemporalOmens');
+    expect(apiSource).toContain('readTemporalOmen');
+    expect(apiSource).toContain('normalizeTemporalOmenEntry');
+    expect(omenEntitySource).toContain('TemporalOmenEntry');
+    expect(omenEntitySource).toContain('TemporalOmenStatusResponse');
+    expect(omensPageSource).toContain('Temporal Omens');
+    expect(omensPageSource).toContain('Read Omen');
+    expect(omensPageSource).toContain('consistencyNote');
+  });
+
+  it('keeps magic discovery gameplay wired to the magic page', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const magicEntitySource = readFileSync(src('entities', 'magicDiscovery.ts'), 'utf8');
+    const magicPageSource = readFileSync(src('pages', 'MagicDiscoveryPage.tsx'), 'utf8');
+
+    expect(appSource).toContain('MagicDiscoveryPage');
+    expect(navSource).toContain("path: '/magic'");
+    expect(apiSource).toContain('getMagicDiscovery');
+    expect(apiSource).toContain('researchMagic');
+    expect(apiSource).toContain('normalizeMagicDiscoveryPath');
+    expect(magicEntitySource).toContain('MagicDiscoveryPath');
+    expect(magicEntitySource).toContain('MagicDiscoveryStatusResponse');
+    expect(magicEntitySource).toContain('betType: string');
+    expect(magicPageSource).toContain('Magic Discovery');
+    expect(magicPageSource).toContain('Research Magic');
+    expect(magicPageSource).toContain('Betting Hooks');
+  });
+
+  it('keeps mythology gameplay wired to the myths page', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const mythologyEntitySource = readFileSync(src('entities', 'mythology.ts'), 'utf8');
+    const mythologyPageSource = readFileSync(src('pages', 'MythologyPage.tsx'), 'utf8');
+
+    expect(appSource).toContain('MythologyPage');
+    expect(navSource).toContain("path: '/myths'");
+    expect(apiSource).toContain('getMythology');
+    expect(apiSource).toContain('promoteMyth');
+    expect(apiSource).toContain('normalizePromotedMyth');
+    expect(mythologyEntitySource).toContain('MythologyStatusResponse');
+    expect(mythologyEntitySource).toContain('PromotedMyth');
+    expect(mythologyPageSource).toContain('Mythology');
+    expect(mythologyPageSource).toContain('Promote Myth');
+    expect(mythologyPageSource).toContain('Candidate Legends');
+  });
+
+  it('keeps civilization gameplay wired to the civilization page', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const civilizationEntitySource = readFileSync(src('entities', 'civilization.ts'), 'utf8');
+    const civilizationPageSource = readFileSync(src('pages', 'CivilizationPage.tsx'), 'utf8');
+    const dashboardPanelSource = readFileSync(
+      src('components', 'DashboardCivilizationPanel.tsx'),
+      'utf8'
+    );
+
+    expect(appSource).toContain('CivilizationPage');
+    expect(navSource).toContain("path: '/civilization'");
+    expect(apiSource).toContain('getCivilization');
+    expect(apiSource).toContain('advanceCivilization');
+    expect(apiSource).toContain('normalizeCivilizationRegionAgenda');
+    expect(civilizationEntitySource).toContain('CivilizationStatusResponse');
+    expect(civilizationEntitySource).toContain('CivilizationDecision');
+    expect(civilizationPageSource).toContain('Civilization');
+    expect(civilizationPageSource).toContain('Advance Civic Agenda');
+    expect(civilizationPageSource).toContain('Regional Agendas');
+    expect(civilizationPageSource).toContain('Recent Decisions');
+    expect(dashboardPanelSource).toContain('Top Agenda');
+  });
+
+  it('keeps AI pantheon gameplay wired to the pantheon page', () => {
+    const appSource = readFileSync(src('App.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'NavigationBar.tsx'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const pantheonEntitySource = readFileSync(src('entities', 'pantheon.ts'), 'utf8');
+    const pantheonPageSource = readFileSync(src('pages', 'PantheonPage.tsx'), 'utf8');
+    const dashboardPanelSource = readFileSync(
+      src('components', 'DashboardPantheonPanel.tsx'),
+      'utf8'
+    );
+
+    expect(appSource).toContain('PantheonPage');
+    expect(navSource).toContain("path: '/pantheon'");
+    expect(apiSource).toContain('getPantheon');
+    expect(apiSource).toContain('counterplayPantheon');
+    expect(apiSource).toContain('normalizePantheonStatusResponse');
+    expect(apiSource).toContain('normalizePantheonCounterplayResponse');
+    expect(apiSource).toContain('normalizePantheonBettingHook');
+    expect(pantheonEntitySource).toContain('PantheonStatusResponse');
+    expect(pantheonEntitySource).toContain('PantheonIntervention');
+    expect(pantheonEntitySource).toContain('PantheonCounterplayStatus');
+    expect(pantheonEntitySource).toContain('PantheonPoliticsStatus');
+    expect(pantheonEntitySource).toContain('PantheonBettingHook');
+    expect(pantheonEntitySource).toContain('pantheon_intervention');
+    expect(pantheonPageSource).toContain('AI Pantheon');
+    expect(pantheonPageSource).toContain('Pantheon Pressure');
+    expect(pantheonPageSource).toContain('Pantheon Betting Hooks');
+    expect(pantheonPageSource).toContain('Divine Actors');
+    expect(pantheonPageSource).toContain('Player Counterplay');
+    expect(pantheonPageSource).toContain('Appease');
+    expect(pantheonPageSource).toContain('Challenge');
+    expect(pantheonPageSource).toContain('Recent Interventions');
+    expect(dashboardPanelSource).toContain('Top Divine Pressure');
+  });
+
+  it('keeps region detail resource and history tabs wired', () => {
+    const panelSource = readFileSync(src('components', 'RegionDetailPanel.tsx'), 'utf8');
+    const navSource = readFileSync(src('components', 'RegionTabs', 'RegionTabNav.tsx'), 'utf8');
+    const historyTabSource = readFileSync(
+      src('components', 'RegionTabs', 'RegionHistoryTab.tsx'),
+      'utf8'
+    );
+
+    expect(panelSource).toContain('RegionResourcesTab');
+    expect(panelSource).toContain('RegionHistoryTab');
+    expect(navSource).toContain("'history'");
+    expect(historyTabSource).toContain('recentEvents');
+    expect(historyTabSource).toContain('Timeline');
+  });
+
+  it('keeps region divine resonance visible in influence gameplay', () => {
+    const regionEntitySource = readFileSync(src('entities', 'region.ts'), 'utf8');
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const panelSource = readFileSync(src('components', 'RegionInfluencePanel.tsx'), 'utf8');
+    const costsSource = readFileSync(
+      src('components', 'RegionTabs', 'RegionInfluenceCosts.tsx'),
+      'utf8'
+    );
+
+    expect(regionEntitySource).toContain('influenceEffectiveness');
+    expect(apiSource).toContain('source.influenceEffectiveness');
+    expect(panelSource).toContain('Divine Resonance:');
+    expect(panelSource).toContain('Effect: {actionPreview.summary}');
+    expect(costsSource).toContain('resonance.summary');
+  });
+
+  it('keeps betting summaries and payout tuning visible', () => {
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const bettingSource = readFileSync(src('components', 'DivineBettingPanel.tsx'), 'utf8');
+    const betEntitySource = readFileSync(src('entities', 'divineBet.ts'), 'utf8');
+
+    expect(apiSource).toContain('getDivineBetSummary');
+    expect(apiSource).toContain("'bets/summary'");
+    expect(bettingSource).toContain('Bet Portfolio');
+    expect(bettingSource).toContain('PayoutProfileLine');
+    expect(betEntitySource).toContain('BetPayoutProfile');
+    expect(betEntitySource).toContain("'magic_discovery'");
+  });
+
+  it('keeps hero lifecycle, relationship, and history context visible', () => {
+    const apiSource = readFileSync(src('api', 'apiService.ts'), 'utf8');
+    const heroEntitySource = readFileSync(src('entities', 'hero.ts'), 'utf8');
+    const heroCardSource = readFileSync(src('components', 'HeroCard.tsx'), 'utf8');
+
+    expect(heroEntitySource).toContain('HeroLifecycleSummary');
+    expect(heroEntitySource).toContain('relationshipContext');
+    expect(heroEntitySource).toContain('recentHistory');
+    expect(heroEntitySource).toContain('HeroChampionStatus');
+    expect(heroEntitySource).toContain('ChampionOutcome');
+    expect(heroEntitySource).toContain('ChampionBettingHook');
+    expect(apiSource).toContain('normalizeHeroLifecycleSummary');
+    expect(apiSource).toContain('source.relationshipContext');
+    expect(apiSource).toContain('source.recentHistory');
+    expect(apiSource).toContain('normalizeChampionStatus');
+    expect(apiSource).toContain('normalizeChampionOutcome');
+    expect(apiSource).toContain('GameTickChampionSummary');
+    expect(heroCardSource).toContain('Lifecycle');
+    expect(heroCardSource).toContain('Region Ties');
+    expect(heroCardSource).toContain('Recent History');
+    expect(heroCardSource).toContain('Champion Bond');
+    expect(heroCardSource).toContain('Latest outcome');
+    expect(heroCardSource).toContain('/events?heroId=${encodeURIComponent(hero.id)}');
+  });
+
+  it('keeps mortal champion controls visible on the heroes page', () => {
+    const heroesPageSource = readFileSync(src('pages', 'HeroesPage.tsx'), 'utf8');
+    const championPanelSource = readFileSync(src('components', 'HeroChampionPanel.tsx'), 'utf8');
+
+    expect(heroesPageSource).toContain('HeroChampionPanel');
+    expect(championPanelSource).toContain('Mortal Champion Bond');
+    expect(championPanelSource).toContain('Designate Champion');
+    expect(championPanelSource).toContain('Cultivate {option.label}');
+    expect(championPanelSource).toContain('designateChampion');
+    expect(championPanelSource).toContain('cultivateChampion');
+    expect(championPanelSource).toContain('Latest Outcome');
+    expect(championPanelSource).toContain('Recent Champion Outcomes');
+    expect(championPanelSource).toContain('/events/${champion.latestOutcome.eventId}');
   });
 });

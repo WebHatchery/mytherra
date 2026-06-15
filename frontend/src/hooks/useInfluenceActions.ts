@@ -70,7 +70,9 @@ export const useInfluenceActions = (
     try {
       const response = await sendInfluenceAction(payload);
       setActionMessage(getResponseMessage(response));
-      onActionSuccess();
+      if (response.success !== false) {
+        onActionSuccess();
+      }
     } catch (error: unknown) {
       setActionMessage(`Failed: ${getErrorMessage(error)}`);
     } finally {

@@ -176,7 +176,7 @@ CREATE TABLE IF NOT EXISTS `confidence_levels` (
 CREATE TABLE IF NOT EXISTS `divine_bets` (
   `id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `player_id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `bet_type` enum('settlement_growth','landmark_discovery','cultural_shift','hero_settlement_bond','hero_location_visit','settlement_transformation','corruption_spread') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `bet_type` enum('settlement_growth','landmark_discovery','cultural_shift','hero_settlement_bond','hero_location_visit','settlement_transformation','corruption_spread','hero_level_milestone','hero_death','region_danger_change','war_outcome','prosperity_threshold','magic_discovery','pantheon_intervention') COLLATE utf8mb4_unicode_ci NOT NULL,
   `target_id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `description` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `timeframe` int NOT NULL,
@@ -239,6 +239,9 @@ CREATE TABLE IF NOT EXISTS `game_events` (
   `timestamp` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `related_region_ids` json DEFAULT NULL,
   `related_hero_ids` json DEFAULT NULL,
+  `related_settlement_ids` json DEFAULT NULL,
+  `related_landmark_ids` json DEFAULT NULL,
+  `related_resource_ids` json DEFAULT NULL,
   `year` int DEFAULT NULL,
   `created_at` timestamp NULL DEFAULT NULL,
   `updated_at` timestamp NULL DEFAULT NULL,
@@ -948,6 +951,15 @@ INSERT INTO resource_node_statuses (`name`, `code`, `description`, `output_modif
 ('Overworked', 'overworked', 'Being exploited beyond sustainable levels', 0.7, 25, 1, '[\"depletion_risk\", \"worker_fatigue\", \"equipment_strain\"]', 1),
 ('Blessed', 'blessed', 'Enhanced by divine or magical blessings', 1.3, -15, 1, '[\"divine_favor\", \"enhanced_yields\", \"worker_protection\"]', 1),
 ('Unstable', 'unstable', 'Subject to unpredictable changes and fluctuations', 0.8, 30, 1, '[\"random_fluctuations\", \"unpredictable_yields\", \"safety_hazards\"]', 1);
+-- Resource Nodes
+INSERT INTO resource_nodes (`id`, `region_id`, `settlement_id`, `type`, `name`, `output`, `status`) VALUES
+('resource-001', 'region-001', 'settlement-001', 'magical_spring', 'Crystal Wellspring', 82, 'blessed'),
+('resource-002', 'region-001', 'settlement-002', 'forest', 'Fellwood Timberline', 56, 'active'),
+('resource-003', 'region-001', 'settlement-003', 'herb_garden', 'Observatory Herbarium', 44, 'active'),
+('resource-004', 'region-002', NULL, 'fishing', 'Gold Coast Fisheries', 68, 'active'),
+('resource-005', 'region-002', NULL, 'quarry', 'Sunmarket Quarry', 53, 'contested'),
+('resource-006', 'region-003', NULL, 'magical_spring', 'Moonlit Leyspring', 78, 'unstable'),
+('resource-007', 'region-003', NULL, 'herb_garden', 'Silverleaf Gardens', 48, 'active');
 -- Building Special Properties
 INSERT INTO building_special_properties (`name`, `code`, `description`, `effects`, `rarity`, `category`, `is_active`) VALUES
 ('Magical', 'magical', 'Imbued with arcane energy that enhances its capabilities', '{\"magic_production\": 0.2, \"mana_cost_reduction\": 0.1}', 'uncommon', 'magical', 1),

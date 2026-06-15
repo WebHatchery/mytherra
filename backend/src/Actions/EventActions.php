@@ -112,7 +112,10 @@ class EventActions
                 'id' => $eventId,
                 'timestamp' => date('Y-m-d H:i:s'),
                 'related_region_ids' => $eventData['related_region_ids'] ?? [],
-                'related_hero_ids' => $eventData['related_hero_ids'] ?? []
+                'related_hero_ids' => $eventData['related_hero_ids'] ?? [],
+                'related_settlement_ids' => $eventData['related_settlement_ids'] ?? [],
+                'related_landmark_ids' => $eventData['related_landmark_ids'] ?? [],
+                'related_resource_ids' => $eventData['related_resource_ids'] ?? []
             ]));
 
             $event->save();

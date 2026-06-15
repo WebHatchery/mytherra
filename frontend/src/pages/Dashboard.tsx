@@ -18,8 +18,21 @@ import {
   FinancialStatistics,
 } from '../api/StatisticsService';
 import PageLayout from '../components/PageLayout';
-import { getGameStatus, GameStatus } from '../api/apiService';
+import {
+  getEntityHistorySummary,
+  getGameStatus,
+  EntityHistorySummaryResponse,
+  GameStatus,
+} from '../api/apiService';
 import { apiClient } from '../api/apiClient';
+import DashboardLastTickPanel from '../components/DashboardLastTickPanel';
+import DashboardHistoryPanel from '../components/DashboardHistoryPanel';
+import DashboardEraPressurePanel from '../components/DashboardEraPressurePanel';
+import DashboardEraLegacyPanel from '../components/DashboardEraLegacyPanel';
+import DashboardEraTransitionPanel from '../components/DashboardEraTransitionPanel';
+import DashboardEraComparisonPanel from '../components/DashboardEraComparisonPanel';
+import DashboardCivilizationPanel from '../components/DashboardCivilizationPanel';
+import DashboardPantheonPanel from '../components/DashboardPantheonPanel';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -29,21 +42,27 @@ export const Dashboard: React.FC = () => {
   const [heroStats, setHeroStats] = useState<HeroStatistics | null>(null);
   const [regionStats, setRegionStats] = useState<RegionStatistics | null>(null);
   const [financialStats, setFinancialStats] = useState<FinancialStatistics | null>(null);
+  const [historySummary, setHistorySummary] = useState<EntityHistorySummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [exportingChronicle, setExportingChronicle] = useState(false);
 
-  const handleExport = async () => {
-    setExporting(true);
+  const downloadExport = async (
+    path: string,
+    filename: string,
+    setBusy: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    setBusy(true);
     try {
-      const response = await apiClient.get('/export/full', {
-        responseType: 'blob'
+      const response = await apiClient.get(path, {
+        responseType: 'blob',
       });
 
       const blob = response.data as Blob;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'mytherra-world-snapshot.json';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -51,26 +70,41 @@ export const Dashboard: React.FC = () => {
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
-      setExporting(false);
+      setBusy(false);
     }
+  };
+
+  const handleExport = async () => {
+    await downloadExport('/export/full', 'mytherra-world-snapshot.json', setExporting);
+  };
+
+  const handleChronicleExport = async () => {
+    await downloadExport(
+      '/export/chronicle-share',
+      'mytherra-chronicle-share.json',
+      setExportingChronicle
+    );
   };
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statusData, summaryData, heroData, regionData, financialData] = await Promise.all([
-          getGameStatus(),
-          statisticsService.getSummary(),
-          statisticsService.getHeroStats(),
-          statisticsService.getRegionStats(),
-          statisticsService.getFinancialStats(),
-        ]);
+        const [statusData, summaryData, heroData, regionData, financialData, historyData] =
+          await Promise.all([
+            getGameStatus(),
+            statisticsService.getSummary(),
+            statisticsService.getHeroStats(),
+            statisticsService.getRegionStats(),
+            statisticsService.getFinancialStats(),
+            getEntityHistorySummary(),
+          ]);
 
         setGameStatus(statusData);
         setSummary(summaryData);
         setHeroStats(heroData);
         setRegionStats(regionData);
         setFinancialStats(financialData);
+        setHistorySummary(historyData);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
@@ -91,47 +125,47 @@ export const Dashboard: React.FC = () => {
 
   const heroRoleChartData = heroStats
     ? {
-      labels: Object.keys(heroStats.roleDistribution),
-      datasets: [
-        {
-          label: 'Heroes by Role',
-          data: Object.values(heroStats.roleDistribution),
-          backgroundColor: [
-            'rgba(255, 99, 132, 0.5)',
-            'rgba(54, 162, 235, 0.5)',
-            'rgba(255, 206, 86, 0.5)',
-            'rgba(75, 192, 192, 0.5)',
-            'rgba(153, 102, 255, 0.5)',
-          ],
-          borderColor: [
-            'rgba(255, 99, 132, 1)',
-            'rgba(54, 162, 235, 1)',
-            'rgba(255, 206, 86, 1)',
-            'rgba(75, 192, 192, 1)',
-            'rgba(153, 102, 255, 1)',
-          ],
-          borderWidth: 1,
-        },
-      ],
-    }
+        labels: Object.keys(heroStats.roleDistribution),
+        datasets: [
+          {
+            label: 'Heroes by Role',
+            data: Object.values(heroStats.roleDistribution),
+            backgroundColor: [
+              'rgba(255, 99, 132, 0.5)',
+              'rgba(54, 162, 235, 0.5)',
+              'rgba(255, 206, 86, 0.5)',
+              'rgba(75, 192, 192, 0.5)',
+              'rgba(153, 102, 255, 0.5)',
+            ],
+            borderColor: [
+              'rgba(255, 99, 132, 1)',
+              'rgba(54, 162, 235, 1)',
+              'rgba(255, 206, 86, 1)',
+              'rgba(75, 192, 192, 1)',
+              'rgba(153, 102, 255, 1)',
+            ],
+            borderWidth: 1,
+          },
+        ],
+      }
     : null;
 
   const regionStatusChartData = regionStats
     ? {
-      labels: Object.keys(regionStats.statusDistribution),
-      datasets: [
-        {
-          label: 'Regions by Status',
-          data: Object.values(regionStats.statusDistribution),
-          backgroundColor: [
-            'rgba(75, 192, 192, 0.5)',
-            'rgba(255, 99, 132, 0.5)',
-            'rgba(255, 206, 86, 0.5)',
-          ],
-          borderWidth: 1,
-        },
-      ],
-    }
+        labels: Object.keys(regionStats.statusDistribution),
+        datasets: [
+          {
+            label: 'Regions by Status',
+            data: Object.values(regionStats.statusDistribution),
+            backgroundColor: [
+              'rgba(75, 192, 192, 0.5)',
+              'rgba(255, 99, 132, 0.5)',
+              'rgba(255, 206, 86, 0.5)',
+            ],
+            borderWidth: 1,
+          },
+        ],
+      }
     : null;
 
   return (
@@ -139,20 +173,36 @@ export const Dashboard: React.FC = () => {
       {/* Header with Export Button */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-white">World Dashboard</h1>
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center gap-2"
-        >
-          {exporting ? (
-            <>
-              <span className="animate-spin">⏳</span>
-              Exporting...
-            </>
-          ) : (
-            <>📥 Export World</>
-          )}
-        </button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            onClick={handleChronicleExport}
+            disabled={exportingChronicle}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            {exportingChronicle ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                Exporting...
+              </>
+            ) : (
+              <>📜 Export Chronicle</>
+            )}
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            {exporting ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                Exporting...
+              </>
+            ) : (
+              <>📥 Export World</>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -178,6 +228,15 @@ export const Dashboard: React.FC = () => {
           <div className="text-2xl font-bold text-purple-400">{summary?.activeBets}</div>
         </div>
       </div>
+
+      <DashboardEraPressurePanel eraPressure={gameStatus?.eraPressure} />
+      <DashboardEraLegacyPanel eraLegacy={gameStatus?.eraLegacy} />
+      <DashboardEraTransitionPanel eraTransition={gameStatus?.eraTransition} />
+      <DashboardEraComparisonPanel eraComparison={gameStatus?.eraComparison} />
+      <DashboardCivilizationPanel civilization={gameStatus?.civilization} />
+      <DashboardPantheonPanel pantheon={gameStatus?.pantheon} />
+      <DashboardLastTickPanel simulation={gameStatus?.simulation} />
+      <DashboardHistoryPanel summary={historySummary} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Hero Stats */}

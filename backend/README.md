@@ -185,10 +185,11 @@ For production deployment:
 
 ## Game Loop
 
-The game loop functionality from the Node.js version is not yet implemented in this PHP version. This would require:
+The PHP backend includes the authoritative game tick runtime.
 
-1. Background job processing (using something like Laravel Queue or ReactPHP)
-2. Scheduled tasks for periodic game state updates
-3. WebSocket support for real-time updates (optional)
+- Run one tick locally with `composer game:tick`.
+- Check production health with `composer game:health`.
+- View runtime state through `GET /api/status` and the Dashboard Last Tick panel.
+- Pause/resume scheduling with `POST /api/admin/game-loop/stop` and `POST /api/admin/game-loop/start`.
 
-This PHP backend currently provides a REST API compatible with the existing frontend.
+The production runbook is in [docs/production-game-loop.md](docs/production-game-loop.md).

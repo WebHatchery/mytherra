@@ -25,6 +25,10 @@ const WorldMapPage: React.FC = () => {
     error: regionsError,
     selectedRegion,
     selectRegion,
+    getSettlementsByRegion,
+    getLandmarksByRegion,
+    settlements,
+    landmarks,
     refetch: refetchRegions,
   } = useRegions({
     autoRefresh: true,
@@ -77,12 +81,20 @@ const WorldMapPage: React.FC = () => {
         <>
           <RegionGrid
             regions={regions}
+            settlements={settlements}
+            landmarks={landmarks}
             selectedRegion={selectedRegion}
             onSelectRegion={selectRegion}
           />
 
           {/* Show region details below the grid when a region is selected */}
-          {selectedRegion && <RegionDetailWrapper region={selectedRegion} />}
+          {selectedRegion && (
+            <RegionDetailWrapper
+              region={selectedRegion}
+              settlements={getSettlementsByRegion(selectedRegion.id)}
+              landmarks={getLandmarksByRegion(selectedRegion.id)}
+            />
+          )}
         </>
       )}
     </PageLayout>

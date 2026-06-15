@@ -10,6 +10,7 @@ use App\Repositories\DatabaseService;
 use App\Controllers\StatusController;
 use App\Controllers\RegionController;
 use App\Controllers\HeroController;
+use App\Controllers\HistoryController;
 use App\Controllers\EventController;
 use App\Controllers\SettlementController;
 use App\Controllers\BuildingController;
@@ -18,9 +19,25 @@ use App\Controllers\ResourceNodeController;
 use App\Controllers\BettingController;
 use App\Controllers\InfluenceController;
 use App\Controllers\AuthController;
+use App\Controllers\AdminWorldEditorController;
+use App\Controllers\ArtifactController;
+use App\Controllers\WeatherController;
+use App\Controllers\TemporalOmenController;
+use App\Controllers\MagicDiscoveryController;
+use App\Controllers\MythologyController;
+use App\Controllers\CivilizationController;
+use App\Controllers\PantheonController;
 use App\Controllers\StatisticsController;
     // Actions
 use App\Actions\RegionActions;
+use App\Actions\AdminWorldEditorActions;
+use App\Actions\ArtifactActions;
+use App\Actions\WeatherActions;
+use App\Actions\TemporalOmenActions;
+use App\Actions\MagicDiscoveryActions;
+use App\Actions\MythologyActions;
+use App\Actions\CivilizationActions;
+use App\Actions\PantheonActions;
 use App\Actions\HeroActions;
 use App\Actions\EventActions;
 use App\Actions\SettlementActions;
@@ -46,6 +63,16 @@ use App\Repositories\BettingConfigRepository;
 use App\Repositories\ResourceNodeRepository;
     // Services
 use App\Services\GameConfigService;
+use App\Services\AdminWorldEditorService;
+use App\Services\ArtifactService;
+use App\Services\WeatherInfluenceService;
+use App\Services\TemporalOmenService;
+use App\Services\MagicDiscoveryService;
+use App\Services\MythologyService;
+use App\Services\CivilizationBehaviorService;
+use App\Services\ChampionService;
+use App\Services\PantheonService;
+use App\Services\EntityHistoryService;
 use App\Services\DivineInfluenceService;
 use App\Services\OddsCalculationService;
 use App\Services\DivineBettingService;
@@ -112,6 +139,57 @@ class ContainerConfig
             // ====================================
             GameConfigService::class => function () {
                 return GameConfigService::getInstance();
+            },
+            ArtifactService::class => function ($container) {
+                return new ArtifactService(
+                    $container->get(GameConfigService::class),
+                    $container->get(HeroRepository::class),
+                    $container->get(RegionRepository::class),
+                    $container->get(LandmarkRepository::class),
+                    $container->get(EventRepository::class)
+                );
+            },
+            WeatherInfluenceService::class => function ($container) {
+                return new WeatherInfluenceService(
+                    $container->get(GameConfigService::class),
+                    $container->get(EventRepository::class)
+                );
+            },
+            TemporalOmenService::class => function ($container) {
+                return new TemporalOmenService(
+                    $container->get(GameConfigService::class),
+                    $container->get(EventRepository::class)
+                );
+            },
+            MagicDiscoveryService::class => function ($container) {
+                return new MagicDiscoveryService(
+                    $container->get(GameConfigService::class),
+                    $container->get(EventRepository::class)
+                );
+            },
+            MythologyService::class => function ($container) {
+                return new MythologyService(
+                    $container->get(GameConfigService::class),
+                    $container->get(EventRepository::class)
+                );
+            },
+            CivilizationBehaviorService::class => function ($container) {
+                return new CivilizationBehaviorService(
+                    $container->get(GameConfigService::class),
+                    $container->get(EventRepository::class)
+                );
+            },
+            PantheonService::class => function ($container) {
+                return new PantheonService(
+                    $container->get(GameConfigService::class),
+                    $container->get(EventRepository::class)
+                );
+            },
+            ChampionService::class => function ($container) {
+                return new ChampionService(
+                    $container->get(HeroRepository::class),
+                    $container->get(GameConfigService::class)
+                );
             },            DivineInfluenceService::class => function ($container) {
                 return new DivineInfluenceService();
             },
@@ -136,6 +214,12 @@ class ContainerConfig
             StatisticsService::class => function ($container) {
                 return new StatisticsService();
             },
+            EntityHistoryService::class => function ($container) {
+                return new EntityHistoryService();
+            },
+            AdminWorldEditorService::class => function ($container) {
+                return new AdminWorldEditorService();
+            },
 
             // ====================================
             // MIDDLEWARE
@@ -154,8 +238,35 @@ class ContainerConfig
             RegionActions::class => function ($container) {
                 return new RegionActions($container->get(RegionRepository::class));
             },
+            AdminWorldEditorActions::class => function ($container) {
+                return new AdminWorldEditorActions($container->get(AdminWorldEditorService::class));
+            },
+            ArtifactActions::class => function ($container) {
+                return new ArtifactActions($container->get(ArtifactService::class));
+            },
+            WeatherActions::class => function ($container) {
+                return new WeatherActions($container->get(WeatherInfluenceService::class));
+            },
+            TemporalOmenActions::class => function ($container) {
+                return new TemporalOmenActions($container->get(TemporalOmenService::class));
+            },
+            MagicDiscoveryActions::class => function ($container) {
+                return new MagicDiscoveryActions($container->get(MagicDiscoveryService::class));
+            },
+            MythologyActions::class => function ($container) {
+                return new MythologyActions($container->get(MythologyService::class));
+            },
+            CivilizationActions::class => function ($container) {
+                return new CivilizationActions($container->get(CivilizationBehaviorService::class));
+            },
+            PantheonActions::class => function ($container) {
+                return new PantheonActions($container->get(PantheonService::class));
+            },
             HeroActions::class => function ($container) {
-                return new HeroActions($container->get(HeroRepository::class));
+                return new HeroActions(
+                    $container->get(HeroRepository::class),
+                    $container->get(ChampionService::class)
+                );
             },
             EventActions::class => function ($container) {
                 return new EventActions($container->get(EventRepository::class));
@@ -177,7 +288,8 @@ class ContainerConfig
                 return new BettingActions(
                     $container->get(BettingRepository::class),
                     $container->get(OddsCalculationService::class),
-                    $container->get(DivineBettingService::class)
+                    $container->get(DivineBettingService::class),
+                    $container->get(ChampionService::class)
                 );
             },
             InfluenceActions::class => function ($container) {
@@ -200,6 +312,46 @@ class ContainerConfig
                     $container->get(RegionActions::class)
                 );
             },
+            AdminWorldEditorController::class => function ($container) {
+                return new AdminWorldEditorController(
+                    $container->get(AdminWorldEditorActions::class)
+                );
+            },
+            ArtifactController::class => function ($container) {
+                return new ArtifactController(
+                    $container->get(ArtifactActions::class)
+                );
+            },
+            WeatherController::class => function ($container) {
+                return new WeatherController(
+                    $container->get(WeatherActions::class)
+                );
+            },
+            TemporalOmenController::class => function ($container) {
+                return new TemporalOmenController(
+                    $container->get(TemporalOmenActions::class)
+                );
+            },
+            MagicDiscoveryController::class => function ($container) {
+                return new MagicDiscoveryController(
+                    $container->get(MagicDiscoveryActions::class)
+                );
+            },
+            MythologyController::class => function ($container) {
+                return new MythologyController(
+                    $container->get(MythologyActions::class)
+                );
+            },
+            CivilizationController::class => function ($container) {
+                return new CivilizationController(
+                    $container->get(CivilizationActions::class)
+                );
+            },
+            PantheonController::class => function ($container) {
+                return new PantheonController(
+                    $container->get(PantheonActions::class)
+                );
+            },
             HeroController::class => function ($container) {
                 return new HeroController(
                     $container->get(HeroActions::class)
@@ -208,6 +360,11 @@ class ContainerConfig
             EventController::class => function ($container) {
                 return new EventController(
                     $container->get(EventActions::class)
+                );
+            },
+            HistoryController::class => function ($container) {
+                return new HistoryController(
+                    $container->get(EntityHistoryService::class)
                 );
             },
             SettlementController::class => function ($container) {

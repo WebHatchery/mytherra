@@ -6,14 +6,7 @@
 export interface DivineBet {
   id: string;
   playerId: string;
-  betType:
-    | 'settlement_growth'
-    | 'landmark_discovery'
-    | 'cultural_shift'
-    | 'hero_settlement_bond'
-    | 'hero_location_visit'
-    | 'settlement_transformation'
-    | 'corruption_spread';
+  betType: DivineBetType;
   targetId: string; // ID of settlement, landmark, hero, or region
   description: string;
   timeframe: number; // Years within which bet must resolve
@@ -25,8 +18,83 @@ export interface DivineBet {
   placedYear: number;
   resolvedYear?: number;
   resolutionNotes?: string;
+  payoutProfile?: BetPayoutProfile;
   createdAt?: Date;
   updatedAt?: Date;
+}
+
+export type DivineBetType =
+  | 'settlement_growth'
+  | 'landmark_discovery'
+  | 'cultural_shift'
+  | 'hero_settlement_bond'
+  | 'hero_location_visit'
+  | 'settlement_transformation'
+  | 'corruption_spread'
+  | 'hero_level_milestone'
+  | 'hero_death'
+  | 'region_danger_change'
+  | 'war_outcome'
+  | 'prosperity_threshold'
+  | 'magic_discovery'
+  | 'pantheon_intervention';
+
+export interface BetTargetSignal {
+  label: string;
+  value: string;
+}
+
+export interface BetTargetState {
+  type: 'settlement' | 'hero' | 'region' | 'resource' | 'landmark';
+  name: string;
+  summary: string;
+  signals: BetTargetSignal[];
+}
+
+export interface OddsFactor {
+  label: string;
+  value: string;
+  effect?: string;
+}
+
+export interface BetPayoutProfile {
+  stake: number;
+  odds: number;
+  confidence: DivineBet['confidence'];
+  rawMultiplier: number;
+  grossMultiplier: number;
+  maximumMultiplier: number;
+  grossPayout: number;
+  netProfit: number;
+  probabilityPercent: number;
+  riskBand: 'low' | 'medium' | 'high' | 'extreme';
+  summary: string;
+}
+
+export interface BetTypeSummary {
+  betType: DivineBetType;
+  total: number;
+  stake: number;
+}
+
+export interface DivineBetSummary {
+  generatedAt: string;
+  total: number;
+  active: number;
+  won: number;
+  lost: number;
+  expired: number;
+  activeStake: number;
+  activePotentialPayout: number;
+  resolvedStake: number;
+  wonPayout: number;
+  netResolvedFavor: number;
+  winRatePercent: number | null;
+  averageOdds: number;
+  topBetTypes: BetTypeSummary[];
+  recentActive: DivineBet[];
+  recentResolved: DivineBet[];
+  summary: string;
 }
 
 /**
@@ -41,7 +109,9 @@ export interface SpeculationEvent {
   settlementId?: string;
   landmarkId?: string;
   heroId?: string;
-  eventType: DivineBet['betType'];
+  eventType: DivineBetType;
+  targetState?: BetTargetState | null;
+  oddsFactors?: OddsFactor[];
   timeframe: {
     minimum: number; // Earliest possible resolution (years)
     maximum: number; // Latest possible resolution (years)
@@ -58,10 +128,16 @@ export interface SpeculationEvent {
 export interface BettingOption {
   id: string;
   description: string;
+  betType?: DivineBetType;
   targetId?: string;
   currentOdds: number;
   minimumStake: number;
   potentialPayout: number;
+  payoutProfile?: BetPayoutProfile;
+  timeframe?: number;
+  confidence?: DivineBet['confidence'];
+  targetState?: BetTargetState | null;
+  oddsFactors?: OddsFactor[];
 }
 
 /**

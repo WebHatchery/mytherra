@@ -17,10 +17,13 @@ const RegionHeader: React.FC<RegionHeaderProps> = ({ region, getStatusColor }) =
           Status: {region.status}
         </p>
       </div>
-      {region.divineResonance && (
+      {region.divineResonance !== undefined && (
         <div className="text-right">
           <div className="text-sm text-gray-400">Divine Resonance</div>
           <div className="text-lg font-bold text-purple-400">{region.divineResonance}%</div>
+          {region.influenceEffectiveness?.label && (
+            <div className="text-xs text-gray-400">{region.influenceEffectiveness.label}</div>
+          )}
         </div>
       )}
     </div>

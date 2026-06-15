@@ -17,7 +17,7 @@ class RegionRepository
     {
         try {
             $region = Region::find($id);
-            return $region ? $region->toArray() : false;
+            return $region ? $this->enrichRegionData($region) : false;
         } catch (Exception $e) {
             Logger::error("Error fetching region by ID: " . $e->getMessage());
             throw $e;
@@ -38,7 +38,10 @@ class RegionRepository
     public function getRegionsByIds(array $ids)
     {
         try {
-            return Region::whereIn('id', $ids)->get()->map->toArray()->all();
+            return Region::whereIn('id', $ids)
+                ->get()
+                ->map(fn(Region $region) => $this->enrichRegionData($region))
+                ->all();
         } catch (Exception $e) {
             Logger::error("Error fetching regions by IDs: " . $e->getMessage());
             throw $e;
@@ -73,7 +76,9 @@ class RegionRepository
                 ->take($limit)
                 ->get();
 
-            return $regions->map->toArray()->all();
+            return $regions
+                ->map(fn(Region $region) => $this->enrichRegionData($region))
+                ->all();
         } catch (Exception $e) {
             Logger::error("Error fetching regions: " . $e->getMessage());
             throw $e;
@@ -100,11 +105,12 @@ class RegionRepository
                     throw new Exception("Region not found for update");
                 }
                 $region->update($regionData);
-                return $region->toArray();
+                $region->refresh();
+                return $this->enrichRegionData($region);
             } else {
                 // Create new region
                 $region = Region::create($regionData);
-                return $region->toArray();
+                return $this->enrichRegionData($region);
             }
         } catch (Exception $e) {
             Logger::error("Error saving region: " . $e->getMessage());
@@ -124,7 +130,7 @@ class RegionRepository
             }
 
             $region = Region::create($data);
-            return $region->toArray();
+            return $this->enrichRegionData($region);
         } catch (Exception $e) {
             Logger::error("Error creating region: " . $e->getMessage());
             throw $e;
@@ -199,10 +205,23 @@ class RegionRepository
                 ->take($limit)
                 ->get();
 
-            return $regions->map->toArray()->all();
+            return $regions
+                ->map(fn(Region $region) => $this->enrichRegionData($region))
+                ->all();
         } catch (Exception $e) {
             Logger::error("Error fetching regions for betting: " . $e->getMessage());
             throw $e;
         }
+    }
+
+    private function enrichRegionData(Region $region): array
+    {
+        return array_merge(
+            $region->toArray(),
+            [
+                'influenceActionCosts' => $region->getInfluenceCosts(),
+                'influenceEffectiveness' => $region->getInfluenceEffectiveness()
+            ]
+        );
     }
 }

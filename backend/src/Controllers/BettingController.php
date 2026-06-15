@@ -111,6 +111,23 @@ class BettingController
         );
     }
 
+    public function getDivineBetSummary(Request $request, Response $response): Response
+    {
+        $queryParams = $request->getQueryParams();
+        $filters = [
+            'betType' => $queryParams['betType'] ?? null,
+            'targetId' => $queryParams['targetId'] ?? null,
+            'recentLimit' => isset($queryParams['recentLimit']) ? (int)$queryParams['recentLimit'] : 5
+        ];
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->bettingActions->fetchDivineBetSummary($filters),
+            'fetching divine bet summary',
+            'No divine bet summary found'
+        );
+    }
+
     /**
      * Get betting odds
      * GET /api/betting-odds

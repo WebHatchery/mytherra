@@ -1,5 +1,6 @@
 // F:\WebDevelopment\Mytherra\frontend\src\components\EventLog.tsx
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { GameEvent } from '../entities/event';
 import { getGameEvents } from '../api/apiService';
 import { useRegions } from '../contexts/useRegionContext';
@@ -27,7 +28,10 @@ const EventLog: React.FC<EventLogProps> = ({ selectedRegionId, selectedHeroId })
       try {
         setIsLoading(true);
         // Backend returns direct array instead of paginated object
-        const data = await getGameEvents(page, eventsPerPage, selectedRegionId, selectedHeroId);
+        const data = await getGameEvents(page, eventsPerPage, {
+          regionId: selectedRegionId,
+          heroId: selectedHeroId,
+        });
 
         // Handle the array response directly
         if (Array.isArray(data)) {
@@ -107,15 +111,12 @@ const EventLog: React.FC<EventLogProps> = ({ selectedRegionId, selectedHeroId })
         {selectedHeroId && (
           <>
             <div className="mt-1 text-sm text-gray-400">Showing events related to this hero</div>
-            <button
-              onClick={() => {
-                window.history.pushState({}, '', window.location.pathname);
-                window.location.reload();
-              }}
+            <Link
+              to="/"
               className="mt-2 text-sm text-blue-300 hover:text-blue-100"
             >
               View All Events
-            </button>
+            </Link>
           </>
         )}
         {selectedRegionId && !selectedHeroId && (
@@ -123,18 +124,12 @@ const EventLog: React.FC<EventLogProps> = ({ selectedRegionId, selectedHeroId })
             <div className="mt-1 text-sm text-gray-400">
               Showing events in this region and those involving heroes from this region
             </div>
-            <button
-              onClick={() => {
-                // Use window.history to navigate without a full page reload,
-                // which would preserve React state across components
-                window.history.pushState({}, '', window.location.pathname);
-                // Force a refresh of the events without the region filter
-                window.location.reload();
-              }}
+            <Link
+              to="/"
               className="mt-2 text-sm text-blue-300 hover:text-blue-100"
             >
               View All Events
-            </button>
+            </Link>
           </>
         )}
       </div>
@@ -163,9 +158,14 @@ const EventLog: React.FC<EventLogProps> = ({ selectedRegionId, selectedHeroId })
               className={[baseLiClasses, heroActionLiClasses].filter(Boolean).join(' ')}
             >
               <p className="font-semibold text-lg">
-                {event.year ? `Year ${event.year}: ` : ''}
-                {processedDescription}
+                <Link to={`/events/${event.id}`} className="text-yellow-200 hover:text-yellow-100">
+                  {event.year ? `Year ${event.year}: ` : ''}
+                  {event.title || processedDescription}
+                </Link>
               </p>
+              {event.title && event.title !== processedDescription && (
+                <p className="mt-1 text-sm text-gray-300">{processedDescription}</p>
+              )}
             </li>
           );
         })}

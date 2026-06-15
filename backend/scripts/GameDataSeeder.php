@@ -11,6 +11,7 @@ use App\Models\Player;
 use App\Models\Settlement;
 use App\Models\Building;
 use App\Models\DivineBet;
+use App\InitData\ResourceNodeData;
 use App\InitData\RegionData;
 use App\InitData\HeroData;
 use App\InitData\EventData;
@@ -45,6 +46,7 @@ class GameDataSeeder
         $this->seedGameEntities();
         $this->initializeGameState();
         $this->seedBuildings();
+        $this->seedResourceNodes();
         $this->seedDivineBets();
         
         echo "✅ Basic game data initialized\n";
@@ -291,6 +293,37 @@ class GameDataSeeder
                 echo "Created building: {$building->name} in settlement {$building->settlement_id}\n";
             } catch (\Exception $e) {
                 echo "Error creating building {$buildingData['id']}: " . $e->getMessage() . "\n";
+            }
+        }
+    }
+
+    /**
+     * Seed resource nodes
+     */
+    private function seedResourceNodes(): void
+    {
+        echo "Creating resource nodes...\n";
+
+        foreach (ResourceNodeData::getData() as $resourceData) {
+            try {
+                $stmt = $this->db->prepare("
+                    INSERT INTO resource_nodes
+                        (id, region_id, settlement_id, type, name, output, status, created_at, updated_at)
+                    VALUES
+                        (:id, :region_id, :settlement_id, :type, :name, :output, :status, NOW(), NOW())
+                    ON DUPLICATE KEY UPDATE
+                        region_id = VALUES(region_id),
+                        settlement_id = VALUES(settlement_id),
+                        type = VALUES(type),
+                        name = VALUES(name),
+                        output = VALUES(output),
+                        status = VALUES(status),
+                        updated_at = NOW()
+                ");
+                $stmt->execute($resourceData);
+                echo "Created resource node: {$resourceData['name']}\n";
+            } catch (\Exception $e) {
+                echo "Error creating resource node {$resourceData['id']}: " . $e->getMessage() . "\n";
             }
         }
     }

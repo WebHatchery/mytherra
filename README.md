@@ -1,32 +1,32 @@
 # Mytherra
 
-Mytherra is a web-based god simulation game about reading fate, spending divine power, and watching a shared fantasy world change over time.
+Mytherra is a browser-based god simulation game about prophecy, wagers, and subtle divine pressure. You play as a minor deity watching a persistent fantasy world change through autonomous heroes, regions, settlements, resources, magic, myths, civilization agendas, and eras.
 
-You play as a minor deity. You do not issue direct orders to mortals. Instead, you observe regions, heroes, settlements, landmarks, and world events, then spend Divine Favor to tilt the odds. The game is built around prediction, subtle influence, and long-running consequences rather than direct control.
+You do not command mortals directly. You read the world, spend Divine Favor, cultivate champions, create risky artifacts, shape weather, research magic, promote myths, and bet on what the simulation will do next.
 
 ## Gameplay Snapshot
 
-- **Role:** A watching deity with limited influence over a living world.
-- **Core resource:** Divine Favor, spent on influence actions and divine bets.
-- **Main tension:** Predict what the simulation will do, then decide whether to nudge it, wager on it, or let it unfold.
-- **Session rhythm:** Read the event log, inspect the world, choose a target, spend favor, place bets, and return as the world advances.
-- **World structure:** Regions contain settlements, landmarks, resources, heroes, and histories.
+- **Role:** A watching deity with limited power over a living world.
+- **Core resource:** Divine Favor, spent on influence, research, champions, artifacts, omens, weather, myths, civilization nudges, and divine bets.
+- **Main tension:** Decide when to observe, when to nudge, and when to wager on fate.
+- **Session rhythm:** Read events, inspect entities, forecast pressure, spend favor, place bets, run or wait for ticks, then review the consequences.
+- **World structure:** Regions contain settlements, landmarks, resources, heroes, histories, magical pressure, cultural drift, and era legacy signals.
 
 ## Core Loop
 
 1. **Enter the world** as a guest or through a WebHatchery account.
-2. **Read recent events** to understand what changed in the current era.
-3. **Inspect regions and heroes** for opportunity, danger, corruption, prosperity, magic, and hero growth.
-4. **Spend Divine Favor** on influence actions when a region or hero is worth nudging.
-5. **Place divine bets** on speculation events when you think fate is readable.
-6. **Track outcomes** through the event log, dashboard, and active bet list.
-7. **Adapt your strategy** as heroes age, settlements evolve, regions shift, and bets resolve.
+2. **Read recent events** to understand what changed this year.
+3. **Inspect the map, heroes, resources, myths, magic, civilization, and era pressure** for opportunities or risks.
+4. **Spend Divine Favor** when a region, hero, champion, artifact, weather pattern, omen, myth, or civic agenda is worth influencing.
+5. **Place divine bets** when the visible world state makes an outcome look likely.
+6. **Advance the simulation** through ticks, then review generated events, resolved bets, champion outcomes, era pressure, and entity history.
+7. **Adapt your strategy** as heroes age, champions build legacies, settlements evolve, resources fluctuate, magic emerges, and eras approach their breaking points.
 
 ## What Players Can Do
 
 ### Influence Regions
 
-Regions are the strategic map layer. Each region tracks values such as prosperity, chaos, magic affinity, status, population, traits, climate, trade connections, danger, and divine resonance.
+Regions are the strategic map layer. They track prosperity, chaos, danger, magic affinity, cultural influence, climate, population, traits, resources, settlements, landmarks, and divine resonance.
 
 Current region actions include:
 
@@ -34,108 +34,101 @@ Current region actions include:
 - **Corrupt Region:** Push a region toward chaos, volatility, and darker outcomes.
 - **Guide Research:** Nudge a region's magical and scholarly development.
 
-Influence costs depend on the target and its resistance. A region with high magic, high chaos, or unusual divine resonance may respond differently from a quiet, ordinary province.
+Influence costs depend on the target. Divine resonance, chaos, magic, and regional pressure can make the same action cheaper, harder, stronger, or riskier.
 
 ### Influence Heroes
 
-Heroes are autonomous mortals who gain levels, build feats, move between regions, age, and eventually die. They can be scholars, warriors, prophets, agents of change, or undecided figures still finding their role.
+Heroes are autonomous mortals who gain levels, build feats, move between regions, age, and eventually die. They can be guided, empowered, revived, or pushed into notable events, but they remain independent actors inside the simulation.
 
-Current hero actions include:
+Hero views show role, level, age, region, feats, lifecycle state, mortality pressure, alignment, personality traits, region ties, nearby settlements, peer heroes, and direct timeline links.
 
-- **Guide Hero:** Encourage a hero toward useful action.
-- **Empower Hero:** Increase a hero's ability to survive and shape events.
-- **Start Notable Event:** Push a living hero into a major story moment.
-- **Revive Hero:** Spend favor to return a fallen hero to play.
+### Cultivate Mortal Champions
 
-Hero details include role, level, age, region, feats, life status, death reason, personality traits, and alignment data where available.
+Players can designate a small roster of mortal champions and cultivate their focus. Champions have rank, bond, quest progress, focus, event history, and latest outcomes.
+
+Champion quests and rivalries can now resolve through world ticks. Their outcomes can mutate heroes, regions, settlements, and landmarks, then feed event history, betting hooks, mythology candidates, and era-legacy signals.
 
 ### Place Divine Bets
 
-The Divine Observatory is the prediction layer. Speculation events present possible futures with odds, timeframes, minimum stakes, and potential payouts.
+The Divine Observatory is the prediction layer. Speculation events present possible futures with visible target state, odds factors, confidence, timeframes, stakes, risk bands, and potential payouts.
 
-Betting currently supports outcomes such as:
+Betting currently draws from real simulation state, including:
 
-- Settlement growth
-- Landmark discovery
+- Settlement growth and transformation
+- Landmark discovery and danger
 - Cultural shifts
-- Hero and settlement bonds
-- Hero location visits
-- Settlement transformation
-- Corruption spread
+- Region prosperity and danger changes
+- Resource disruption
+- Hero milestones and mortality
+- Champion quest or rivalry outcomes
+- Emerging magic paths becoming known
 
-Each bet records its target, stake, confidence, timeframe, current odds, potential payout, placed year, and final resolution. Winning bets reward foresight; losing bets are part of the cost of reading fate badly.
+Resolved bets explain why they won, lost, or expired, and link back into event history.
 
-## World Systems
+### Shape Artifacts, Weather, Omens, Magic, Myths, Civilization, And Pantheon Pressure
 
-### Regions
+Mytherra now has several divine tools beyond direct region and hero influence:
 
-Regions are defined by prosperity, chaos, magic affinity, status, traits, climate, population, cultural influence, danger, and divine resonance. They are the main targets for map-level divine strategy.
+- **Artifacts:** Create named divine artifacts, empower them, stabilize them, transfer them to heroes, unbind them, and inspect artifact history.
+- **Weather:** Nudge regional weather to affect danger, resources, settlements, travel pressure, and conflict pressure.
+- **Omens:** Spend favor on world, region, or hero forecasts without mutating the world state.
+- **Magic:** Research hidden, emerging, and known magic paths through regions, heroes, and landmarks, then wager on emerging paths becoming known.
+- **Myths:** Promote major events into durable myths that shape regional identity, hero reputation, landmark memory, and future pressure.
+- **Civilization:** Inspect and advance regional agendas such as expansion, defense, trade, rivalry, research, and recovery.
+- **Pantheon:** Watch non-player deities pursue domains such as prosperity, strife, secrets, and entropy, then appease or challenge their pressure with Divine Favor.
 
-### Settlements
+### Watch Eras Rise And End
 
-Settlements belong to regions and track population, prosperity, defensibility, type, status, specializations, founded year, traits, and related events. Settlement evolution is one of the major ways the world visibly changes.
+Era pressure tracks long-run world risk from collapse, conquest, cataclysm, magical rupture, divine war, and other ending conditions. The game surfaces continuity forecasts showing which heroes, places, scars, myths, and bets may matter after an era boundary.
 
-### Landmarks
-
-Landmarks are temples, ruins, forests, mountains, rivers, monuments, dungeons, towers, battlefields, groves, and other places with magic, danger, status, traits, and event history.
-
-### Resources
-
-Resource nodes such as mines, quarries, forests, farmland, fishing grounds, and magical springs affect regional value and future simulation depth.
-
-### Heroes
-
-Heroes are the most readable individual agents in the world. Their levels, feats, movement, mortality, and alignment make them strong targets for both influence and bets.
-
-### Events
-
-The event log is the main narrative feed. It records world events by year and can be filtered by selected region or hero. The game story is not pre-written; it emerges from simulation updates, hero actions, and divine nudges.
-
-### Divine Economy
-
-Divine Favor is spent on influence and wagers. The dashboard tracks financial stats such as total favor wagered, active bets, wins, losses, and payout ratio.
+Era transitions can transform the existing world, create new era-born foundations, preserve selected legacies, expire or carry bets, and record comparison snapshots for the dashboard.
 
 ## Main Screens
 
-- **Events:** The default view and narrative feed for world history.
-- **World Map:** Select regions, inspect regional details, and apply regional influence.
-- **Heroes:** Select heroes, inspect their status, and apply heroic influence.
-- **Betting:** Browse speculation events, place bets, review active bets, and inspect odds.
-- **Dashboard:** Review era, year, hero distribution, regional status, population, active bets, and divine economy stats.
+- **Events:** Timeline feed, event details, entity filters, and era filters.
+- **World Map:** Region selection, region details, influence, resources, history, settlements, landmarks, and pressure signals.
+- **Heroes:** Hero list, hero lifecycle, direct timelines, influence actions, and champion controls.
+- **Artifacts:** Divine artifact creation, empowerment, stabilization, transfer, unbinding, and history.
+- **Weather:** Regional weather nudges and effect history.
+- **Omens:** Temporal forecasts for world, region, and hero targets.
+- **Magic:** Research paths, evidence signals, discovered systems, magic history, and discovery betting hooks.
+- **Myths:** Candidate legends, promoted myths, source events, and world effects.
+- **Civilization:** Regional agenda scores, civic decisions, recent behavior, and linked events.
+- **Pantheon:** AI deity goals, domains, rivalries, pressure targets, counterplay, and recent interventions.
+- **Betting:** Speculation events, odds factors, portfolio summary, active bets, and resolved bets.
+- **Eras:** Era pressure, legacy continuity, rollover readiness, era history, and comparison data.
+- **Dashboard:** Current status, last tick results, champion outcomes, resolved bets, era panels, chronicles, statistics, full world export, and chronicle share export.
+- **Admin World Editor:** Admin-only creation and editing for regions, settlements, landmarks, resources, and heroes.
 
 ## Strategy Notes
 
-- Do not spend favor just because it is available. Watch the event log first.
-- Prosperous regions are better long-term bets, but chaotic regions create bigger swings.
-- Heroes with rising levels or unusual feats are strong candidates for both guidance and speculation.
-- Bet before you influence when you already believe an outcome is likely.
-- Influence after betting when the target needs a push and the payout justifies the cost.
-- A dead hero is not always finished; revival can preserve an important narrative thread.
-- Region stats matter together. Prosperity, chaos, magic affinity, danger, and divine resonance all change how attractive a target is.
+- Read the latest events before spending favor. A good nudge starts with knowing what the world is already doing.
+- Bet before influencing when the visible odds already favor your read.
+- Influence after betting only when the payout justifies the favor cost.
+- Champions are long-term investments. Their outcomes can become myths, betting targets, and era-legacy material.
+- Omens do not change the world, but they can help decide where to spend favor next.
+- Artifacts and weather create stronger direct pressure, but their risks are easier to misread.
+- Pantheon pressure can help or complicate your plans; you can inspect political escalation, bet on direct interventions, and appease or challenge a deity to suppress near-term pressure.
+- Prosperity, chaos, danger, magic affinity, culture, resources, hero presence, landmarks, civilization agendas, and pantheon actors matter together.
+- Era pressure changes what "winning" means. Sometimes preserving a legacy matters more than stabilizing the current year.
 
 ## Current Status
 
 Playable foundations are in place:
 
 - Guest and WebHatchery account entry
-- World event log
-- Region map and region detail tabs
-- Hero list and hero details
-- Divine influence UI and backend services
-- Divine betting interface
-- Dashboard statistics
-- Settlements, landmarks, resources, buildings, and export APIs
 - PHP backend with MySQL persistence
+- Protected gameplay API routes
+- Event timeline and event detail pages
+- Region map, region tabs, resources, settlements, landmarks, and scoped history
+- Hero lifecycle, hero influence, direct hero timelines, and mortal champions
+- Divine betting, odds explanations, payout previews, portfolio summary, and real tick resolution
+- Artifacts, weather, temporal omens, magic discovery, mythology, civilization behavior, AI pantheon pressure/politics, and era systems
+- Dashboard last-tick inspection, champion outcomes, pantheon interventions, resolved bets, entity chronicles, era panels, chronicle share export, and export/status surfaces
+- Admin-only world editing for primary simulation entities
+- Production game-loop commands and health monitoring
 
-Still in active development:
-
-- Production game-loop scheduling and monitoring
-- Resource seeding and richer resource UI
-- Era-ending cataclysms
-- Reincarnation and legacy mechanics
-- Richer magic discovery
-- More complex settlement, culture, and civilization behavior
-- Better betting context, history, and long-term consequences
+Active development now focuses on richer magic/myth/civilization evolution, richer pantheon alliance/rival arcs, broader new-era variety, descendant identity, multi-step divine-tool consequence chains, interactive replay/share presentation, safer bulk admin workflows, and long-run simulation balance.
 
 ## Running Locally
 
@@ -196,13 +189,16 @@ composer test
 
 # Run one simulation tick
 composer game:tick
+
+# Check tick/runtime health
+composer game:health
 ```
 
 ## Repository Map
 
-- `frontend/` - React, TypeScript, Vite, Tailwind UI for the game.
-- `backend/` - PHP API, Eloquent models, game actions, services, auth, and persistence.
+- `frontend/` - React, TypeScript, Vite, and Tailwind UI for the game.
+- `backend/` - PHP API, actions, services, models, auth, persistence, and simulation runtime.
 - `bruno/` - API request collection for manual backend testing.
-- `ROADMAP.md` - Longer-term feature plan and implementation phases.
+- `ROADMAP.md` - Current gameplay-depth roadmap.
 
 Part of the WebHatchery game collection.

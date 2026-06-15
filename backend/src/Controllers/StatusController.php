@@ -55,6 +55,7 @@ class StatusController
                 '/landmarks/:id',
                 '/landmarks/:id/discover',
                 '/bets',
+                '/bets/summary',
                 '/bets/:id',
                 '/speculation-events',
                 '/betting-odds',
@@ -105,6 +106,21 @@ class StatusController
             fn() => $this->statusActions->runGameTick($advanceYear),
             'running game tick',
             'Failed to run game tick'
+        );
+    }
+
+    public function runEraTransition(Request $request, Response $response): Response
+    {
+        Logger::debug("POST /api/admin/era/transition endpoint called");
+
+        $body = json_decode((string)$request->getBody(), true) ?: [];
+        $force = array_key_exists('force', $body) ? (bool)$body['force'] : false;
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->statusActions->runEraTransition($force),
+            'running era transition',
+            'Failed to run era transition'
         );
     }
 

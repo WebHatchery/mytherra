@@ -9,6 +9,7 @@ use App\Utils\Logger;
 use App\Repositories\OddsRepository;
 use App\Repositories\BettingConfigRepository;
 use App\Models\BetConfig;
+use App\Models\DivineBet;
 
 class OddsCalculationService
 {
@@ -66,12 +67,12 @@ class OddsCalculationService
     // Round to 2 decimal places and ensure minimum odds of 1.1
             $finalOdds = max(round($calculatedOdds * 100) / 100, 1.1);
 
-    // Calculate potential payout based on confidence stake multiplier
-            $stakeMultiplier = $this->confidenceLevels[$confidence]['stakeMultiplier'] ?? 1.0;
+            $payoutProfile = $this->calculatePayoutProfile(1, $finalOdds, $confidence);
 
             return [
                 'odds' => $finalOdds,
-                'potentialPayout' => $finalOdds * $stakeMultiplier
+                'potentialPayout' => $payoutProfile['grossMultiplier'],
+                'payoutProfile' => $payoutProfile
             ];
         } catch (Exception $e) {
             Logger::error("Error calculating bet odds: " . $e->getMessage());
@@ -79,9 +80,18 @@ class OddsCalculationService
     // Return default values on error
             return [
                 'odds' => 2.0,
-                'potentialPayout' => 2.0
+                'potentialPayout' => 2.0,
+                'payoutProfile' => $this->calculatePayoutProfile(1, 2.0, $confidence)
             ];
         }
+    }
+
+    public function calculatePayoutProfile(int $stake, float $odds, string $confidence): array
+    {
+        $stakeMultiplier = $this->confidenceLevels[$confidence]['stakeMultiplier']
+            ?? DivineBet::getStakeMultiplier($confidence);
+
+        return DivineBet::calculatePayoutProfile($stake, $odds, $confidence, (float)$stakeMultiplier);
     }
 
     /**
@@ -121,6 +131,7 @@ class OddsCalculationService
             switch ($betType) {
                 case 'settlement_growth':
                 case 'settlement_transformation':
+                case 'prosperity_threshold':
                     return $this->calculateSettlementModifier($targetId, $betType);
 
                 case 'landmark_discovery':
@@ -132,7 +143,18 @@ class OddsCalculationService
 
                 case 'hero_settlement_bond':
                 case 'hero_location_visit':
+                case 'hero_level_milestone':
+                case 'hero_death':
                     return $this->calculateHeroModifier($targetId, $betType);
+
+                case 'region_danger_change':
+                    return $this->calculateRegionModifier($targetId, $betType);
+
+                case 'magic_discovery':
+                    return $this->calculateMagicDiscoveryModifier($targetId);
+
+                case 'pantheon_intervention':
+                    return $this->calculatePantheonInterventionModifier($targetId);
 
                 default:
                     return 1.0;
@@ -310,6 +332,55 @@ class OddsCalculationService
         }
     }
 
+    private function calculateMagicDiscoveryModifier(string $targetId): float
+    {
+        try {
+            $path = (new MagicDiscoveryService())->pathsForTarget($targetId)[0] ?? null;
+            if (!is_array($path)) {
+                return 1.35;
+            }
+
+            $progress = max(0, min(100, (int)($path['progress'] ?? 0)));
+            $evidence = max(0, min(100, (int)($path['evidenceScore'] ?? 0)));
+            $status = (string)($path['status'] ?? 'hidden');
+
+            if ($status === 'known') {
+                return 0.55;
+            }
+
+            $readiness = ($progress * 0.7) + ($evidence * 0.3);
+            $modifier = 1.45 - ($readiness / 120);
+
+            return max(0.55, min(1.45, $modifier));
+        } catch (Exception $e) {
+            Logger::error("Error calculating magic discovery modifier: " . $e->getMessage());
+            return 1.0;
+        }
+    }
+
+    private function calculatePantheonInterventionModifier(string $regionId): float
+    {
+        try {
+            $pressureScore = 0;
+            foreach ((new PantheonService())->status()['pressure'] ?? [] as $entry) {
+                if (!is_array($entry) || (string)($entry['targetRegionId'] ?? '') !== $regionId) {
+                    continue;
+                }
+
+                $pressureScore = max($pressureScore, (int)($entry['pressureScore'] ?? 0));
+            }
+
+            if ($pressureScore <= 0) {
+                return 1.35;
+            }
+
+            return max(0.55, min(1.45, 1.35 - ($pressureScore / 140)));
+        } catch (Exception $e) {
+            Logger::error("Error calculating pantheon intervention modifier: " . $e->getMessage());
+            return 1.0;
+        }
+    }
+
     /**
      * Update odds for all active bets based on changing world conditions
      */
@@ -341,8 +412,13 @@ class OddsCalculationService
                 $bet['currentOdds'] = round($newOdds, 2);
 
     // Recalculate potential payout based on new odds
-                $stakeMultiplier = $this->confidenceConfigs[$bet['confidence']]['stakeMultiplier'];
-                $bet['potentialPayout'] = (int)round($bet['divineFavorStake'] * $bet['currentOdds'] * $stakeMultiplier);
+                $payoutProfile = $this->calculatePayoutProfile(
+                    (int)$bet['divineFavorStake'],
+                    (float)$bet['currentOdds'],
+                    (string)$bet['confidence']
+                );
+                $bet['potentialPayout'] = $payoutProfile['grossPayout'];
+                $bet['payoutProfile'] = $payoutProfile;
 
                 $updatedBets[] = $bet;
             } catch (Exception $e) {

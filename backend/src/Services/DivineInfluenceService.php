@@ -172,6 +172,15 @@ class DivineInfluenceService
                 $effects
             );
 
+            $this->recordInfluenceEvent(
+                $targetId,
+                $targetType,
+                $influenceType,
+                $strength,
+                $description,
+                $effects
+            );
+
     // Return success response with effects
             return [
                 'success' => true,
@@ -298,14 +307,51 @@ class DivineInfluenceService
     private function recordInfluenceEvent($targetId, $targetType, $influenceType, $strength, $description, $effects)
     {
         try {
+            $regionId = null;
+            $relatedRegionIds = [];
+            $relatedHeroIds = [];
+            $relatedSettlementIds = [];
+            $relatedLandmarkIds = [];
+
+            if ($targetType === 'region') {
+                $regionId = $targetId;
+                $relatedRegionIds[] = $targetId;
+            } elseif ($targetType === 'hero') {
+                $hero = Hero::find($targetId);
+                $regionId = $hero?->region_id;
+                $relatedHeroIds[] = $targetId;
+                if ($regionId) {
+                    $relatedRegionIds[] = $regionId;
+                }
+            } elseif ($targetType === 'settlement') {
+                $settlement = Settlement::find($targetId);
+                $regionId = $settlement?->region_id;
+                $relatedSettlementIds[] = $targetId;
+                if ($regionId) {
+                    $relatedRegionIds[] = $regionId;
+                }
+            } elseif ($targetType === 'landmark') {
+                $landmark = Landmark::find($targetId);
+                $regionId = $landmark?->region_id;
+                $relatedLandmarkIds[] = $targetId;
+                if ($regionId) {
+                    $relatedRegionIds[] = $regionId;
+                }
+            }
+
             GameEvent::create([
                 'id' => 'event-' . bin2hex(random_bytes(8)),
                 'title' => 'Divine Influence Applied',
                 'description' => $description,
                 'type' => 'divine_influence',
                 'status' => 'completed',
-                'region_id' => $targetType === 'region' ? $targetId : null,
+                'region_id' => $regionId,
                 'timestamp' => date('c'),
+                'related_region_ids' => array_values(array_unique(array_filter($relatedRegionIds))),
+                'related_hero_ids' => array_values(array_unique(array_filter($relatedHeroIds))),
+                'related_settlement_ids' => array_values(array_unique(array_filter($relatedSettlementIds))),
+                'related_landmark_ids' => array_values(array_unique(array_filter($relatedLandmarkIds))),
+                'related_resource_ids' => [],
                 'year' => $this->getCurrentGameYear()
             ]);
         } catch (\Exception $e) {
@@ -400,11 +446,10 @@ class DivineInfluenceService
     // Calculate resonance bonus
             $resonanceBonus = 1.0;
             if ($targetType === 'region') {
-                $divineResonance = Region::where('id', $targetId)->value('divine_resonance');
+                $region = Region::find($targetId);
 
-                if ($divineResonance !== null) {
-                    // Formula: 1 + (resonance - 50) * 0.01
-                    $resonanceBonus += ($divineResonance - 50) * 0.01;
+                if ($region) {
+                    $resonanceBonus = $region->getInfluenceEffectiveness()['effectMultiplier'];
                 }
             }
 
@@ -460,12 +505,18 @@ class DivineInfluenceService
 
     // Calculate base cost with strength multiplier
             $cost = round($baseCosts[$influenceType] * $strengthMultipliers[$strength]);
+            $resonanceProfile = null;
 
     // Additional cost for certain target types
             if ($targetType === 'region') {
                 $cost = round($cost * 1.5);
 
     // Regions are more expensive to influence
+                $region = Region::find($targetId);
+                if ($region) {
+                    $resonanceProfile = $region->getInfluenceEffectiveness();
+                    $cost = round($cost * $resonanceProfile['costMultiplier']);
+                }
             }
 
     // Ensure minimum cost of 1
@@ -486,7 +537,8 @@ class DivineInfluenceService
             return [
                 'cost' => $cost,
                 'effectivenessEstimate' => $modifiers,
-                'targetName' => $targetName
+                'targetName' => $targetName,
+                'resonanceEffect' => $resonanceProfile
             ];
         } catch (\Exception $e) {
             Logger::error("Error calculating influence cost: " . $e->getMessage());
