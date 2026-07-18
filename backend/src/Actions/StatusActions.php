@@ -69,7 +69,9 @@ class StatusActions
             $this->artifactService,
             $this->weatherInfluenceService,
             $this->temporalOmenService,
-            $this->pantheonService
+            $this->pantheonService,
+            $this->magicDiscoveryService,
+            $this->mythologyService
         );
     }
 

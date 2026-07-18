@@ -176,7 +176,7 @@ CREATE TABLE IF NOT EXISTS `confidence_levels` (
 CREATE TABLE IF NOT EXISTS `divine_bets` (
   `id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `player_id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `bet_type` enum('settlement_growth','landmark_discovery','cultural_shift','hero_settlement_bond','hero_location_visit','settlement_transformation','corruption_spread','hero_level_milestone','hero_death','region_danger_change','war_outcome','prosperity_threshold','magic_discovery','pantheon_intervention') COLLATE utf8mb4_unicode_ci NOT NULL,
+  `bet_type` enum('settlement_growth','landmark_discovery','cultural_shift','hero_settlement_bond','hero_location_visit','settlement_transformation','corruption_spread','hero_level_milestone','hero_death','region_danger_change','war_outcome','prosperity_threshold','magic_discovery','pantheon_intervention','civilization_agenda') COLLATE utf8mb4_unicode_ci NOT NULL,
   `target_id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `description` text COLLATE utf8mb4_unicode_ci NOT NULL,
   `timeframe` int NOT NULL,

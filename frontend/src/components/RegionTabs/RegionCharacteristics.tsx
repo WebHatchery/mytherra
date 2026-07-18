@@ -30,6 +30,15 @@ const RegionCharacteristics: React.FC<RegionCharacteristicsProps> = ({
             <span className="ml-2 capitalize">{region.culturalInfluence}</span>
           </div>
         )}
+        {region.tradeRoutes && region.tradeRoutes.length > 0 && (
+          <div>
+            <span className="text-gray-400">Trade Routes:</span>
+            <span className="ml-2 text-cyan-300">
+              {region.tradeRoutes.length} connected region
+              {region.tradeRoutes.length === 1 ? '' : 's'}
+            </span>
+          </div>
+        )}
         {region.dangerLevel !== undefined && (
           <div>
             <span className="text-gray-400">Danger Level:</span>

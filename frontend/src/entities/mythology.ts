@@ -19,6 +19,23 @@ export interface MythEffects {
   futureEventSignals: string[];
 }
 
+export interface MythEcho {
+  id: string;
+  year: number;
+  eventId: string;
+  resonance: number;
+  activityCount: number;
+  summary: string;
+  effects: {
+    regions: MythEffectTarget[];
+    heroes: MythEffectTarget[];
+    landmarks: MythEffectTarget[];
+  };
+  signals: string[];
+  mythId?: string;
+  mythTitle?: string;
+}
+
 export interface MythCandidate {
   eventId: string;
   title: string;
@@ -61,12 +78,19 @@ export interface PromotedMyth {
   reason: string;
   influenceSummary: string;
   effects: MythEffects;
+  echoCount: number;
+  lastEchoYear?: number | null;
+  latestEcho?: MythEcho | null;
+  evolutionHistory: MythEcho[];
+  autonomousEvolution: string;
 }
 
 export interface MythologyStatusResponse {
   currentYear: number;
   promotionCost: number;
   summary: string;
+  evolutionSummary: string;
+  recentEchoes: MythEcho[];
   mythTypeOptions: MythTypeOption[];
   myths: PromotedMyth[];
   candidates: MythCandidate[];

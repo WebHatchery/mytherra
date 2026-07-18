@@ -7,12 +7,14 @@ import PageLayout from '../components/PageLayout';
 import { useGameStatus } from '../hooks/useGameStatus';
 import type {
   PantheonBettingHook,
+  PantheonChanges,
   PantheonCounterplayAction,
   PantheonCounterplayMode,
   PantheonDeity,
   PantheonIntervention,
   PantheonPoliticalEscalation,
   PantheonRelationship,
+  PantheonRelationshipArc,
   PantheonStatusResponse,
 } from '../entities/pantheon';
 
@@ -51,12 +53,12 @@ const domainTone = (domain?: string): string => {
 
 const scoreWidth = (score: number): string => `${Math.max(0, Math.min(100, score))}%`;
 
-const changeCount = (intervention: PantheonIntervention): number =>
-  intervention.changes.regions.length +
-  intervention.changes.settlements.length +
-  intervention.changes.resources.length +
-  intervention.changes.heroes.length +
-  intervention.changes.landmarks.length;
+const changeCount = (record: { changes: PantheonChanges }): number =>
+  record.changes.regions.length +
+  record.changes.settlements.length +
+  record.changes.resources.length +
+  record.changes.heroes.length +
+  record.changes.landmarks.length;
 
 const DeityCard: React.FC<{
   deity: PantheonDeity;
@@ -226,6 +228,61 @@ const PoliticalEscalationCard: React.FC<{ escalation: PantheonPoliticalEscalatio
   </article>
 );
 
+const RelationshipArcCard: React.FC<{ arc: PantheonRelationshipArc }> = ({ arc }) => {
+  const eventIds = arc.eventIds.length > 0 ? arc.eventIds : arc.eventId ? [arc.eventId] : [];
+
+  return (
+    <article className="rounded-lg border border-[#2f334d] bg-[#1a1b26] p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-base font-bold text-white">{arc.title}</h3>
+            <span
+              className={
+                arc.stance === 'ally'
+                  ? 'text-sm font-semibold text-emerald-300'
+                  : 'text-sm font-semibold text-red-300'
+              }
+            >
+              {labelize(arc.stance)}
+            </span>
+            <span className="rounded bg-gray-800 px-2 py-0.5 text-xs text-gray-300">
+              {labelize(arc.stage)}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-gray-300">{arc.summary}</p>
+        </div>
+        <div className="text-right text-sm text-gray-400">
+          <div>Step {arc.stepCount}</div>
+          <div>{arc.momentum}/100 momentum</div>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+        <span className="text-gray-500">
+          {arc.sourceName} to {arc.targetName}
+        </span>
+        <span className="text-gray-500">Year {arc.lastAdvancedYear}</span>
+        <span className="text-gray-500">{changeCount(arc)} changed entities</span>
+        {arc.targetRegionId && (
+          <Link
+            to={`/events?regionId=${encodeURIComponent(arc.targetRegionId)}`}
+            className="text-blue-300 hover:text-blue-100"
+          >
+            {arc.targetRegionName ?? 'Region Timeline'}
+          </Link>
+        )}
+        {eventIds.slice(0, 3).map(eventId => (
+          <Link key={eventId} to={`/events/${eventId}`} className="text-blue-300 hover:text-blue-100">
+            Event
+          </Link>
+        ))}
+      </div>
+      {arc.nextPressure && <div className="mt-2 text-xs text-gray-500">{arc.nextPressure}</div>}
+    </article>
+  );
+};
+
 const BettingHookCard: React.FC<{ hook: PantheonBettingHook }> = ({ hook }) => (
   <article className="rounded-lg border border-[#2f334d] bg-[#1a1b26] p-4">
     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -391,6 +448,7 @@ const PantheonPage: React.FC = () => {
   const relationships = statusPantheon?.relationships ?? [];
   const politics = statusPantheon?.politics ?? null;
   const escalations = politics?.escalations ?? [];
+  const relationshipArcs = statusPantheon?.relationshipArcs ?? [];
   const bettingHooks = statusPantheon?.bettingHooks ?? [];
   const counterplay = statusPantheon?.counterplay ?? null;
   const isLoading = isLoadingStatus || isLoadingPantheon;
@@ -543,6 +601,31 @@ const PantheonPage: React.FC = () => {
           <EmptyState
             title="No Relationships"
             message="Pantheon alliances and rivalries will appear here."
+            icon="◇"
+          />
+        )}
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-white">Alliance and Rival Arcs</h2>
+          {relationshipArcs.length > 0 && (
+            <p className="mt-1 text-sm text-gray-400">
+              {relationshipArcs.length} persistent pantheon political arc
+              {relationshipArcs.length === 1 ? '' : 's'} recorded from recent ticks.
+            </p>
+          )}
+        </div>
+        {relationshipArcs.length > 0 ? (
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {relationshipArcs.slice(0, 4).map(arc => (
+              <RelationshipArcCard key={arc.arcKey} arc={arc} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="No Political Arcs"
+            message="Escalated alliances and rivalries will persist here after pantheon ticks advance."
             icon="◇"
           />
         )}

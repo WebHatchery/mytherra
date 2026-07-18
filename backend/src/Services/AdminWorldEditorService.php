@@ -84,6 +84,7 @@ class AdminWorldEditorService
                 'resources' => ResourceNode::orderBy('name')->take(80)->get()->toArray(),
                 'heroes' => Hero::orderBy('name')->take(80)->get()->toArray(),
             ],
+            'auditLog' => $this->auditLog(),
         ];
     }
 
@@ -130,6 +131,56 @@ class AdminWorldEditorService
         $eventId = $this->recordEditEvent('updated', $type, $model);
 
         return $this->mutationResponse($type, 'updated', $model->fresh(), $eventId);
+    }
+
+    public function preview(string $entityType, array $payload): array
+    {
+        $type = $this->normalizeEntityType($entityType);
+        $mode = $this->previewMode($payload);
+        $model = null;
+
+        if ($mode === 'update') {
+            $id = $this->requiredString($payload, 'id');
+            $model = $this->findModel($type, $id);
+            if (!$model instanceof Model) {
+                throw new \InvalidArgumentException($this->label($type) . " not found: {$id}");
+            }
+            $data = match ($type) {
+                'regions' => $this->regionData($payload, false),
+                'settlements' => $this->settlementData($payload, false),
+                'landmarks' => $this->landmarkData($payload, false),
+                'resources' => $this->resourceData($payload, false),
+                'heroes' => $this->heroData($payload, false),
+                default => throw new \InvalidArgumentException("Unsupported world editor entity type: {$entityType}"),
+            };
+
+            if ($data === []) {
+                throw new \InvalidArgumentException('At least one editable field is required.');
+            }
+        } else {
+            $data = match ($type) {
+                'regions' => $this->regionData($payload, true),
+                'settlements' => $this->settlementData($payload, true),
+                'landmarks' => $this->landmarkData($payload, true),
+                'resources' => $this->resourceData($payload, true),
+                'heroes' => $this->heroData($payload, true),
+                default => throw new \InvalidArgumentException("Unsupported world editor entity type: {$entityType}"),
+            };
+        }
+
+        $compatibility = $this->compatibilityPreview($type, $mode, $data, $model);
+
+        return [
+            'entityType' => $type,
+            'mode' => $mode,
+            'wouldPersist' => false,
+            'isValid' => true,
+            'entityId' => (string)($data['id'] ?? $model?->getKey() ?? ''),
+            'summary' => $this->label($type) . " {$mode} preview passed validation with "
+                . count($data) . ' editable fields.',
+            'appliedFields' => array_keys($data),
+            'compatibility' => $compatibility,
+        ];
     }
 
     private function regionData(array $payload, bool $creating): array
@@ -378,6 +429,271 @@ class AdminWorldEditorService
         ]);
 
         return $eventId;
+    }
+
+    private function auditLog(): array
+    {
+        return GameEvent::where('type', 'admin_world_edit')
+            ->orderByRaw('COALESCE(year, 0) DESC')
+            ->orderByDesc('created_at')
+            ->take(12)
+            ->get()
+            ->map(fn(GameEvent $event): array => $this->auditEntry($event))
+            ->values()
+            ->all();
+    }
+
+    private function auditEntry(GameEvent $event): array
+    {
+        $entityType = $this->auditEntityType($event);
+
+        return [
+            'id' => (string)$event->id,
+            'title' => (string)$event->title,
+            'description' => (string)$event->description,
+            'status' => (string)$event->status,
+            'year' => $event->year !== null ? (int)$event->year : null,
+            'createdAt' => $event->created_at !== null ? (string)$event->created_at : null,
+            'regionId' => $event->region_id !== null ? (string)$event->region_id : null,
+            'entityType' => $entityType,
+            'entityId' => $this->auditEntityId($event, $entityType),
+            'eventUrl' => '/events/' . rawurlencode((string)$event->id),
+            'timelineUrl' => $this->auditTimelineUrl($event, $entityType),
+            'relatedRegionIds' => $this->ids($event->related_region_ids ?? []),
+            'relatedHeroIds' => $this->ids($event->related_hero_ids ?? []),
+            'relatedSettlementIds' => $this->ids($event->related_settlement_ids ?? []),
+            'relatedLandmarkIds' => $this->ids($event->related_landmark_ids ?? []),
+            'relatedResourceIds' => $this->ids($event->related_resource_ids ?? []),
+        ];
+    }
+
+    private function auditEntityType(GameEvent $event): string
+    {
+        if ($this->ids($event->related_hero_ids ?? []) !== []) {
+            return 'heroes';
+        }
+        if ($this->ids($event->related_settlement_ids ?? []) !== []) {
+            return 'settlements';
+        }
+        if ($this->ids($event->related_landmark_ids ?? []) !== []) {
+            return 'landmarks';
+        }
+        if ($this->ids($event->related_resource_ids ?? []) !== []) {
+            return 'resources';
+        }
+
+        return 'regions';
+    }
+
+    private function auditEntityId(GameEvent $event, string $entityType): ?string
+    {
+        $ids = match ($entityType) {
+            'heroes' => $this->ids($event->related_hero_ids ?? []),
+            'settlements' => $this->ids($event->related_settlement_ids ?? []),
+            'landmarks' => $this->ids($event->related_landmark_ids ?? []),
+            'resources' => $this->ids($event->related_resource_ids ?? []),
+            default => $this->ids($event->related_region_ids ?? []),
+        };
+
+        return $ids[0] ?? null;
+    }
+
+    private function auditTimelineUrl(GameEvent $event, string $entityType): string
+    {
+        $entityId = $this->auditEntityId($event, $entityType);
+        $queryKey = match ($entityType) {
+            'heroes' => 'heroId',
+            'settlements' => 'settlementId',
+            'landmarks' => 'landmarkId',
+            'resources' => 'resourceId',
+            default => 'regionId',
+        };
+
+        if ($entityId !== null) {
+            return '/events?' . http_build_query([$queryKey => $entityId]);
+        }
+
+        return '/events?' . http_build_query(['type' => 'admin_world_edit']);
+    }
+
+    private function ids(mixed $values): array
+    {
+        if (!is_array($values)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map(fn(mixed $value): string => trim((string)$value), $values),
+            fn(string $value): bool => $value !== ''
+        )));
+    }
+
+    private function previewMode(array $payload): string
+    {
+        $mode = $this->stringValue($payload, 'mode', 'create');
+        if (!in_array($mode, ['create', 'update'], true)) {
+            throw new \InvalidArgumentException('mode must be one of: create, update');
+        }
+
+        return $mode;
+    }
+
+    private function compatibilityPreview(string $type, string $mode, array $data, ?Model $model): array
+    {
+        $warnings = [];
+        $signals = [];
+        $notes = [];
+        $relatedIds = [
+            'regions' => [],
+            'settlements' => [],
+            'landmarks' => [],
+            'resources' => [],
+            'heroes' => [],
+        ];
+
+        $regionId = (string)($data['region_id'] ?? $model?->getAttribute('region_id') ?? '');
+        if ($type === 'regions') {
+            $regionId = (string)($data['id'] ?? $model?->getKey() ?? $regionId);
+        }
+        if ($regionId !== '') {
+            $relatedIds['regions'][] = $regionId;
+        }
+
+        $entityId = (string)($data['id'] ?? $model?->getKey() ?? '');
+        if ($entityId !== '' && isset($relatedIds[$type])) {
+            $relatedIds[$type][] = $entityId;
+        }
+
+        if (!empty($data['settlement_id'])) {
+            $relatedIds['settlements'][] = (string)$data['settlement_id'];
+        }
+
+        $affectedSystems = match ($type) {
+            'regions' => ['region drift', 'culture pressure', 'divine influence', 'betting odds', 'era pressure'],
+            'settlements' => ['settlement growth', 'resource pressure', 'civic pressure', 'regional prosperity', 'era legacy'],
+            'landmarks' => ['magic pressure', 'civic pressure', 'corruption risk', 'myth anchors', 'betting odds'],
+            'resources' => ['resource output', 'settlement growth', 'regional prosperity', 'regional danger', 'resource bets'],
+            'heroes' => ['hero lifecycle', 'civic pressure', 'champion systems', 'myth candidates', 'era legacy'],
+            default => ['simulation state'],
+        };
+
+        $this->addNumericSignals($signals, $warnings, $data, [
+            'prosperity' => ['Prosperity', 20, 85],
+            'chaos' => ['Chaos', 15, 80],
+            'magic_affinity' => ['Magic affinity', 10, 85],
+            'danger_level' => ['Danger', 20, 80],
+            'divine_resonance' => ['Divine resonance', 15, 85],
+            'defensibility' => ['Defensibility', 20, 85],
+            'population' => ['Population', 1, 10000],
+            'population_total' => ['Population total', 1, 100000],
+            'output' => ['Output', 15, 85],
+            'magic_level' => ['Magic level', 15, 85],
+            'level' => ['Hero level', 1, 50],
+            'age' => ['Hero age', 1, 120],
+        ]);
+
+        $status = (string)($data['status'] ?? $model?->getAttribute('status') ?? '');
+        if ($status !== '') {
+            $signals[] = ['label' => 'Status', 'value' => $status, 'tone' => $this->statusTone($status)];
+            if (in_array($status, ['corrupt', 'corrupted', 'cursed', 'haunted', 'warring', 'war_torn', 'abandoned', 'ruined', 'depleted', 'contested', 'unstable', 'overworked', 'undead'], true)) {
+                $warnings[] = "Status {$status} can push dangerous or destabilizing tick outcomes.";
+            }
+        }
+
+        if ($type === 'regions' && !empty($data['trade_routes'])) {
+            $notes[] = 'Trade routes can add inter-region culture pressure if the route IDs match existing regions.';
+            foreach ($this->ids($data['trade_routes']) as $routeId) {
+                $relatedIds['regions'][] = $routeId;
+            }
+        }
+
+        if ($type === 'heroes') {
+            $isAlive = $data['is_alive'] ?? $model?->getAttribute('is_alive');
+            if ($isAlive === false || $status === 'deceased') {
+                $warnings[] = 'Non-living heroes stop contributing normal civic pressure and may affect legacy selection.';
+            }
+            $alignment = $data['alignment'] ?? $model?->getAttribute('alignment') ?? null;
+            if (is_array($alignment)) {
+                foreach (['good', 'chaotic'] as $axis) {
+                    $value = (int)($alignment[$axis] ?? 50);
+                    $signals[] = ['label' => 'Alignment ' . $axis, 'value' => (string)$value, 'tone' => $value >= 80 || $value <= 20 ? 'warning' : 'neutral'];
+                    if ($value >= 90 || $value <= 10) {
+                        $warnings[] = "Extreme {$axis} alignment can skew future hero behavior and mythology.";
+                    }
+                }
+            }
+        }
+
+        if ($type === 'settlements' && in_array($status, ['abandoned', 'ruined', 'struggling', 'declining'], true)) {
+            $warnings[] = 'Weak settlement status can reduce regional prosperity and raise era-collapse pressure.';
+        }
+
+        if ($type === 'landmarks' && in_array($status, ['corrupted', 'haunted', 'active'], true)) {
+            $warnings[] = 'Landmark status can influence magic pressure, civic pressure, and corruption betting signals.';
+        }
+
+        if ($type === 'resources' && in_array($status, ['depleted', 'contested', 'corrupted', 'unstable', 'overworked'], true)) {
+            $warnings[] = 'Resource status can suppress settlement growth and increase regional danger.';
+        }
+
+        if ($mode === 'create') {
+            $notes[] = 'Preview validates create payloads but does not reserve the ID until save.';
+        } else {
+            $notes[] = 'Preview validates update payloads against the current entity but does not record an admin audit event.';
+        }
+
+        foreach ($relatedIds as $key => $values) {
+            $relatedIds[$key] = array_values(array_unique(array_filter($values)));
+        }
+
+        return [
+            'riskTier' => $this->riskTier($warnings),
+            'affectedSystems' => $affectedSystems,
+            'warnings' => array_values(array_unique($warnings)),
+            'signals' => $signals,
+            'notes' => $notes,
+            'relatedIds' => $relatedIds,
+        ];
+    }
+
+    private function addNumericSignals(array &$signals, array &$warnings, array $data, array $fields): void
+    {
+        foreach ($fields as $field => [$label, $low, $high]) {
+            if (!array_key_exists($field, $data)) {
+                continue;
+            }
+
+            $value = (int)$data[$field];
+            $tone = $value <= $low || $value >= $high ? 'warning' : 'neutral';
+            $signals[] = ['label' => $label, 'value' => (string)$value, 'tone' => $tone];
+            if ($value <= $low) {
+                $warnings[] = "{$label} is low enough to affect simulation stability.";
+            } elseif ($value >= $high) {
+                $warnings[] = "{$label} is high enough to amplify downstream simulation effects.";
+            }
+        }
+    }
+
+    private function statusTone(string $status): string
+    {
+        return in_array($status, ['thriving', 'prosperous', 'flourishing', 'blessed', 'active', 'living'], true)
+            ? 'positive'
+            : (in_array($status, ['corrupt', 'corrupted', 'cursed', 'haunted', 'warring', 'war_torn', 'abandoned', 'ruined', 'depleted', 'contested', 'unstable', 'overworked', 'undead'], true)
+                ? 'warning'
+                : 'neutral');
+    }
+
+    private function riskTier(array $warnings): string
+    {
+        $count = count(array_unique($warnings));
+        if ($count >= 4) {
+            return 'high';
+        }
+        if ($count >= 2) {
+            return 'medium';
+        }
+
+        return $count === 1 ? 'low' : 'stable';
     }
 
     private function findModel(string $type, string $id): ?Model

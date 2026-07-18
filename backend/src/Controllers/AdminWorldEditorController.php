@@ -68,4 +68,22 @@ class AdminWorldEditorController
             'updating admin world editor entity'
         );
     }
+
+    public function previewEntity(Request $request, Response $response, array $args): Response
+    {
+        $body = json_decode((string)$request->getBody(), true);
+        if (!is_array($body)) {
+            return $this->jsonResponse($response, [
+                'success' => false,
+                'message' => 'Invalid JSON input',
+                'error_code' => 'VALIDATION_ERROR'
+            ], 400);
+        }
+
+        return $this->handleApiAction(
+            $response,
+            fn() => $this->worldEditorActions->preview((string)$args['entityType'], $body),
+            'previewing admin world editor entity'
+        );
+    }
 }

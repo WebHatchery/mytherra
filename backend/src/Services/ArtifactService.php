@@ -20,7 +20,7 @@ class ArtifactService
 {
     private const CONFIG_CATEGORY = 'artifacts';
     private const CONFIG_KEY_ROSTER = 'roster';
-    private const MAX_ARTIFACTS = 5;
+    private const MAX_ARTIFACTS = 9;
     private const CREATION_COST = 40;
     private const EMPOWER_BASE_COST = 20;
     private const TRANSFER_COST = 8;
@@ -50,6 +50,53 @@ class ArtifactService
             'summary' => 'Draws out magic and research, but behaves unpredictably.',
             'instability' => 16,
             'corruption' => 3,
+        ],
+    ];
+
+    private const STARTER_ARTIFACTS = [
+        'artifact-starter-crystal-aegis' => [
+            'name' => 'Crystal Aegis of First Dawn',
+            'focus' => 'protection',
+            'powerLevel' => 2,
+            'instability' => 18,
+            'corruption' => 0,
+            'status' => 'active',
+            'ownerType' => 'landmark',
+            'ownerId' => 'landmark-001',
+            'originSummary' => 'A warding relic kept inside the Crystal Sanctuary since the first temple bells.',
+        ],
+        'artifact-starter-goldtide-ledger' => [
+            'name' => 'Goldtide Ledger',
+            'focus' => 'prosperity',
+            'powerLevel' => 2,
+            'instability' => 22,
+            'corruption' => 4,
+            'status' => 'active',
+            'ownerType' => 'region',
+            'ownerId' => 'region-002',
+            'originSummary' => 'A living account book that turns bargains, tithes, and debts into regional fortune.',
+        ],
+        'artifact-starter-moonwell-lens' => [
+            'name' => 'Moonwell Lens',
+            'focus' => 'knowledge',
+            'powerLevel' => 3,
+            'instability' => 31,
+            'corruption' => 7,
+            'status' => 'active',
+            'ownerType' => 'hero',
+            'ownerId' => 'hero-003',
+            'originSummary' => 'A silver lens that lets prophets read the reflection between omen and memory.',
+        ],
+        'artifact-starter-ashen-banner' => [
+            'name' => 'Ashen Banner of Broken Oaths',
+            'focus' => 'war',
+            'powerLevel' => 3,
+            'instability' => 44,
+            'corruption' => 24,
+            'status' => 'active',
+            'ownerType' => 'landmark',
+            'ownerId' => 'landmark-004',
+            'originSummary' => 'A battle standard sealed in the Forgotten Tower, still calling old rivalries by name.',
         ],
     ];
 
@@ -95,6 +142,7 @@ class ArtifactService
             'changed' => 0,
             'events' => 0,
             'consequences' => [],
+            'chains' => [],
             'errors' => [],
         ];
         $artifacts = $this->loadArtifacts();
@@ -102,38 +150,65 @@ class ArtifactService
         foreach ($artifacts as $artifactId => $artifact) {
             $summary['processed']++;
             try {
-                if (!is_array($artifact) || !$this->shouldResolveConsequence($artifact, $currentYear)) {
+                if (!is_array($artifact)) {
                     continue;
                 }
 
-                $consequence = $this->resolveWorldConsequence($artifact, $currentYear);
-                if ($consequence === null) {
-                    continue;
+                $changed = false;
+                $chainResults = $this->advanceArtifactChains($artifact, $currentYear);
+                foreach ($chainResults as $chainResult) {
+                    $artifact['eventIds'][] = $chainResult['eventId'];
+                    $artifact['history'] = $this->appendLimited(
+                        $artifact['history'] ?? [],
+                        $this->historyEntry($artifact, [
+                            'id' => $chainResult['eventId'],
+                            'title' => $chainResult['title'],
+                            'description' => $chainResult['summary'],
+                            'type' => 'artifact_chain',
+                            'year' => $currentYear,
+                        ]),
+                        24
+                    );
+                    $summary['events']++;
+                    $summary['chains'][] = $chainResult;
+                    $changed = true;
                 }
 
-                $artifact['lastConsequenceYear'] = $currentYear;
-                $artifact['consequences'] = $this->prependLimited(
-                    $artifact['consequences'] ?? [],
-                    $consequence,
-                    8
-                );
-                $artifact['eventIds'][] = $consequence['eventId'];
-                $artifact['history'] = $this->appendLimited(
-                    $artifact['history'] ?? [],
-                    $this->historyEntry($artifact, [
-                        'id' => $consequence['eventId'],
-                        'title' => $consequence['title'],
-                        'description' => $consequence['summary'],
-                        'type' => 'artifact_consequence',
-                        'year' => $currentYear,
-                    ]),
-                    24
-                );
+                if ($this->shouldResolveConsequence($artifact, $currentYear)) {
+                    $consequence = $this->resolveWorldConsequence($artifact, $currentYear);
+                    if ($consequence !== null) {
+                        $artifact['lastConsequenceYear'] = $currentYear;
+                        $artifact['consequences'] = $this->prependLimited(
+                            $artifact['consequences'] ?? [],
+                            $consequence,
+                            8
+                        );
+                        $artifact['eventIds'][] = $consequence['eventId'];
+                        $artifact['history'] = $this->appendLimited(
+                            $artifact['history'] ?? [],
+                            $this->historyEntry($artifact, [
+                                'id' => $consequence['eventId'],
+                                'title' => $consequence['title'],
+                                'description' => $consequence['summary'],
+                                'type' => 'artifact_consequence',
+                                'year' => $currentYear,
+                            ]),
+                            24
+                        );
+                        $chain = $this->seedArtifactChain($artifact, $consequence, $currentYear);
+                        if ($chain !== null) {
+                            $artifact['chains'] = $this->prependLimited($artifact['chains'] ?? [], $chain, 6);
+                        }
+                        $summary['events']++;
+                        $summary['consequences'][] = $consequence;
+                        $changed = true;
+                    }
+                }
 
-                $artifacts[$artifactId] = $artifact;
-                $summary['changed']++;
-                $summary['events']++;
-                $summary['consequences'][] = $consequence;
+                if ($changed) {
+                    $artifacts[$artifactId] = $artifact;
+                    $summary['changed']++;
+                }
             } catch (\Throwable $error) {
                 $summary['errors'][] = [
                     'id' => is_string($artifactId) ? $artifactId : null,
@@ -351,8 +426,127 @@ class ArtifactService
 
         $value = $this->configService->getConfig(self::CONFIG_CATEGORY, self::CONFIG_KEY_ROSTER, []);
         $this->artifactCache = is_array($value) ? $value : [];
+        $this->artifactCache = $this->ensureStarterArtifacts($this->artifactCache);
 
         return $this->artifactCache;
+    }
+
+    private function ensureStarterArtifacts(array $artifacts): array
+    {
+        $changed = false;
+        $currentYear = $this->currentYear();
+
+        foreach (self::STARTER_ARTIFACTS as $artifactId => $definition) {
+            if (isset($artifacts[$artifactId]) || count($artifacts) >= self::MAX_ARTIFACTS) {
+                continue;
+            }
+
+            $artifact = $this->buildStarterArtifact($artifactId, $definition, $currentYear);
+            $event = $this->recordArtifactEvent(
+                $artifact,
+                'Divine Artifact Discovered',
+                "{$artifact['name']} was already part of the world in year {$artifact['createdYear']}. {$definition['originSummary']}",
+                'artifact_created',
+                (int)$artifact['createdYear']
+            );
+            $artifact['eventIds'][] = $event['id'];
+            $artifact['history'][] = $this->historyEntry($artifact, $event);
+            $artifacts[$artifactId] = $artifact;
+            $changed = true;
+        }
+
+        if ($changed) {
+            $this->saveArtifacts($artifacts);
+        }
+
+        return $artifacts;
+    }
+
+    private function buildStarterArtifact(string $artifactId, array $definition, int $currentYear): array
+    {
+        $focus = $this->normalizeFocus((string)$definition['focus']);
+        $owner = $this->resolveStarterOwner(
+            (string)($definition['ownerType'] ?? 'unbound'),
+            is_string($definition['ownerId'] ?? null) ? (string)$definition['ownerId'] : null
+        );
+
+        return [
+            'id' => $artifactId,
+            'name' => (string)$definition['name'],
+            'focus' => $focus,
+            'createdYear' => max(1, $currentYear - 1),
+            'powerLevel' => max(1, min(10, (int)($definition['powerLevel'] ?? 1))),
+            'instability' => max(0, min(100, (int)($definition['instability'] ?? 0))),
+            'corruption' => max(0, min(100, (int)($definition['corruption'] ?? 0))),
+            'status' => in_array($definition['status'] ?? 'active', ['active', 'corrupted', 'lost'], true)
+                ? (string)$definition['status']
+                : 'active',
+            'ownerType' => $owner['type'],
+            'ownerId' => $owner['id'],
+            'ownerName' => $owner['name'],
+            'ownerRegionId' => $owner['regionId'],
+            'eventIds' => [],
+            'history' => [],
+            'seeded' => true,
+            'originSummary' => (string)$definition['originSummary'],
+        ];
+    }
+
+    private function resolveStarterOwner(string $targetType, ?string $targetId): array
+    {
+        $targetType = strtolower(trim($targetType));
+
+        if ($targetId === null || $targetId === '') {
+            return $this->unboundOwner();
+        }
+
+        if ($targetType === 'region') {
+            $region = Region::find($targetId);
+            if ($region instanceof Region) {
+                return [
+                    'type' => 'region',
+                    'id' => (string)$region->id,
+                    'name' => (string)$region->name,
+                    'regionId' => (string)$region->id,
+                ];
+            }
+        }
+
+        if ($targetType === 'hero') {
+            $hero = Hero::find($targetId);
+            if ($hero instanceof Hero) {
+                return [
+                    'type' => 'hero',
+                    'id' => (string)$hero->id,
+                    'name' => (string)$hero->name,
+                    'regionId' => $hero->region_id ? (string)$hero->region_id : null,
+                ];
+            }
+        }
+
+        if ($targetType === 'landmark') {
+            $landmark = Landmark::find($targetId);
+            if ($landmark instanceof Landmark) {
+                return [
+                    'type' => 'landmark',
+                    'id' => (string)$landmark->id,
+                    'name' => (string)$landmark->name,
+                    'regionId' => $landmark->region_id ? (string)$landmark->region_id : null,
+                ];
+            }
+        }
+
+        return $this->unboundOwner();
+    }
+
+    private function unboundOwner(): array
+    {
+        return [
+            'type' => 'unbound',
+            'id' => null,
+            'name' => 'Unbound',
+            'regionId' => null,
+        ];
     }
 
     private function saveArtifacts(array $artifacts): void
@@ -416,12 +610,7 @@ class ArtifactService
         $type = strtolower(trim($targetType));
 
         if ($type === 'unbound' || $targetId === null || $targetId === '') {
-            return [
-                'type' => 'unbound',
-                'id' => null,
-                'name' => 'Unbound',
-                'regionId' => null,
-            ];
+            return $this->unboundOwner();
         }
 
         if ($type === 'hero') {
@@ -687,6 +876,177 @@ class ArtifactService
             'relatedSettlementIds' => array_values(array_unique(array_filter($related['settlementIds'] ?? []))),
             'relatedLandmarkIds' => array_values(array_unique(array_filter($related['landmarkIds']))),
             'relatedResourceIds' => array_values(array_unique(array_filter($related['resourceIds'] ?? []))),
+        ];
+    }
+
+    private function seedArtifactChain(array $artifact, array $consequence, int $currentYear): ?array
+    {
+        if ($this->hasActiveChain($artifact['chains'] ?? [], 'artifact')) {
+            return null;
+        }
+
+        $pressure = $this->artifactChainPressure($artifact);
+        if ($pressure < 35) {
+            return null;
+        }
+
+        $maxSteps = $pressure >= 75 ? 3 : 2;
+        $artifactId = (string)($artifact['id'] ?? bin2hex(random_bytes(4)));
+        $artifactName = (string)($artifact['name'] ?? 'An artifact');
+
+        return [
+            'id' => 'artifact-chain-' . $artifactId . '-' . $currentYear,
+            'tool' => 'artifact',
+            'status' => 'active',
+            'startedYear' => $currentYear,
+            'lastAdvancedYear' => null,
+            'nextYear' => $currentYear + 1,
+            'step' => 0,
+            'maxSteps' => $maxSteps,
+            'sourceEventId' => (string)($consequence['eventId'] ?? ''),
+            'eventIds' => array_values(array_filter([(string)($consequence['eventId'] ?? '')])),
+            'title' => 'Artifact Chain: ' . $artifactName,
+            'latestSummary' => "{$artifactName} began a {$maxSteps}-step consequence chain after {$consequence['title']}.",
+        ];
+    }
+
+    private function advanceArtifactChains(array &$artifact, int $currentYear): array
+    {
+        $chains = is_array($artifact['chains'] ?? null) ? array_values($artifact['chains']) : [];
+        $results = [];
+
+        foreach ($chains as $index => $chain) {
+            if (!is_array($chain) || !$this->shouldAdvanceChain($chain, $currentYear)) {
+                continue;
+            }
+
+            [$updatedChain, $result] = $this->resolveArtifactChainStep($artifact, $chain, $currentYear);
+            $chains[$index] = $updatedChain;
+            $results[] = $result;
+        }
+
+        if ($results !== []) {
+            $artifact['chains'] = array_slice(array_values($chains), 0, 6);
+        }
+
+        return $results;
+    }
+
+    private function resolveArtifactChainStep(array &$artifact, array $chain, int $currentYear): array
+    {
+        $step = max(1, (int)($chain['step'] ?? 0) + 1);
+        $maxSteps = max($step, (int)($chain['maxSteps'] ?? 2));
+        $focus = $this->normalizeFocus((string)($artifact['focus'] ?? 'protection'));
+        $focusConfig = self::FOCUS_OPTIONS[$focus];
+        $status = (string)($artifact['status'] ?? 'active');
+        $artifactName = (string)($artifact['name'] ?? 'An artifact');
+        $chainPower = max(1, intdiv(max(1, (int)($artifact['powerLevel'] ?? 1)) + $step, 2));
+        $related = $this->relatedIds($artifact);
+        $effectParts = [];
+
+        $region = $this->resolveArtifactRegion($artifact);
+        if ($region instanceof Region) {
+            $before = [
+                'prosperity' => (int)$region->prosperity,
+                'chaos' => (int)$region->chaos,
+                'dangerLevel' => (int)$region->danger_level,
+                'magicAffinity' => (int)$region->magic_affinity,
+            ];
+            $this->applyRegionalConsequence($region, $focus, $chainPower, $status);
+            $region->save();
+            $effectParts[] = "Step {$step} shifted {$region->name} from {$before['prosperity']}/{$before['chaos']}/{$before['dangerLevel']}/{$before['magicAffinity']} to {$region->prosperity}/{$region->chaos}/{$region->danger_level}/{$region->magic_affinity}.";
+            $related['regionIds'][] = (string)$region->id;
+            $related['regionId'] ??= (string)$region->id;
+
+            if ($step % 2 === 1) {
+                $settlementEffect = $this->applySettlementConsequence((string)$region->id, $focus, $chainPower, $status);
+                if ($settlementEffect !== null) {
+                    $effectParts[] = $settlementEffect['summary'];
+                    $related['settlementIds'][] = $settlementEffect['id'];
+                }
+            } else {
+                $resourceEffect = $this->applyResourceConsequence((string)$region->id, $focus, $chainPower, $status);
+                if ($resourceEffect !== null) {
+                    $effectParts[] = $resourceEffect['summary'];
+                    $related['resourceIds'][] = $resourceEffect['id'];
+                }
+            }
+        }
+
+        if ($step === $maxSteps) {
+            $landmarkEffect = $this->applyLandmarkConsequence($artifact, $focus, $chainPower, $status);
+            if ($landmarkEffect !== null) {
+                $effectParts[] = $landmarkEffect['summary'];
+                $related['landmarkIds'][] = $landmarkEffect['id'];
+            }
+        } else {
+            $heroEffect = $this->applyHeroConsequence($artifact, $focus, $chainPower, $status);
+            if ($heroEffect !== null) {
+                $effectParts[] = $heroEffect['summary'];
+                $related['heroIds'][] = $heroEffect['id'];
+            }
+        }
+
+        if ($effectParts === []) {
+            $artifact['instability'] = min(100, (int)($artifact['instability'] ?? 0) + 1);
+            $effectParts[] = "{$artifactName} carried its echo forward without finding a mortal anchor.";
+        }
+
+        $artifact['instability'] = min(100, (int)($artifact['instability'] ?? 0) + 1);
+        if ($status === 'corrupted' || $focus === 'war') {
+            $artifact['corruption'] = min(100, (int)($artifact['corruption'] ?? 0) + 1);
+        }
+
+        $finished = $step >= $maxSteps;
+        $title = 'Artifact Chain: ' . $artifactName;
+        $summary = "{$artifactName}'s consequence chain advanced step {$step}/{$maxSteps} in year {$currentYear}. "
+            . implode(' ', $effectParts)
+            . ($finished ? ' The chain resolved.' : ' The chain will keep echoing.');
+        $event = $this->recordArtifactEvent(
+            $artifact,
+            $title,
+            $summary,
+            'artifact_chain',
+            $currentYear,
+            $related
+        );
+
+        $chain['step'] = $step;
+        $chain['lastAdvancedYear'] = $currentYear;
+        $chain['nextYear'] = $finished ? null : $currentYear + ($step % 2 === 0 ? 2 : 1);
+        $chain['status'] = $finished ? 'completed' : 'active';
+        $chain['latestSummary'] = $summary;
+        $chain['eventIds'] = $this->appendLimited(
+            is_array($chain['eventIds'] ?? null) ? $chain['eventIds'] : [],
+            $event['id'],
+            6
+        );
+
+        return [
+            $chain,
+            [
+                'id' => (string)$chain['id'] . '-step-' . $step . '-' . $currentYear,
+                'tool' => 'artifact',
+                'title' => $title,
+                'artifactId' => (string)($artifact['id'] ?? ''),
+                'artifactName' => $artifactName,
+                'focus' => $focus,
+                'focusLabel' => $focusConfig['label'],
+                'year' => $currentYear,
+                'summary' => $summary,
+                'eventId' => $event['id'],
+                'chainId' => (string)$chain['id'],
+                'chainStep' => $step,
+                'chainMaxSteps' => $maxSteps,
+                'chainStatus' => (string)$chain['status'],
+                'sourceEventId' => (string)($chain['sourceEventId'] ?? ''),
+                'nextYear' => $chain['nextYear'],
+                'relatedRegionIds' => array_values(array_unique(array_filter($related['regionIds']))),
+                'relatedHeroIds' => array_values(array_unique(array_filter($related['heroIds']))),
+                'relatedSettlementIds' => array_values(array_unique(array_filter($related['settlementIds'] ?? []))),
+                'relatedLandmarkIds' => array_values(array_unique(array_filter($related['landmarkIds']))),
+                'relatedResourceIds' => array_values(array_unique(array_filter($related['resourceIds'] ?? []))),
+            ],
         ];
     }
 
@@ -964,10 +1324,14 @@ class ArtifactService
             'ownerId' => $artifact['ownerId'] ?? null,
             'ownerName' => (string)($artifact['ownerName'] ?? 'Unbound'),
             'ownerRegionId' => $artifact['ownerRegionId'] ?? null,
+            'seeded' => (bool)($artifact['seeded'] ?? false),
+            'originSummary' => !empty($artifact['originSummary']) ? (string)$artifact['originSummary'] : null,
             'eventIds' => is_array($artifact['eventIds'] ?? null) ? array_values($artifact['eventIds']) : [],
             'history' => is_array($artifact['history'] ?? null) ? array_values($artifact['history']) : [],
             'consequences' => $this->artifactConsequences($artifact),
             'latestConsequence' => $this->artifactConsequences($artifact)[0] ?? null,
+            'chains' => $this->artifactChains($artifact),
+            'activeChainCount' => $this->activeChainCount($this->artifactChains($artifact)),
             'lastConsequenceYear' => isset($artifact['lastConsequenceYear']) ? (int)$artifact['lastConsequenceYear'] : null,
             'empowerCost' => $this->empowerCost($artifact),
             'stabilizeCost' => self::STABILIZE_BASE_COST + intdiv($instability + $corruption, 8),
@@ -989,6 +1353,61 @@ class ArtifactService
     private function artifactConsequences(array $artifact): array
     {
         return is_array($artifact['consequences'] ?? null) ? array_values($artifact['consequences']) : [];
+    }
+
+    private function artifactChains(array $artifact): array
+    {
+        return is_array($artifact['chains'] ?? null) ? array_values($artifact['chains']) : [];
+    }
+
+    private function activeChainCount(array $chains): int
+    {
+        return count(array_filter($chains, fn($chain): bool => is_array($chain) && ($chain['status'] ?? null) === 'active'));
+    }
+
+    private function hasActiveChain(mixed $chains, string $tool): bool
+    {
+        if (!is_array($chains)) {
+            return false;
+        }
+
+        foreach ($chains as $chain) {
+            if (is_array($chain) && ($chain['tool'] ?? null) === $tool && ($chain['status'] ?? null) === 'active') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function shouldAdvanceChain(array $chain, int $currentYear): bool
+    {
+        if (($chain['status'] ?? null) !== 'active') {
+            return false;
+        }
+
+        if ((int)($chain['lastAdvancedYear'] ?? 0) >= $currentYear) {
+            return false;
+        }
+
+        return (int)($chain['nextYear'] ?? PHP_INT_MAX) <= $currentYear;
+    }
+
+    private function artifactChainPressure(array $artifact): int
+    {
+        $status = (string)($artifact['status'] ?? 'active');
+        $pressure = ((int)($artifact['powerLevel'] ?? 1) * 8)
+            + intdiv((int)($artifact['instability'] ?? 0), 2)
+            + intdiv((int)($artifact['corruption'] ?? 0), 2);
+
+        if ($status === 'corrupted') {
+            $pressure += 18;
+        }
+        if ($status === 'lost') {
+            $pressure += 8;
+        }
+
+        return max(0, min(100, $pressure));
     }
 
     private function riskTier(int $instability, int $corruption): string
@@ -1053,7 +1472,7 @@ class ArtifactService
         return array_slice(array_values($items), 0, $limit);
     }
 
-    private function appendLimited(array $items, array $item, int $limit): array
+    private function appendLimited(array $items, mixed $item, int $limit): array
     {
         $items[] = $item;
         return array_slice(array_values($items), -$limit);

@@ -25,6 +25,10 @@ final class PantheonWiringTest extends TestCase
         self::assertStringContainsString('applySecrets', $service);
         self::assertStringContainsString('applyEntropy', $service);
         self::assertStringContainsString('pantheon_intervention', $service);
+        self::assertStringContainsString('pantheon_relationship_arc', $service);
+        self::assertStringContainsString('relationshipArcs', $service);
+        self::assertStringContainsString('advanceRelationshipArcs', $service);
+        self::assertStringContainsString('ARC_COOLDOWN_YEARS', $service);
         self::assertStringContainsString('counterplay', $service);
         self::assertStringContainsString('COUNTERPLAY_COSTS', $service);
         self::assertStringContainsString('pantheon_counterplay', $service);
@@ -35,10 +39,13 @@ final class PantheonWiringTest extends TestCase
         self::assertStringContainsString("'pantheon' =>", $gameLoop);
         self::assertStringContainsString('pantheonService->advanceWorld($tickYear, 1)', $gameLoop);
         self::assertStringContainsString('pantheon interventions', $gameLoop);
+        self::assertStringContainsString('pantheon interventions/arcs', $gameLoop);
         self::assertStringContainsString('pantheon_intervention', $mythology);
         self::assertStringContainsString('pantheon_counterplay', $mythology);
+        self::assertStringContainsString('pantheon_relationship_arc', $mythology);
         self::assertStringContainsString('pantheon_intervention', $eraLegacy);
         self::assertStringContainsString('pantheon_counterplay', $eraLegacy);
+        self::assertStringContainsString('pantheon_relationship_arc', $eraLegacy);
         self::assertStringContainsString('divine_intervention', $eraLegacy);
     }
 
@@ -49,6 +56,7 @@ final class PantheonWiringTest extends TestCase
         $status = (string)file_get_contents(dirname(__DIR__, 2) . '/src/Actions/StatusActions.php');
         $export = (string)file_get_contents(dirname(__DIR__, 2) . '/src/Services/ExportService.php');
         $dashboard = (string)file_get_contents(dirname(__DIR__, 3) . '/frontend/src/pages/Dashboard.tsx');
+        $dashboardPantheon = (string)file_get_contents(dirname(__DIR__, 3) . '/frontend/src/components/DashboardPantheonPanel.tsx');
         $lastTick = (string)file_get_contents(dirname(__DIR__, 3) . '/frontend/src/components/DashboardLastTickPanel.tsx');
         $api = (string)file_get_contents(dirname(__DIR__, 3) . '/frontend/src/api/apiService.ts');
         $page = (string)file_get_contents(dirname(__DIR__, 3) . '/frontend/src/pages/PantheonPage.tsx');
@@ -62,10 +70,15 @@ final class PantheonWiringTest extends TestCase
         self::assertStringContainsString("'pantheon' => \$this->pantheonService->status()", $status);
         self::assertStringContainsString("'pantheon' => \$pantheon", $export);
         self::assertStringContainsString("'pantheon' => 'exportPantheon'", $export);
+        self::assertStringContainsString('pantheon_relationship_arc', $export);
         self::assertStringContainsString('DashboardPantheonPanel', $dashboard);
+        self::assertStringContainsString('Latest Political Arc', $dashboardPantheon);
         self::assertStringContainsString('Pantheon Interventions', $lastTick);
+        self::assertStringContainsString('Pantheon Arcs', $lastTick);
         self::assertStringContainsString('PantheonStatusResponse', $api);
         self::assertStringContainsString('PantheonTickSummary', $api);
+        self::assertStringContainsString('PantheonRelationshipArc', $api);
+        self::assertStringContainsString('normalizePantheonRelationshipArc', $api);
         self::assertStringContainsString('getPantheon', $api);
         self::assertStringContainsString('counterplayPantheon', $api);
         self::assertStringContainsString('normalizePantheonStatusResponse', $api);
@@ -78,7 +91,9 @@ final class PantheonWiringTest extends TestCase
         self::assertStringContainsString('Challenge', $page);
         self::assertStringContainsString('Recent Interventions', $page);
         self::assertStringContainsString('Pantheon Betting Hooks', $page);
+        self::assertStringContainsString('Alliance and Rival Arcs', $page);
         self::assertStringContainsString('PantheonPoliticsStatus', $entity);
+        self::assertStringContainsString('PantheonRelationshipArc', $entity);
         self::assertStringContainsString('PantheonBettingHook', $entity);
         self::assertStringContainsString('PantheonIntervention', $entity);
         self::assertStringContainsString('PantheonCounterplayStatus', $entity);

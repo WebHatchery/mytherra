@@ -16,6 +16,14 @@ final class ArtifactWiringTest extends TestCase
         self::assertStringContainsString("'artifacts'", $service);
         self::assertStringContainsString("'roster'", $service);
         self::assertStringContainsString('CREATION_COST', $service);
+        self::assertStringContainsString('STARTER_ARTIFACTS', $service);
+        self::assertStringContainsString('Crystal Aegis of First Dawn', $service);
+        self::assertStringContainsString('Goldtide Ledger', $service);
+        self::assertStringContainsString('Moonwell Lens', $service);
+        self::assertStringContainsString('Ashen Banner of Broken Oaths', $service);
+        self::assertStringContainsString('ensureStarterArtifacts', $service);
+        self::assertStringContainsString("'seeded' => true", $service);
+        self::assertStringContainsString("'originSummary'", $service);
         self::assertStringContainsString('empower', $service);
         self::assertStringContainsString('transfer', $service);
         self::assertStringContainsString('stabilize', $service);
@@ -49,6 +57,7 @@ final class ArtifactWiringTest extends TestCase
         self::assertStringContainsString("'artifacts' => \$artifacts", $export);
         self::assertStringContainsString("'artifacts' => 'exportArtifacts'", $export);
         self::assertStringContainsString('ArtifactStatusResponse', $api);
+        self::assertStringContainsString('artifactLimit: Number(source.artifactLimit ?? source.artifact_limit ?? 9)', $api);
         self::assertStringContainsString('createArtifact', $api);
         self::assertStringContainsString('empowerArtifact', $api);
         self::assertStringContainsString('transferArtifact', $api);

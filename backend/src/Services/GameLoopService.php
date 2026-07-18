@@ -9,6 +9,7 @@ use App\Models\GameEvent;
 use App\Models\GameState;
 use App\Models\Hero;
 use App\Models\HeroDeathReason;
+use App\Models\HeroSettlementInteraction;
 use App\Models\Landmark;
 use App\Models\Player;
 use App\Models\Region;
@@ -32,7 +33,8 @@ class GameLoopService
         private ?WeatherInfluenceService $weatherInfluenceService = null,
         private ?TemporalOmenService $temporalOmenService = null,
         private ?PantheonService $pantheonService = null,
-        private ?MagicDiscoveryService $magicDiscoveryService = null
+        private ?MagicDiscoveryService $magicDiscoveryService = null,
+        private ?MythologyService $mythologyService = null
     ) {
         $this->configService ??= GameConfigService::getInstance();
         $this->eraPressureService ??= new EraPressureService();
@@ -49,6 +51,7 @@ class GameLoopService
         $this->temporalOmenService ??= new TemporalOmenService($this->configService, null, $this->eraPressureService);
         $this->pantheonService ??= new PantheonService($this->configService);
         $this->magicDiscoveryService ??= new MagicDiscoveryService($this->configService);
+        $this->mythologyService ??= new MythologyService($this->configService);
     }
 
     public function isEnabled(): bool
@@ -90,10 +93,12 @@ class GameLoopService
             'settlements' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'changes' => [], 'errors' => []],
             'heroes' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'changes' => [], 'errors' => []],
             'champions' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'outcomes' => [], 'errors' => []],
-            'divineTools' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'consequences' => [], 'errors' => []],
+            'divineTools' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'consequences' => [], 'chains' => [], 'errors' => []],
             'resources' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'changes' => [], 'errors' => []],
             'civilization' => ['processed' => 0, 'decisions' => [], 'events' => 0, 'errors' => []],
-            'pantheon' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'interventions' => [], 'errors' => []],
+            'pantheon' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'interventions' => [], 'arcs' => [], 'errors' => []],
+            'magicDiscovery' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'progressions' => [], 'errors' => []],
+            'mythology' => ['processed' => 0, 'changed' => 0, 'events' => 0, 'echoes' => [], 'errors' => []],
             'bets' => ['processed' => 0, 'won' => 0, 'lost' => 0, 'expired' => 0, 'resolved' => [], 'errors' => []],
             'divineFavor' => ['before' => 0, 'after' => 0, 'recovered' => self::DIVINE_FAVOR_PER_TICK],
             'eraPressure' => null,
@@ -111,6 +116,8 @@ class GameLoopService
             $result['divineTools'] = $this->processDivineToolConsequences($tickYear);
             $result['civilization'] = $this->civilizationBehaviorService->advanceWorld($tickYear, 1);
             $result['pantheon'] = $this->pantheonService->advanceWorld($tickYear, 1);
+            $result['magicDiscovery'] = $this->magicDiscoveryService->advanceWorld($tickYear, 2);
+            $result['mythology'] = $this->mythologyService->advanceWorld($tickYear, 2);
             $result['bets'] = $this->processActiveBets($tickYear);
             $result['divineFavor'] = $this->recoverDivineFavor();
 
@@ -141,7 +148,7 @@ class GameLoopService
 
             $this->recordEvent(
                 'World Tick Completed',
-                "Year {$tickYear} advanced: {$result['regions']['changed']} regions, {$result['settlements']['changed']} settlements, {$result['heroes']['changed']} heroes, {$result['champions']['events']} champion outcomes, {$result['divineTools']['events']} divine tool consequences, {$result['civilization']['events']} civilization decisions, {$result['pantheon']['events']} pantheon interventions, and {$result['bets']['processed']} bets changed state. {$result['eraPressure']['summary']} {$result['eraLegacy']['summary']} {$result['eraTransition']['summary']}",
+                "Year {$tickYear} advanced: {$result['regions']['changed']} regions, {$result['settlements']['changed']} settlements, {$result['heroes']['changed']} heroes, {$result['champions']['events']} champion outcomes, {$result['divineTools']['events']} divine tool consequences, {$result['civilization']['events']} civilization decisions, {$result['pantheon']['events']} pantheon interventions/arcs, {$result['magicDiscovery']['events']} magic progressions, {$result['mythology']['events']} myth echoes, and {$result['bets']['processed']} bets changed state. {$result['eraPressure']['summary']} {$result['eraLegacy']['summary']} {$result['eraTransition']['summary']}",
                 'game_tick',
                 null,
                 [],
@@ -298,7 +305,10 @@ class GameLoopService
                         "{$region->name} shifted to prosperity {$region->prosperity}, chaos {$region->chaos}, danger {$region->danger_level}, magic {$region->magic_affinity}, culture {$region->cultural_influence}, and status {$region->status}. {$resourcePressure['summary']} {$settlementPressure['summary']} {$magicCulturePressure['summary']} {$this->sentenceFromNotes($thresholdNotes)}",
                         'region_tick',
                         $region->id,
-                        [$region->id],
+                        $this->ids(array_merge(
+                            [(string)$region->id],
+                            $magicCulturePressure['relatedRegionIds'] ?? []
+                        )),
                         $magicCulturePressure['heroIds'],
                         $currentYear,
                         $magicCulturePressure['settlementIds'],
@@ -487,13 +497,33 @@ class GameLoopService
             try {
                 $oldOutput = (int)$node->output;
                 $oldStatus = $node->status;
+                $oldScarcityTier = $this->resourceScarcityTier($oldOutput, (string)$oldStatus);
                 $outcome = $this->resourceTickOutcome($node, $oldOutput, $oldStatus);
 
                 $node->output = $outcome['output'];
                 $node->status = $outcome['status'];
-
-                if ($node->output !== $oldOutput || $node->status !== $oldStatus) {
+                $resourceChanged = $node->output !== $oldOutput || $node->status !== $oldStatus;
+                if ($resourceChanged) {
                     $node->save();
+                }
+                $settlementImpact = $this->applyResourceScarcitySettlementImpact(
+                    $node,
+                    $oldOutput,
+                    (string)$oldStatus,
+                    $outcome,
+                    $currentYear
+                );
+                $thresholdNotes = $this->resourceThresholdNotes(
+                    $oldOutput,
+                    (int)$node->output,
+                    (string)$oldStatus,
+                    (string)$node->status,
+                    $oldScarcityTier,
+                    (string)$outcome['scarcityTier'],
+                    $settlementImpact
+                );
+
+                if ($resourceChanged) {
                     $summary['changed']++;
                     $this->appendChange($summary, [
                         'id' => $node->id,
@@ -504,24 +534,38 @@ class GameLoopService
                         'before' => [
                             'output' => $oldOutput,
                             'status' => $oldStatus,
+                            'scarcityTier' => $oldScarcityTier,
                         ],
                         'after' => [
                             'output' => (int)$node->output,
                             'status' => $node->status,
                             'effectiveOutput' => $this->effectiveResourceOutput($node),
+                            'scarcityTier' => $outcome['scarcityTier'],
                         ],
-                        'reason' => $outcome['reason'],
+                        'reason' => $outcome['reason'] . ' ' . $settlementImpact['summary'],
                     ]);
                 }
 
-                if ($node->status !== $oldStatus || abs((int)$node->output - $oldOutput) >= 4) {
+                if (
+                    $node->status !== $oldStatus ||
+                    abs((int)$node->output - $oldOutput) >= 4 ||
+                    $thresholdNotes !== [] ||
+                    ($settlementImpact['changed'] ?? false)
+                ) {
                     $eventId = $this->recordEvent(
-                        $this->resourceEventTitle($oldStatus, (string)$node->status, $oldOutput, (int)$node->output),
-                        "{$node->name} shifted from {$oldStatus} output {$oldOutput} to {$node->status} output {$node->output}. {$outcome['reason']}",
+                        $this->resourceEventTitle(
+                            $oldStatus,
+                            (string)$node->status,
+                            $oldOutput,
+                            (int)$node->output,
+                            $oldScarcityTier,
+                            (string)$outcome['scarcityTier']
+                        ),
+                        "{$node->name} shifted from {$oldStatus} output {$oldOutput} ({$oldScarcityTier}) to {$node->status} output {$node->output} ({$outcome['scarcityTier']}). {$outcome['reason']} {$settlementImpact['summary']} {$this->sentenceFromNotes($thresholdNotes)}",
                         'resource_tick',
                         $node->region_id,
                         [$node->region_id],
-                        [],
+                        $this->resourceRelatedHeroIds($node, (string)$node->status),
                         $currentYear,
                         $node->settlement_id ? [$node->settlement_id] : [],
                         [],
@@ -550,6 +594,8 @@ class GameLoopService
                 $oldRegionId = $hero->region_id;
                 $oldAge = (int)$hero->age;
                 $oldStatus = $hero->status;
+                $oldAlignment = $this->normalHeroAlignment($hero->alignment);
+                $oldTraits = array_values(array_filter($hero->personality_traits ?? []));
 
                 $hero->age = (int)$hero->age + 1;
 
@@ -567,6 +613,14 @@ class GameLoopService
                     }
                 }
 
+                $identityPressure = $this->heroIdentityPressure($hero);
+                $this->applyHeroIdentityPressure($hero, $identityPressure);
+                $settlementInteraction = $this->recordHeroSettlementInteraction(
+                    $hero,
+                    $identityPressure,
+                    $currentYear
+                );
+
                 if ($this->shouldHeroDie($hero)) {
                     $hero->is_alive = false;
                     $hero->status = 'deceased';
@@ -575,6 +629,8 @@ class GameLoopService
 
                 $hero->save();
                 $summary['changed']++;
+                $newAlignment = $this->normalHeroAlignment($hero->alignment);
+                $newTraits = array_values(array_filter($hero->personality_traits ?? []));
                 $heroChanges = [];
                 if ((int)$hero->level !== $oldLevel) {
                     $heroChanges[] = "level {$oldLevel}->{$hero->level}";
@@ -587,6 +643,18 @@ class GameLoopService
                 }
                 if (!$hero->is_alive) {
                     $heroChanges[] = 'died';
+                }
+                if ($newAlignment !== $oldAlignment) {
+                    $heroChanges[] = "alignment {$oldAlignment['good']}/{$oldAlignment['chaotic']}->{$newAlignment['good']}/{$newAlignment['chaotic']}";
+                }
+                if ($newTraits !== $oldTraits) {
+                    $addedTraits = array_values(array_diff($newTraits, $oldTraits));
+                    if ($addedTraits !== []) {
+                        $heroChanges[] = 'traits +' . implode(', ', $addedTraits);
+                    }
+                }
+                if ($settlementInteraction !== null) {
+                    $heroChanges[] = "settlement bond {$settlementInteraction['targetName']}";
                 }
 
                 if ($heroChanges !== []) {
@@ -601,6 +669,8 @@ class GameLoopService
                             'level' => $oldLevel,
                             'regionId' => $oldRegionId,
                             'status' => $oldStatus,
+                            'alignment' => $oldAlignment,
+                            'personalityTraits' => $oldTraits,
                         ],
                         'after' => [
                             'age' => (int)$hero->age,
@@ -608,7 +678,10 @@ class GameLoopService
                             'regionId' => $hero->region_id,
                             'status' => $hero->status,
                             'isAlive' => (bool)$hero->is_alive,
+                            'alignment' => $newAlignment,
+                            'personalityTraits' => $newTraits,
                         ],
+                        'reason' => $identityPressure['summary'],
                     ]);
                 }
 
@@ -635,6 +708,29 @@ class GameLoopService
                         [$oldRegionId, $hero->region_id],
                         [$hero->id],
                         $currentYear
+                    );
+                    $this->attachEventToLatestChange($summary, $hero->id, $eventId);
+                    $summary['events']++;
+                }
+
+                if (
+                    ($identityPressure['shouldRecordEvent'] ?? false) &&
+                    ($settlementInteraction !== null || $newAlignment !== $oldAlignment || $newTraits !== $oldTraits)
+                ) {
+                    $interactionSummary = $settlementInteraction
+                        ? " {$settlementInteraction['outcomeDescription']}"
+                        : '';
+                    $eventId = $this->recordEvent(
+                        'Hero Civic Bond',
+                        "{$hero->name} responded to regional pressure. {$identityPressure['summary']}{$interactionSummary}",
+                        'hero_civic_bond',
+                        $hero->region_id,
+                        [$hero->region_id],
+                        [$hero->id],
+                        $currentYear,
+                        $identityPressure['settlementIds'],
+                        [],
+                        $identityPressure['resourceIds']
                     );
                     $this->attachEventToLatestChange($summary, $hero->id, $eventId);
                     $summary['events']++;
@@ -677,6 +773,7 @@ class GameLoopService
             'weather' => null,
             'omens' => null,
             'consequences' => [],
+            'chains' => [],
             'errors' => [],
         ];
 
@@ -696,8 +793,10 @@ class GameLoopService
                 $summary['consequences'] = array_values(array_merge(
                     $summary['consequences'],
                     $section['consequences'] ?? [],
-                    $section['followUps'] ?? []
+                    $section['followUps'] ?? [],
+                    $section['chains'] ?? []
                 ));
+                $summary['chains'] = array_values(array_merge($summary['chains'], $section['chains'] ?? []));
                 foreach (($section['errors'] ?? []) as $error) {
                     $summary['errors'][] = is_array($error)
                         ? array_merge(['tool' => $key], $error)
@@ -815,9 +914,17 @@ class GameLoopService
                 break;
 
             case 'cultural_shift':
-                $won = $target['type'] === 'region' && in_array($target['model']->cultural_influence, ['mystical', 'martial', 'mercantile'], true);
+                $cultureShiftEvent = $target['type'] === 'region'
+                    ? $this->recentCultureShiftForRegion((string)$target['model']->id, (int)$bet->placed_year, $currentYear)
+                    : null;
+                $won = $target['type'] === 'region' && (
+                    in_array($target['model']->cultural_influence, ['scholarly', 'mystical', 'martial', 'mercantile'], true) ||
+                    $cultureShiftEvent instanceof GameEvent
+                );
                 $notes = $won
-                    ? "{$target['model']->name} now shows a strong {$target['model']->cultural_influence} cultural identity."
+                    ? ($cultureShiftEvent instanceof GameEvent
+                        ? "{$target['model']->name} recorded a culture-shift event: {$cultureShiftEvent->title}."
+                        : "{$target['model']->name} now shows a strong {$target['model']->cultural_influence} cultural identity.")
                     : "{$target['name']} has not shifted culture enough.";
                 break;
 
@@ -907,6 +1014,16 @@ class GameLoopService
                 $notes = $won
                     ? "{$target['model']->name} drew pantheon intervention: {$pantheonEvent->title}."
                     : "{$target['name']} has not drawn a pantheon intervention yet.";
+                break;
+
+            case 'civilization_agenda':
+                $civilizationEvent = $target['type'] === 'region'
+                    ? $this->recentCivilizationAgendaForRegion((string)$target['model']->id, (int)$bet->placed_year, $currentYear, (string)$bet->description)
+                    : null;
+                $won = $civilizationEvent instanceof GameEvent;
+                $notes = $won
+                    ? "{$target['model']->name} followed a civic agenda: {$civilizationEvent->title}."
+                    : "{$target['name']} has not recorded the predicted civic agenda yet.";
                 break;
 
             default:
@@ -1117,6 +1234,20 @@ class GameLoopService
             ->first();
     }
 
+    private function recentCultureShiftForRegion(string $regionId, int $placedYear, int $currentYear): ?GameEvent
+    {
+        return GameEvent::where(function ($query) use ($regionId): void {
+            $query->where('region_id', $regionId)
+                ->orWhereJsonContains('related_region_ids', $regionId);
+        })
+            ->where('type', 'region_tick')
+            ->where('title', 'Regional Culture Shift')
+            ->whereBetween('year', [$placedYear, $currentYear])
+            ->orderBy('year', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->first();
+    }
+
     private function recentPantheonInterventionForRegion(string $regionId, int $placedYear, int $currentYear): ?GameEvent
     {
         return GameEvent::where(function ($query) use ($regionId): void {
@@ -1128,6 +1259,28 @@ class GameLoopService
             ->orderBy('year', 'desc')
             ->orderBy('created_at', 'desc')
             ->first();
+    }
+
+    private function recentCivilizationAgendaForRegion(string $regionId, int $placedYear, int $currentYear, string $description): ?GameEvent
+    {
+        $events = GameEvent::where(function ($query) use ($regionId): void {
+            $query->where('region_id', $regionId)
+                ->orWhereJsonContains('related_region_ids', $regionId);
+        })
+            ->where('type', 'civilization_behavior')
+            ->whereBetween('year', [$placedYear, $currentYear])
+            ->orderBy('year', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        foreach ($events as $event) {
+            $eventLabel = trim(str_replace('Civilization Agenda:', '', (string)$event->title));
+            if ($eventLabel !== '' && stripos($description, $eventLabel) !== false) {
+                return $event;
+            }
+        }
+
+        return $events->first();
     }
 
     private function refreshBetOdds(DivineBet $bet): void
@@ -1147,6 +1300,12 @@ class GameLoopService
 
         if ($bet->bet_type === 'pantheon_intervention' && $target['type'] === 'region') {
             $odds *= $this->pantheonInterventionOddsModifier((string)$target['model']->id);
+            $bet->updateOdds(max(1.1, round($odds, 2)));
+            return;
+        }
+
+        if ($bet->bet_type === 'civilization_agenda' && $target['type'] === 'region') {
+            $odds *= $this->civilizationAgendaOddsModifier((string)$target['model']->id);
             $bet->updateOdds(max(1.1, round($odds, 2)));
             return;
         }
@@ -1208,6 +1367,29 @@ class GameLoopService
             return max(0.55, min(1.45, 1.35 - ($pressureScore / 140)));
         } catch (\Throwable $error) {
             Logger::error('Error calculating pantheon intervention odds modifier', ['error' => $error->getMessage()]);
+            return 1.0;
+        }
+    }
+
+    private function civilizationAgendaOddsModifier(string $regionId): float
+    {
+        try {
+            $agendaScore = 0;
+            foreach ($this->civilizationBehaviorService->status()['regionAgendas'] ?? [] as $agenda) {
+                if (!is_array($agenda) || (string)($agenda['regionId'] ?? '') !== $regionId) {
+                    continue;
+                }
+
+                $agendaScore = max($agendaScore, (int)($agenda['score'] ?? 0));
+            }
+
+            if ($agendaScore <= 0) {
+                return 1.35;
+            }
+
+            return max(0.55, min(1.45, 1.42 - ($agendaScore / 130)));
+        } catch (\Throwable $error) {
+            Logger::error('Error calculating civilization agenda odds modifier', ['error' => $error->getMessage()]);
             return 1.0;
         }
     }
@@ -1354,16 +1536,37 @@ class GameLoopService
         if ($status === 'status-flourishing' && $output < 60) {
             $status = 'active';
         }
+        $scarcityTier = $this->resourceScarcityTier($output, $status);
+        $notes[] = "Scarcity tier resolved as {$scarcityTier}.";
 
         return [
             'output' => $output,
             'status' => $status,
+            'scarcityTier' => $scarcityTier,
             'reason' => implode(' ', array_unique($notes)),
         ];
     }
 
-    private function resourceEventTitle(string $oldStatus, string $newStatus, int $oldOutput, int $newOutput): string
-    {
+    private function resourceEventTitle(
+        string $oldStatus,
+        string $newStatus,
+        int $oldOutput,
+        int $newOutput,
+        string $oldScarcityTier = 'stable',
+        string $newScarcityTier = 'stable'
+    ): string {
+        if (
+            in_array($newScarcityTier, ['critical', 'collapsed'], true) &&
+            $newScarcityTier !== $oldScarcityTier
+        ) {
+            return 'Resource Scarcity Critical';
+        }
+        if (
+            in_array($oldScarcityTier, ['critical', 'collapsed'], true) &&
+            in_array($newScarcityTier, ['stable', 'abundant'], true)
+        ) {
+            return 'Resource Scarcity Relief';
+        }
         if ($newStatus === 'depleted' && $oldStatus !== 'depleted') {
             return 'Resource Depleted';
         }
@@ -1387,6 +1590,187 @@ class GameLoopService
         }
 
         return 'Resource State Changed';
+    }
+
+    private function resourceScarcityTier(int $output, string $status): string
+    {
+        if ($status === 'depleted' || $output <= 5) {
+            return 'collapsed';
+        }
+        if ($status === 'corrupted' || $output <= 20) {
+            return 'critical';
+        }
+        if (in_array($status, ['contested', 'overworked', 'unstable'], true) || $output <= 40) {
+            return 'strained';
+        }
+        if (in_array($status, ['blessed', 'status-flourishing'], true) || $output >= 75) {
+            return 'abundant';
+        }
+
+        return 'stable';
+    }
+
+    private function resourceThresholdNotes(
+        int $oldOutput,
+        int $newOutput,
+        string $oldStatus,
+        string $newStatus,
+        string $oldScarcityTier,
+        string $newScarcityTier,
+        array $settlementImpact
+    ): array {
+        $notes = [];
+
+        if ($oldScarcityTier !== $newScarcityTier) {
+            $notes[] = "Scarcity tier changed from {$oldScarcityTier} to {$newScarcityTier}.";
+        }
+        if ($this->crossedDown($oldOutput, $newOutput, 40)) {
+            $notes[] = 'Output fell into strained resource range.';
+        }
+        if ($this->crossedDown($oldOutput, $newOutput, 20)) {
+            $notes[] = 'Output fell into critical scarcity range.';
+        }
+        if ($this->crossedUp($oldOutput, $newOutput, 75)) {
+            $notes[] = 'Output recovered to abundant resource range.';
+        }
+        if ($oldStatus !== $newStatus && in_array($newStatus, ['depleted', 'contested', 'corrupted', 'overworked'], true)) {
+            $notes[] = "Status now creates strategic pressure: {$newStatus}.";
+        }
+        if (($settlementImpact['changed'] ?? false) === true) {
+            $notes[] = 'Linked settlement survival metrics changed.';
+        }
+
+        return $notes;
+    }
+
+    private function applyResourceScarcitySettlementImpact(
+        ResourceNode $node,
+        int $oldOutput,
+        string $oldStatus,
+        array $outcome,
+        int $currentYear
+    ): array {
+        $settlement = $node->settlement;
+        if (!$settlement instanceof Settlement) {
+            return [
+                'changed' => false,
+                'summary' => 'No settlement directly depended on this resource.',
+            ];
+        }
+
+        $newOutput = (int)$outcome['output'];
+        $newStatus = (string)$outcome['status'];
+        $oldScarcityTier = $this->resourceScarcityTier($oldOutput, $oldStatus);
+        $newScarcityTier = (string)$outcome['scarcityTier'];
+        $changedEnough = $oldStatus !== $newStatus ||
+            $oldScarcityTier !== $newScarcityTier ||
+            abs($newOutput - $oldOutput) >= 4;
+
+        if (!$changedEnough) {
+            return [
+                'changed' => false,
+                'summary' => "{$settlement->name} absorbed the resource change without immediate survival impact.",
+            ];
+        }
+
+        $oldProsperity = (int)$settlement->prosperity;
+        $oldDefensibility = (int)$settlement->defensibility;
+        $oldStatusValue = (string)$settlement->status;
+        $oldTraits = $settlement->traits ?? [];
+        $prosperityDelta = 0;
+        $defensibilityDelta = 0;
+        $traitSignals = [];
+
+        if (in_array($newScarcityTier, ['critical', 'collapsed'], true)) {
+            $prosperityDelta -= $newScarcityTier === 'collapsed' ? 2 : 1;
+            $traitSignals[] = 'resource_scarcity';
+        } elseif ($newScarcityTier === 'strained') {
+            $prosperityDelta -= 1;
+            $traitSignals[] = 'resource_watch';
+        } elseif (
+            in_array($oldScarcityTier, ['critical', 'collapsed', 'strained'], true) &&
+            in_array($newScarcityTier, ['stable', 'abundant'], true)
+        ) {
+            $prosperityDelta += 1;
+            $traitSignals[] = 'resource_recovery';
+        }
+
+        if ($newStatus === 'contested') {
+            $defensibilityDelta += 1;
+            $traitSignals[] = 'resource_conflict';
+        }
+        if (in_array($newStatus, ['corrupted', 'unstable'], true)) {
+            $prosperityDelta -= 1;
+            $defensibilityDelta -= 1;
+            $traitSignals[] = 'hazard_watch';
+        }
+        if (in_array($newStatus, ['blessed', 'status-flourishing'], true)) {
+            $prosperityDelta += 1;
+            $traitSignals[] = 'resource_boon';
+        }
+
+        $settlement->prosperity = $this->clamp($oldProsperity + $prosperityDelta);
+        $settlement->defensibility = $this->clamp($oldDefensibility + $defensibilityDelta);
+        $settlement->traits = $this->settlementTraitsAfterResourceScarcity($oldTraits, $traitSignals);
+        $settlement->last_event_year = $currentYear;
+        $regionDanger = $node->region ? (int)$node->region->danger_level : 25;
+        $settlement->status = $this->settlementStatusFor(
+            (int)$settlement->prosperity,
+            (int)$settlement->population,
+            (int)$settlement->defensibility,
+            $regionDanger,
+            $oldStatusValue
+        );
+
+        $changed = (int)$settlement->prosperity !== $oldProsperity ||
+            (int)$settlement->defensibility !== $oldDefensibility ||
+            $settlement->status !== $oldStatusValue ||
+            $settlement->traits !== $oldTraits;
+
+        if ($changed) {
+            $settlement->save();
+        }
+
+        return [
+            'changed' => $changed,
+            'settlementId' => (string)$settlement->id,
+            'summary' => $changed
+                ? "{$settlement->name} reacted to resource scarcity: prosperity {$oldProsperity}->{$settlement->prosperity}, defense {$oldDefensibility}->{$settlement->defensibility}, status {$oldStatusValue}->{$settlement->status}."
+                : "{$settlement->name} watched the resource pressure but did not cross a settlement threshold.",
+        ];
+    }
+
+    private function settlementTraitsAfterResourceScarcity(array $traits, array $traitSignals): array
+    {
+        $result = array_values(array_unique(array_filter($traits)));
+
+        foreach ($traitSignals as $trait) {
+            if (!is_string($trait) || $trait === '' || in_array($trait, $result, true)) {
+                continue;
+            }
+
+            $result[] = $trait;
+            if (count($result) >= 8) {
+                break;
+            }
+        }
+
+        return $result;
+    }
+
+    private function resourceRelatedHeroIds(ResourceNode $node, string $status): array
+    {
+        if (!in_array($status, ['depleted', 'contested', 'corrupted', 'overworked', 'unstable'], true)) {
+            return [];
+        }
+
+        return Hero::where('region_id', $node->region_id)
+            ->where('is_alive', true)
+            ->orderByDesc('level')
+            ->limit(4)
+            ->pluck('id')
+            ->values()
+            ->all();
     }
 
     private function settlementPressureForRegion(string $regionId): array
@@ -1460,6 +1844,7 @@ class GameLoopService
         $dangerDelta = 0;
         $traitSignals = [];
         $magicAffinity = (int)$region->magic_affinity;
+        $interRegionCulturePressure = $this->interRegionCulturePressureForRegion($region);
 
         if ($magicAffinity >= 70) {
             $cultureScores['mystical'] += 2;
@@ -1642,6 +2027,19 @@ class GameLoopService
             }
         }
 
+        foreach ($interRegionCulturePressure['cultureScores'] as $culture => $score) {
+            if (!array_key_exists($culture, $cultureScores)) {
+                continue;
+            }
+
+            $cultureScores[$culture] += (int)$score;
+        }
+        $magicDelta += (int)$interRegionCulturePressure['magicDelta'];
+        $prosperityDelta += (int)$interRegionCulturePressure['prosperityDelta'];
+        $chaosDelta += (int)$interRegionCulturePressure['chaosDelta'];
+        $dangerDelta += (int)$interRegionCulturePressure['dangerDelta'];
+        $traitSignals = array_merge($traitSignals, $interRegionCulturePressure['traitSignals']);
+
         arsort($cultureScores);
         $topCulture = (string)array_key_first($cultureScores);
         $topCultureScore = (int)($cultureScores[$topCulture] ?? 0);
@@ -1671,7 +2069,117 @@ class GameLoopService
             'settlementIds' => $settlements->pluck('id')->take(8)->values()->all(),
             'landmarkIds' => $landmarks->pluck('id')->take(8)->values()->all(),
             'resourceIds' => $resources->pluck('id')->take(8)->values()->all(),
-            'summary' => "Magic/culture pressure: {$heroes->count()} living heroes, {$landmarks->count()} known landmarks ({$magicalLandmarks} magical, {$sacredLandmarks} sacred, {$strategicLandmarks} strategic, {$hazardousLandmarks} hazardous), {$magicalResources} magical resources, {$settlements->count()} settlements; magic {$magicText}, culture {$cultureText}, traits {$traitText}.",
+            'relatedRegionIds' => $interRegionCulturePressure['regionIds'],
+            'summary' => "Magic/culture pressure: {$heroes->count()} living heroes, {$landmarks->count()} known landmarks ({$magicalLandmarks} magical, {$sacredLandmarks} sacred, {$strategicLandmarks} strategic, {$hazardousLandmarks} hazardous), {$magicalResources} magical resources, {$settlements->count()} settlements; magic {$magicText}, culture {$cultureText}, traits {$traitText}. {$interRegionCulturePressure['summary']}",
+        ];
+    }
+
+    private function interRegionCulturePressureForRegion(Region $region): array
+    {
+        $directRouteIds = $this->ids($region->trade_routes ?? []);
+        $reverseRouteIds = [];
+
+        foreach (Region::where('id', '!=', (string)$region->id)->get() as $candidate) {
+            if (in_array((string)$region->id, $this->ids($candidate->trade_routes ?? []), true)) {
+                $reverseRouteIds[] = (string)$candidate->id;
+            }
+        }
+
+        $connectedIds = $this->ids(array_merge($directRouteIds, $reverseRouteIds));
+        if ($connectedIds === []) {
+            return $this->emptyInterRegionCulturePressure('Inter-region culture pressure: no active trade routes.');
+        }
+
+        $connectedRegions = Region::whereIn('id', $connectedIds)->get();
+        if ($connectedRegions->isEmpty()) {
+            return $this->emptyInterRegionCulturePressure('Inter-region culture pressure: trade routes point to no active regions.');
+        }
+
+        $cultureScores = [
+            'scholarly' => 0,
+            'martial' => 0,
+            'mystical' => 0,
+            'mercantile' => 0,
+            'pastoral' => 0,
+        ];
+        $magicDelta = 0;
+        $prosperityDelta = 0;
+        $chaosDelta = 0;
+        $dangerDelta = 0;
+        $traitSignals = [];
+        $signals = [];
+        $regionIds = [];
+
+        foreach ($connectedRegions as $connectedRegion) {
+            $regionIds[] = (string)$connectedRegion->id;
+            $culture = (string)($connectedRegion->cultural_influence ?? 'pastoral');
+            if (!array_key_exists($culture, $cultureScores)) {
+                $culture = 'pastoral';
+            }
+
+            $prosperity = (int)$connectedRegion->prosperity;
+            $population = (int)($connectedRegion->population_total ?? 0);
+            $chaos = (int)$connectedRegion->chaos;
+            $danger = (int)$connectedRegion->danger_level;
+            $magicAffinity = (int)$connectedRegion->magic_affinity;
+            $strength = 1
+                + ($prosperity >= 70 ? 1 : 0)
+                + ($population >= 2000 ? 1 : 0);
+            $strength = min(3, $strength);
+            $cultureScores[$culture] += $strength;
+            $signals[] = "{$connectedRegion->name} {$culture} +{$strength}";
+
+            if ($culture === 'mercantile' && $prosperity >= 60) {
+                $prosperityDelta++;
+                $traitSignals[] = 'trade_culture_exchange';
+            }
+            if (in_array($culture, ['scholarly', 'mystical'], true) && $magicAffinity >= 55) {
+                $magicDelta++;
+                $traitSignals[] = 'cross_region_lore';
+            }
+            if ($culture === 'martial' || $chaos >= 65 || $danger >= 65) {
+                $cultureScores['martial']++;
+                $dangerDelta++;
+                if ($chaos >= 65) {
+                    $chaosDelta++;
+                }
+                $traitSignals[] = 'border_tension';
+            }
+            if ($culture === 'pastoral' && $chaos <= 35) {
+                $chaosDelta--;
+            }
+        }
+
+        return [
+            'cultureScores' => $cultureScores,
+            'magicDelta' => max(-1, min(2, $magicDelta)),
+            'prosperityDelta' => max(-1, min(2, $prosperityDelta)),
+            'chaosDelta' => max(-2, min(2, $chaosDelta)),
+            'dangerDelta' => max(0, min(2, $dangerDelta)),
+            'traitSignals' => array_values(array_unique($traitSignals)),
+            'regionIds' => $this->ids($regionIds),
+            'summary' => 'Inter-region culture pressure: ' . $connectedRegions->count() .
+                ' connected region(s); ' . implode(', ', array_slice($signals, 0, 4)) . '.',
+        ];
+    }
+
+    private function emptyInterRegionCulturePressure(string $summary): array
+    {
+        return [
+            'cultureScores' => [
+                'scholarly' => 0,
+                'martial' => 0,
+                'mystical' => 0,
+                'mercantile' => 0,
+                'pastoral' => 0,
+            ],
+            'magicDelta' => 0,
+            'prosperityDelta' => 0,
+            'chaosDelta' => 0,
+            'dangerDelta' => 0,
+            'traitSignals' => [],
+            'regionIds' => [],
+            'summary' => $summary,
         ];
     }
 
@@ -2196,6 +2704,451 @@ class GameLoopService
         return $this->clamp((int)$node->output * $modifier);
     }
 
+    private function heroIdentityPressure(Hero $hero): array
+    {
+        $region = $hero->region;
+        $settlement = $this->heroFocusSettlement($hero);
+        $regionProsperity = $region ? (int)$region->prosperity : 50;
+        $regionChaos = $region ? (int)$region->chaos : 50;
+        $regionDanger = $region ? (int)$region->danger_level : 25;
+        $resources = $hero->region_id ? ResourceNode::where('region_id', $hero->region_id)->get() : [];
+        $strainedResourceIds = [];
+        $strainedResourceCount = 0;
+        $corruptedResourceCount = 0;
+
+        foreach ($resources as $resource) {
+            if (!in_array($resource->status, ['depleted', 'contested', 'corrupted', 'overworked', 'unstable'], true)) {
+                continue;
+            }
+
+            $strainedResourceCount++;
+            $strainedResourceIds[] = (string)$resource->id;
+            if ($resource->status === 'corrupted') {
+                $corruptedResourceCount++;
+            }
+        }
+
+        $role = (string)$hero->role;
+        $interactionType = null;
+        $action = null;
+        $goodDelta = 0;
+        $chaoticDelta = 0;
+        $settlementProsperityDelta = 0;
+        $settlementDefensibilityDelta = 0;
+        $traitSignals = [];
+        $settlementTraitSignals = [];
+        $pressureLabel = 'stable regional conditions';
+
+        if ($strainedResourceCount > 0) {
+            $pressureLabel = "resource scarcity ({$strainedResourceCount} strained nodes)";
+            [$interactionType, $action, $goodDelta, $chaoticDelta, $settlementProsperityDelta, $settlementDefensibilityDelta, $traitSignals, $settlementTraitSignals] =
+                $this->heroResourceScarcityResponse($role, $settlement, $corruptedResourceCount);
+        } elseif ($regionChaos >= 65 || $regionDanger >= 60) {
+            $pressureLabel = "regional crisis (chaos {$regionChaos}, danger {$regionDanger})";
+            [$interactionType, $action, $goodDelta, $chaoticDelta, $settlementProsperityDelta, $settlementDefensibilityDelta, $traitSignals, $settlementTraitSignals] =
+                $this->heroCrisisResponse($role, $settlement);
+        } elseif ($regionProsperity >= 70 && $settlement instanceof Settlement) {
+            $pressureLabel = "civic growth (prosperity {$regionProsperity})";
+            [$interactionType, $action, $goodDelta, $chaoticDelta, $settlementProsperityDelta, $settlementDefensibilityDelta, $traitSignals, $settlementTraitSignals] =
+                $this->heroProsperityResponse($role, $settlement);
+        }
+
+        $hasAction = $settlement instanceof Settlement && is_string($interactionType) && is_string($action);
+        $successChance = 0.5;
+        if ($settlement instanceof Settlement) {
+            $successChance = 0.38
+                + min(0.25, ((int)$hero->level / 120))
+                + ((int)$settlement->prosperity / 500)
+                + ((int)$settlement->defensibility / 600)
+                - ($regionDanger / 500);
+        }
+
+        $traitText = $traitSignals === [] ? 'none' : implode(', ', array_slice($traitSignals, 0, 4));
+        $actionText = $hasAction ? $action : 'no settlement action';
+        $summary = "Hero identity pressure: {$pressureLabel}; action {$actionText}; alignment good {$goodDelta}, chaotic {$chaoticDelta}; traits {$traitText}.";
+
+        return [
+            'settlement' => $settlement,
+            'settlementIds' => $settlement instanceof Settlement ? [(string)$settlement->id] : [],
+            'resourceIds' => $this->ids($strainedResourceIds),
+            'interactionType' => $interactionType,
+            'action' => $action,
+            'successChance' => max(0.15, min(0.88, $successChance)),
+            'duration' => $interactionType === 'establish_base' ? 3 : 1,
+            'goodDelta' => max(-3, min(3, $goodDelta)),
+            'chaoticDelta' => max(-3, min(3, $chaoticDelta)),
+            'traitSignals' => array_values(array_unique($traitSignals)),
+            'settlementTraitSignals' => array_values(array_unique($settlementTraitSignals)),
+            'settlementProsperityDelta' => max(-2, min(2, $settlementProsperityDelta)),
+            'settlementDefensibilityDelta' => max(-2, min(2, $settlementDefensibilityDelta)),
+            'shouldRecordEvent' => $hasAction || $traitSignals !== [] || $strainedResourceCount > 0,
+            'summary' => $summary,
+        ];
+    }
+
+    private function heroResourceScarcityResponse(string $role, ?Settlement $settlement, int $corruptedResources): array
+    {
+        $settlementName = $settlement?->name ?? 'the region';
+
+        return match ($role) {
+            'warrior' => [
+                'quest',
+                "Protected {$settlementName} resource routes",
+                1,
+                -1,
+                0,
+                1,
+                ['resource_guardian', 'protective'],
+                ['hero_guarded', 'resource_watch'],
+            ],
+            'scholar' => [
+                'research',
+                "Mapped failing resource flows for {$settlementName}",
+                1,
+                0,
+                1,
+                0,
+                ['resource_scholar', 'analytical'],
+                ['resource_stewardship'],
+            ],
+            'prophet' => [
+                $corruptedResources > 0 ? 'corruption_cleanse' : 'quest',
+                "Led rites against scarcity around {$settlementName}",
+                2,
+                -1,
+                1,
+                0,
+                ['restorative_mystic', 'compassionate'],
+                ['cleansing_rites'],
+            ],
+            'agent of change' => [
+                'trade',
+                "Brokered resource relief for {$settlementName}",
+                1,
+                1,
+                1,
+                0,
+                ['crisis_broker', 'practical'],
+                ['resource_relief'],
+            ],
+            default => [
+                'visit',
+                "Surveyed resource strain near {$settlementName}",
+                1,
+                0,
+                0,
+                0,
+                ['watchful'],
+                ['resource_watch'],
+            ],
+        };
+    }
+
+    private function heroCrisisResponse(string $role, ?Settlement $settlement): array
+    {
+        $settlementName = $settlement?->name ?? 'the region';
+
+        return match ($role) {
+            'warrior' => [
+                'quest',
+                "Organized crisis defense for {$settlementName}",
+                1,
+                -1,
+                0,
+                2,
+                ['guardian', 'battle_ready'],
+                ['hero_guarded', 'crisis_sheltered'],
+            ],
+            'scholar' => [
+                'research',
+                "Catalogued crisis patterns around {$settlementName}",
+                0,
+                -1,
+                1,
+                0,
+                ['crisis_cartographer', 'analytical'],
+                ['watch_records'],
+            ],
+            'prophet' => [
+                'quest',
+                "Steadied fearful omens in {$settlementName}",
+                2,
+                -1,
+                1,
+                0,
+                ['crisis_oracle', 'steadfast'],
+                ['prophetic_guidance'],
+            ],
+            'agent of change' => [
+                'establish_base',
+                "Rallied emergency reforms in {$settlementName}",
+                0,
+                2,
+                1,
+                1,
+                ['decisive', 'reformist'],
+                ['reformist_civic'],
+            ],
+            default => [
+                'visit',
+                "Kept watch over {$settlementName}",
+                1,
+                0,
+                0,
+                1,
+                ['watchful'],
+                ['hero_guarded'],
+            ],
+        };
+    }
+
+    private function heroProsperityResponse(string $role, Settlement $settlement): array
+    {
+        return match ($role) {
+            'scholar' => [
+                'research',
+                "Expanded civic learning in {$settlement->name}",
+                1,
+                -1,
+                1,
+                0,
+                ['civic_scholar', 'curious'],
+                ['heroic_scholarship'],
+            ],
+            'prophet' => [
+                'visit',
+                "Blessed civic rites in {$settlement->name}",
+                2,
+                -1,
+                1,
+                0,
+                ['spiritual_mentor'],
+                ['pilgrimage_site'],
+            ],
+            'warrior' => [
+                'quest',
+                "Turned prosperity into patrol discipline for {$settlement->name}",
+                1,
+                -1,
+                0,
+                1,
+                ['honorable', 'guardian'],
+                ['landmark_watch'],
+            ],
+            'agent of change' => [
+                'trade',
+                "Opened new civic bargains in {$settlement->name}",
+                1,
+                1,
+                1,
+                0,
+                ['civic_broker', 'ambitious'],
+                ['trade_culture_exchange'],
+            ],
+            default => [
+                'visit',
+                "Built civic ties in {$settlement->name}",
+                1,
+                0,
+                0,
+                0,
+                ['civic_minded'],
+                ['civic_minded'],
+            ],
+        };
+    }
+
+    private function applyHeroIdentityPressure(Hero $hero, array $identityPressure): void
+    {
+        $goodDelta = (int)($identityPressure['goodDelta'] ?? 0);
+        $chaoticDelta = (int)($identityPressure['chaoticDelta'] ?? 0);
+
+        if ($goodDelta !== 0 || $chaoticDelta !== 0) {
+            $alignment = $this->normalHeroAlignment($hero->alignment);
+            $alignment['good'] = $this->clamp($alignment['good'] + $goodDelta);
+            $alignment['chaotic'] = $this->clamp($alignment['chaotic'] + $chaoticDelta);
+            $alignment['lastChange'] = $identityPressure['summary'];
+            $hero->alignment = $alignment;
+        }
+
+        $hero->personality_traits = $this->heroTraitsAfterIdentityPressure(
+            $hero->personality_traits ?? [],
+            $identityPressure
+        );
+    }
+
+    private function recordHeroSettlementInteraction(Hero $hero, array $identityPressure, int $currentYear): ?array
+    {
+        $settlement = $identityPressure['settlement'] ?? null;
+        $interactionType = $identityPressure['interactionType'] ?? null;
+        $action = $identityPressure['action'] ?? null;
+
+        if (!$settlement instanceof Settlement || !is_string($interactionType) || !is_string($action)) {
+            return null;
+        }
+        if ($this->heroSettlementInteractionExists($hero, $settlement, $interactionType, $currentYear)) {
+            return null;
+        }
+
+        try {
+            $success = $this->roll((float)$identityPressure['successChance']);
+            $outcomeDescription = $success
+                ? "{$hero->name} succeeded: {$action}."
+                : "{$hero->name} attempted to help {$settlement->name}, but the outcome remained uncertain.";
+
+            HeroSettlementInteraction::create([
+                'id' => 'hsi-' . bin2hex(random_bytes(8)),
+                'hero_id' => $hero->id,
+                'settlement_id' => $settlement->id,
+                'landmark_id' => null,
+                'action' => $action,
+                'started_year' => $currentYear,
+                'duration' => (int)$identityPressure['duration'],
+                'success' => $success,
+                'outcome_description' => $outcomeDescription,
+                'interaction_type' => $interactionType,
+            ]);
+
+            if ($success) {
+                $oldProsperity = (int)$settlement->prosperity;
+                $oldDefensibility = (int)$settlement->defensibility;
+                $oldTraits = $settlement->traits ?? [];
+                $settlement->prosperity = $this->clamp(
+                    $oldProsperity + (int)$identityPressure['settlementProsperityDelta']
+                );
+                $settlement->defensibility = $this->clamp(
+                    $oldDefensibility + (int)$identityPressure['settlementDefensibilityDelta']
+                );
+                $settlement->traits = $this->settlementTraitsAfterHeroBond(
+                    $oldTraits,
+                    $identityPressure['settlementTraitSignals'] ?? []
+                );
+
+                if (
+                    (int)$settlement->prosperity !== $oldProsperity ||
+                    (int)$settlement->defensibility !== $oldDefensibility ||
+                    $settlement->traits !== $oldTraits
+                ) {
+                    $settlement->save();
+                }
+            }
+
+            return [
+                'targetId' => (string)$settlement->id,
+                'targetName' => (string)$settlement->name,
+                'interactionType' => $interactionType,
+                'action' => $action,
+                'success' => $success,
+                'outcomeDescription' => $outcomeDescription,
+            ];
+        } catch (\Throwable $error) {
+            Logger::error('Hero settlement interaction failed', [
+                'heroId' => $hero->id,
+                'settlementId' => $settlement->id,
+                'error' => $error->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    private function heroSettlementInteractionExists(
+        Hero $hero,
+        Settlement $settlement,
+        string $interactionType,
+        int $currentYear
+    ): bool {
+        return HeroSettlementInteraction::where('hero_id', $hero->id)
+            ->where('settlement_id', $settlement->id)
+            ->where('interaction_type', $interactionType)
+            ->where('started_year', $currentYear)
+            ->exists();
+    }
+
+    private function heroFocusSettlement(Hero $hero): ?Settlement
+    {
+        if (!$hero->region_id) {
+            return null;
+        }
+
+        $query = Settlement::where('region_id', $hero->region_id);
+
+        return match ((string)$hero->role) {
+            'warrior' => $query->orderBy('defensibility')->orderByDesc('population')->first(),
+            'scholar', 'prophet' => $query->orderByDesc('prosperity')->orderByDesc('population')->first(),
+            'agent of change' => $query->orderByDesc('population')->orderByDesc('prosperity')->first(),
+            default => $query->orderByDesc('population')->first(),
+        };
+    }
+
+    private function normalHeroAlignment(mixed $alignment): array
+    {
+        $alignment = is_array($alignment) ? $alignment : [];
+        $result = [
+            'good' => $this->clamp((int)($alignment['good'] ?? 50)),
+            'chaotic' => $this->clamp((int)($alignment['chaotic'] ?? 50)),
+        ];
+
+        if (isset($alignment['lastChange']) && is_string($alignment['lastChange'])) {
+            $result['lastChange'] = $alignment['lastChange'];
+        }
+
+        return $result;
+    }
+
+    private function heroTraitsAfterIdentityPressure(array $traits, array $identityPressure): array
+    {
+        $result = array_values(array_unique(array_filter($traits)));
+
+        foreach ($identityPressure['traitSignals'] ?? [] as $trait) {
+            if (!is_string($trait) || $trait === '' || in_array($trait, $result, true)) {
+                continue;
+            }
+
+            $result[] = $trait;
+            if (count($result) >= 8) {
+                break;
+            }
+        }
+
+        return $result;
+    }
+
+    private function settlementTraitsAfterHeroBond(array $traits, array $traitSignals): array
+    {
+        $result = array_values(array_unique(array_filter($traits)));
+
+        foreach ($traitSignals as $trait) {
+            if (!is_string($trait) || $trait === '' || in_array($trait, $result, true)) {
+                continue;
+            }
+
+            $result[] = $trait;
+            if (count($result) >= 8) {
+                break;
+            }
+        }
+
+        return $result;
+    }
+
+    private function ids(array $values): array
+    {
+        $ids = [];
+
+        foreach ($values as $value) {
+            if (!is_scalar($value)) {
+                continue;
+            }
+
+            $id = trim((string)$value);
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
     private function appendChange(array &$summary, array $change, int $limit = 12): void
     {
         if (count($summary['changes']) >= $limit) {
@@ -2320,8 +3273,7 @@ class GameLoopService
         int $defensibility = 50,
         int $regionDanger = 25,
         string $currentStatus = 'stable'
-    ): string
-    {
+    ): string {
         if ($population <= 0) {
             return 'abandoned';
         }

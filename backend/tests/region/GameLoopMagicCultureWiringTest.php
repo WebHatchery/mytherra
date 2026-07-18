@@ -29,6 +29,9 @@ final class GameLoopMagicCultureWiringTest extends TestCase
         self::assertStringContainsString("Landmark::where('region_id', \$region->id)", $this->serviceSource);
         self::assertStringContainsString("ResourceNode::where('region_id', \$region->id)", $this->serviceSource);
         self::assertStringContainsString("Settlement::where('region_id', \$region->id)", $this->serviceSource);
+        self::assertStringContainsString('interRegionCulturePressureForRegion', $this->serviceSource);
+        self::assertStringContainsString('trade_routes', $this->serviceSource);
+        self::assertStringContainsString('Inter-region culture pressure:', $this->serviceSource);
     }
 
     public function testRegionSummariesExposeMagicCultureAndTraits(): void
@@ -51,5 +54,7 @@ final class GameLoopMagicCultureWiringTest extends TestCase
         self::assertStringContainsString('$magicCulturePressure[\'settlementIds\']', $this->serviceSource);
         self::assertStringContainsString('$magicCulturePressure[\'landmarkIds\']', $this->serviceSource);
         self::assertStringContainsString('$magicCulturePressure[\'resourceIds\']', $this->serviceSource);
+        self::assertStringContainsString('$magicCulturePressure[\'relatedRegionIds\']', $this->serviceSource);
+        self::assertStringContainsString('$this->ids(array_merge(', $this->serviceSource);
     }
 }

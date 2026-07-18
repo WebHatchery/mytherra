@@ -37,7 +37,8 @@ export type DivineBetType =
   | 'war_outcome'
   | 'prosperity_threshold'
   | 'magic_discovery'
-  | 'pantheon_intervention';
+  | 'pantheon_intervention'
+  | 'civilization_agenda';
 
 export interface BetTargetSignal {
   label: string;

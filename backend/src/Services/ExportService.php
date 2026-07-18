@@ -10,6 +10,7 @@ use App\Models\Settlement;
 use App\Models\DivineBet;
 use App\Models\GameEvent;
 use App\Models\GameState;
+use App\Models\GameConfig;
 use App\Models\Building;
 use App\Models\Landmark;
 use App\Models\ResourceNode;
@@ -27,21 +28,32 @@ class ExportService
 
     private const CHRONICLE_MAJOR_TYPES = [
         'era_transition',
+        'era_descendant',
         'era_pressure',
         'magic_discovery',
+        'magic_progression',
         'myth_promoted',
+        'myth_echo',
         'civilization_behavior',
+        'civilization_diplomacy',
         'pantheon_intervention',
+        'pantheon_relationship_arc',
         'champion_quest_completed',
         'champion_rivalry_resolved',
         'champion_rivalry_escalated',
         'artifact_consequence',
+        'artifact_chain',
         'weather_consequence',
+        'weather_chain',
         'time_omen_followup',
+        'time_omen_chain',
         'divine_bet_resolved',
         'bet_resolution',
         'admin_world_edit',
     ];
+    private const PUBLIC_SHARE_CATEGORY = 'public_chronicle_shares';
+    private const PUBLIC_SHARE_RETENTION_DAYS = 30;
+    private const PUBLIC_SHARE_VISIBILITY = 'public_link';
 
     private function timestamp(): string
     {
@@ -132,6 +144,8 @@ class ExportService
             'champions' => 'exportChampions',
             'pantheon' => 'exportPantheon',
             'chronicle' => 'exportChronicleShare',
+            'chronicle-replay' => 'exportChronicleReplay',
+            'chronicleReplay' => 'exportChronicleReplay',
             'bets' => 'exportDivineBets',
             'events' => 'exportEvents'
         ];
@@ -205,6 +219,238 @@ class ExportService
             'bettingHighlights' => $this->chronicleBettingHighlights($timeline),
             'highlights' => $highlights,
             'timeline' => $timeline,
+        ];
+    }
+
+    public function exportChronicleReplay(array $filters = []): array
+    {
+        $normalizedFilters = $this->normalizeChronicleFilters($filters);
+        $events = array_reverse($this->chronicleEvents($normalizedFilters));
+        $timeline = array_map(fn(GameEvent $event): array => $this->formatChronicleEvent($event), $events);
+        $frames = [];
+        $runningTypes = [];
+        $entityCounts = [
+            'regions' => [],
+            'heroes' => [],
+            'settlements' => [],
+            'landmarks' => [],
+            'resources' => [],
+        ];
+
+        foreach ($timeline as $index => $event) {
+            $type = (string)($event['type'] ?? 'unknown');
+            $runningTypes[$type] = ($runningTypes[$type] ?? 0) + 1;
+            foreach ($entityCounts as $key => $values) {
+                foreach ($event['relatedIds'][$key] ?? [] as $id) {
+                    $entityCounts[$key][(string)$id] = true;
+                }
+            }
+
+            $frames[] = [
+                'index' => $index + 1,
+                'eventId' => (string)$event['id'],
+                'year' => $event['year'],
+                'era' => $event['era'],
+                'title' => (string)$event['title'],
+                'description' => (string)$event['description'],
+                'type' => $type,
+                'status' => (string)$event['status'],
+                'timelineUrl' => (string)$event['timelineUrl'],
+                'relatedIds' => $event['relatedIds'],
+                'beatSummary' => $this->replayBeatSummary($event, $index + 1, count($timeline)),
+                'runningContext' => [
+                    'frame' => $index + 1,
+                    'totalFrames' => count($timeline),
+                    'dominantEventType' => $this->dominantEventType($runningTypes),
+                    'entityCounts' => array_map(
+                        fn(array $ids): int => count($ids),
+                        $entityCounts
+                    ),
+                ],
+            ];
+        }
+
+        return [
+            'exportedAt' => $this->timestamp(),
+            'version' => '1.0',
+            'packageType' => 'chronicle_replay',
+            'filters' => $normalizedFilters,
+            'summary' => [
+                'frameCount' => count($frames),
+                'yearRange' => $this->yearRange($timeline),
+                'topEventTypes' => $this->topEventTypes($timeline),
+                'playbackOrder' => 'oldest_to_newest',
+            ],
+            'controls' => [
+                'supportsStep' => true,
+                'supportsScrub' => true,
+                'supportsEntityFilters' => true,
+            ],
+            'frames' => $frames,
+        ];
+    }
+
+    public function publishChronicleShare(array $filters = [], array $authUser = []): array
+    {
+        $shareId = $this->shareId();
+        $createdAtDate = new \DateTimeImmutable();
+        $createdAt = $createdAtDate->format(\DateTimeInterface::ATOM);
+        $expiresAt = $createdAtDate
+            ->modify('+' . self::PUBLIC_SHARE_RETENTION_DAYS . ' days')
+            ->format(\DateTimeInterface::ATOM);
+        $package = $this->exportChronicleShare($filters);
+        $snapshot = [
+            'shareId' => $shareId,
+            'shareUrl' => '/chronicle-share/' . rawurlencode($shareId),
+            'createdAt' => $createdAt,
+            'expiresAt' => $expiresAt,
+            'createdBy' => $this->shareCreator($authUser),
+            'governance' => $this->shareGovernance([
+                'createdAt' => $createdAt,
+                'expiresAt' => $expiresAt,
+            ]),
+            'package' => $package,
+        ];
+
+        GameConfigService::getInstance()->setConfig(
+            self::PUBLIC_SHARE_CATEGORY,
+            $shareId,
+            $snapshot,
+            'array',
+            'Public chronicle share snapshot generated from a curated export package with retention governance.'
+        );
+
+        return $snapshot;
+    }
+
+    public function getPublicChronicleShare(string $shareId): array
+    {
+        $shareId = strtolower(trim($shareId));
+        if (!preg_match('/^[a-z0-9]{12}$/', $shareId)) {
+            throw new \InvalidArgumentException('Chronicle share not found.');
+        }
+
+        $snapshot = GameConfigService::getInstance()->getConfig(
+            self::PUBLIC_SHARE_CATEGORY,
+            $shareId,
+            ['missing' => true]
+        );
+
+        if (!is_array($snapshot) || ($snapshot['missing'] ?? false) === true) {
+            throw new \InvalidArgumentException('Chronicle share not found.');
+        }
+
+        $governance = $this->shareGovernance($snapshot);
+        if (($governance['visibilityStatus'] ?? 'active') !== 'active') {
+            throw new \InvalidArgumentException('Chronicle share not found.');
+        }
+
+        return [
+            'shareId' => (string)($snapshot['shareId'] ?? $shareId),
+            'shareUrl' => (string)($snapshot['shareUrl'] ?? ('/chronicle-share/' . rawurlencode($shareId))),
+            'createdAt' => (string)($snapshot['createdAt'] ?? ''),
+            'expiresAt' => (string)($governance['expiresAt'] ?? ''),
+            'createdBy' => is_array($snapshot['createdBy'] ?? null) ? $snapshot['createdBy'] : null,
+            'governance' => $governance,
+            'package' => is_array($snapshot['package'] ?? null) ? $snapshot['package'] : [],
+        ];
+    }
+
+    public function listPublicChronicleShares(array $authUser = []): array
+    {
+        $currentUserId = $this->shareUserId($authUser);
+        $isAdmin = $this->isAdminUser($authUser);
+        $shares = GameConfig::where('category', self::PUBLIC_SHARE_CATEGORY)
+            ->orderByDesc('updated_at')
+            ->take($isAdmin ? 50 : 20)
+            ->get()
+            ->map(function (GameConfig $config) use ($currentUserId, $isAdmin): ?array {
+                $snapshot = json_decode((string)$config->value, true);
+                if (!is_array($snapshot)) {
+                    return null;
+                }
+
+                $createdBy = is_array($snapshot['createdBy'] ?? null) ? $snapshot['createdBy'] : [];
+                $creatorId = (string)($createdBy['id'] ?? '');
+                if (!$isAdmin && $creatorId !== $currentUserId) {
+                    return null;
+                }
+
+                $package = is_array($snapshot['package'] ?? null) ? $snapshot['package'] : [];
+                $summary = is_array($package['summary'] ?? null) ? $package['summary'] : [];
+                $governance = $this->shareGovernance($snapshot);
+                $visibilityStatus = (string)($governance['visibilityStatus'] ?? 'active');
+
+                return [
+                    'shareId' => (string)($snapshot['shareId'] ?? $config->key),
+                    'shareUrl' => (string)($snapshot['shareUrl'] ?? ('/chronicle-share/' . rawurlencode((string)$config->key))),
+                    'createdAt' => (string)($snapshot['createdAt'] ?? $config->created_at?->toIso8601String() ?? ''),
+                    'expiresAt' => (string)($governance['expiresAt'] ?? ''),
+                    'createdBy' => $createdBy ?: null,
+                    'governance' => $governance,
+                    'headline' => (string)($package['headline'] ?? 'Mytherra Chronicle'),
+                    'currentYear' => isset($summary['currentYear']) ? (int)$summary['currentYear'] : null,
+                    'eventCount' => isset($summary['eventCount']) ? (int)$summary['eventCount'] : null,
+                    'highlightCount' => isset($summary['highlightCount']) ? (int)$summary['highlightCount'] : null,
+                    'visibilityStatus' => $visibilityStatus,
+                    'isExpired' => (bool)($governance['isExpired'] ?? false),
+                    'canRevoke' => ($isAdmin || $creatorId === $currentUserId) && $visibilityStatus !== 'revoked',
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        return [
+            'shares' => $shares,
+            'canManageAll' => $isAdmin,
+        ];
+    }
+
+    public function revokePublicChronicleShare(string $shareId, array $authUser = []): array
+    {
+        $shareId = strtolower(trim($shareId));
+        if (!preg_match('/^[a-z0-9]{12}$/', $shareId)) {
+            throw new \InvalidArgumentException('Chronicle share not found.');
+        }
+
+        $config = GameConfig::where('category', self::PUBLIC_SHARE_CATEGORY)
+            ->where('key', $shareId)
+            ->first();
+        if (!$config instanceof GameConfig) {
+            throw new \InvalidArgumentException('Chronicle share not found.');
+        }
+
+        $snapshot = json_decode((string)$config->value, true);
+        if (!is_array($snapshot)) {
+            throw new \InvalidArgumentException('Chronicle share not found.');
+        }
+
+        $createdBy = is_array($snapshot['createdBy'] ?? null) ? $snapshot['createdBy'] : [];
+        $creatorId = (string)($createdBy['id'] ?? '');
+        $currentUserId = $this->shareUserId($authUser);
+        if (!$this->isAdminUser($authUser) && $creatorId !== $currentUserId) {
+            throw new \InvalidArgumentException('Chronicle share not found.');
+        }
+
+        $revokedAt = $this->timestamp();
+        $snapshot['revokedAt'] = $snapshot['revokedAt'] ?? $revokedAt;
+        $snapshot['revokedBy'] = $snapshot['revokedBy'] ?? $this->shareCreator($authUser);
+        $snapshot['governance'] = $this->shareGovernance($snapshot);
+
+        GameConfigService::getInstance()->setConfig(
+            self::PUBLIC_SHARE_CATEGORY,
+            $shareId,
+            $snapshot,
+            'array',
+            'Revoked public chronicle share snapshot retained for governance audit.'
+        );
+
+        return [
+            'shareId' => $shareId,
+            'revoked' => true,
+            'revokedAt' => (string)$snapshot['revokedAt'],
+            'visibilityStatus' => 'revoked',
         ];
     }
 
@@ -434,12 +680,14 @@ class ExportService
             });
         }
 
-        foreach ([
+        foreach (
+            [
             'heroId' => 'related_hero_ids',
             'settlementId' => 'related_settlement_ids',
             'landmarkId' => 'related_landmark_ids',
             'resourceId' => 'related_resource_ids',
-        ] as $field => $column) {
+            ] as $field => $column
+        ) {
             if (!empty($filters[$field])) {
                 $query->whereJsonContains($column, $filters[$field]);
             }
@@ -618,6 +866,33 @@ class ExportService
         return "Mytherra Year {$currentYear}: {$latest}. Recent themes: {$topTypes}. Era pressure: {$pressure}.";
     }
 
+    private function replayBeatSummary(array $event, int $frame, int $totalFrames): string
+    {
+        $year = $event['year'] !== null ? 'Year ' . $event['year'] : 'Unknown year';
+        $type = $this->formatEventType((string)($event['type'] ?? 'event'));
+        $description = trim((string)($event['description'] ?? ''));
+        $description = $description !== ''
+            ? substr($description, 0, 180)
+            : 'No description recorded.';
+
+        return "Frame {$frame}/{$totalFrames}: {$year} {$type}. {$description}";
+    }
+
+    private function dominantEventType(array $counts): ?string
+    {
+        if ($counts === []) {
+            return null;
+        }
+
+        arsort($counts);
+        return (string)array_key_first($counts);
+    }
+
+    private function formatEventType(string $type): string
+    {
+        return ucwords(str_replace(['_', '-'], ' ', $type));
+    }
+
     private function stringArray(mixed $value): array
     {
         if (!is_array($value)) {
@@ -642,6 +917,102 @@ class ExportService
             fn(array $matches): string => strtoupper($matches[1]),
             $field
         ) ?? $field;
+    }
+
+    private function shareId(): string
+    {
+        return bin2hex(random_bytes(6));
+    }
+
+    private function shareCreator(array $authUser): array
+    {
+        return [
+            'id' => $this->shareUserId($authUser),
+            'displayName' => (string)($authUser['display_name'] ?? $authUser['username'] ?? 'Unknown'),
+            'role' => (string)($authUser['role'] ?? 'user'),
+            'isGuest' => (bool)($authUser['is_guest'] ?? false),
+        ];
+    }
+
+    private function shareGovernance(array $snapshot): array
+    {
+        $existing = is_array($snapshot['governance'] ?? null) ? $snapshot['governance'] : [];
+        $createdAt = (string)($snapshot['createdAt'] ?? '');
+        $expiresAt = (string)($snapshot['expiresAt'] ?? $existing['expiresAt'] ?? '');
+        if ($expiresAt === '' && $createdAt !== '') {
+            try {
+                $expiresAt = (new \DateTimeImmutable($createdAt))
+                    ->modify('+' . self::PUBLIC_SHARE_RETENTION_DAYS . ' days')
+                    ->format(\DateTimeInterface::ATOM);
+            } catch (\Exception) {
+                $expiresAt = '';
+            }
+        }
+
+        $revokedAt = (string)($snapshot['revokedAt'] ?? $existing['revokedAt'] ?? '');
+        $revokedBy = is_array($snapshot['revokedBy'] ?? null)
+            ? $snapshot['revokedBy']
+            : (is_array($existing['revokedBy'] ?? null) ? $existing['revokedBy'] : null);
+        $isExpired = $this->shareExpired($expiresAt);
+        $visibilityStatus = $revokedAt !== ''
+            ? 'revoked'
+            : ($isExpired ? 'expired' : 'active');
+
+        return [
+            'visibility' => (string)($existing['visibility'] ?? self::PUBLIC_SHARE_VISIBILITY),
+            'visibilityStatus' => $visibilityStatus,
+            'retentionDays' => (int)($existing['retentionDays'] ?? self::PUBLIC_SHARE_RETENTION_DAYS),
+            'expiresAt' => $expiresAt,
+            'isExpired' => $isExpired,
+            'isRevoked' => $visibilityStatus === 'revoked',
+            'revokedAt' => $revokedAt !== '' ? $revokedAt : null,
+            'revokedBy' => $revokedBy,
+            'policySummary' => $this->sharePolicySummary($visibilityStatus, $expiresAt),
+        ];
+    }
+
+    private function shareExpired(string $expiresAt): bool
+    {
+        if ($expiresAt === '') {
+            return false;
+        }
+
+        try {
+            return new \DateTimeImmutable($expiresAt) <= new \DateTimeImmutable();
+        } catch (\Exception) {
+            return false;
+        }
+    }
+
+    private function sharePolicySummary(string $visibilityStatus, string $expiresAt): string
+    {
+        if ($visibilityStatus === 'revoked') {
+            return 'Public link has been revoked and is retained for share-governance audit.';
+        }
+
+        if ($visibilityStatus === 'expired') {
+            return 'Public link has expired under the 30-day share-governance retention policy.';
+        }
+
+        return $expiresAt !== ''
+            ? 'Public link remains active until ' . $expiresAt . ' under the 30-day share-governance policy.'
+            : 'Public link remains active under the share-governance policy.';
+    }
+
+    private function shareUserId(array $authUser): string
+    {
+        return (string)($authUser['user_id'] ?? $authUser['id'] ?? '');
+    }
+
+    private function isAdminUser(array $authUser): bool
+    {
+        $roles = $authUser['roles'] ?? [];
+        if (is_string($roles)) {
+            $roles = [$roles];
+        }
+
+        return ($authUser['role'] ?? null) === 'admin'
+            || (is_array($roles) && in_array('admin', $roles, true));
     }
 
     /**

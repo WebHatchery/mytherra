@@ -10,6 +10,8 @@ use App\Repositories\OddsRepository;
 use App\Repositories\BettingConfigRepository;
 use App\Models\BetConfig;
 use App\Models\DivineBet;
+use App\Models\Landmark;
+use App\Models\Region;
 
 class OddsCalculationService
 {
@@ -137,9 +139,11 @@ class OddsCalculationService
                 case 'landmark_discovery':
                     return $this->calculateLandmarkModifier($targetId, $betType);
 
-                case 'cultural_shift':
                 case 'corruption_spread':
-                    return $this->calculateRegionModifier($targetId, $betType);
+                    return $this->calculateCorruptionSpreadModifier($targetId);
+
+                case 'cultural_shift':
+                    return $this->calculateCultureShiftModifier($targetId);
 
                 case 'hero_settlement_bond':
                 case 'hero_location_visit':
@@ -155,6 +159,9 @@ class OddsCalculationService
 
                 case 'pantheon_intervention':
                     return $this->calculatePantheonInterventionModifier($targetId);
+
+                case 'civilization_agenda':
+                    return $this->calculateCivilizationAgendaModifier($targetId);
 
                 default:
                     return 1.0;
@@ -291,6 +298,81 @@ class OddsCalculationService
         }
     }
 
+    private function calculateCultureShiftModifier(string $regionId): float
+    {
+        try {
+            $region = Region::find($regionId);
+            if (!$region instanceof Region) {
+                return 1.2;
+            }
+
+            $currentCulture = (string)($region->cultural_influence ?? 'pastoral');
+            $distinctCultures = ['scholarly', 'martial', 'mystical', 'mercantile'];
+            $pressure = 0;
+            $tradeRoutes = is_array($region->trade_routes ?? null) ? count($region->trade_routes) : 0;
+            $pressure += min(4, $tradeRoutes);
+            $pressure += (int)$region->magic_affinity >= 65 ? 2 : 0;
+            $pressure += (int)$region->prosperity >= 70 ? 1 : 0;
+            $pressure += (int)$region->danger_level >= 55 ? 1 : 0;
+            $pressure += (int)$region->chaos >= 60 ? 1 : 0;
+
+            foreach ($region->regional_traits ?? [] as $trait) {
+                if (in_array((string)$trait, ['trade_culture_exchange', 'cross_region_lore', 'border_tension'], true)) {
+                    $pressure++;
+                }
+                if (str_starts_with((string)$trait, 'myth_')) {
+                    $pressure++;
+                }
+            }
+
+            if (in_array($currentCulture, $distinctCultures, true)) {
+                return 0.7;
+            }
+
+            return max(0.55, min(1.45, 1.35 - ($pressure / 12)));
+        } catch (Exception $e) {
+            Logger::error("Error calculating culture shift modifier: " . $e->getMessage());
+            return 1.0;
+        }
+    }
+
+    private function calculateCorruptionSpreadModifier(string $targetId): float
+    {
+        $landmark = Landmark::find($targetId);
+        if ($landmark instanceof Landmark) {
+            return $this->calculateLandmarkCorruptionModifier($landmark);
+        }
+
+        return $this->calculateRegionModifier($targetId, 'corruption_spread');
+    }
+
+    private function calculateLandmarkCorruptionModifier(Landmark $landmark): float
+    {
+        try {
+            $risk = ((int)$landmark->danger_level * 0.55) + ((int)$landmark->magic_level * 0.30);
+            if ((string)$landmark->status === Landmark::STATUS_HAUNTED) {
+                $risk += 12;
+            }
+            if ((string)$landmark->status === Landmark::STATUS_ACTIVE) {
+                $risk += 5;
+            }
+            foreach ($landmark->traits ?? [] as $trait) {
+                if (in_array((string)$trait, [Landmark::TRAIT_PORTAL, Landmark::TRAIT_MAGICAL, Landmark::TRAIT_ANCIENT], true)) {
+                    $risk += 5;
+                }
+            }
+
+            if ((string)$landmark->status === Landmark::STATUS_CORRUPTED || $landmark->isCorrupted()) {
+                return 0.55;
+            }
+
+            return max(0.55, min(1.55, 1.45 - ($risk / 110)));
+        } catch (Exception $e) {
+            Logger::error("Error calculating landmark corruption modifier: " . $e->getMessage());
+            return 1.0;
+        }
+    }
+
     /**
      * Calculate landmark-specific odds modifiers
      */
@@ -377,6 +459,29 @@ class OddsCalculationService
             return max(0.55, min(1.45, 1.35 - ($pressureScore / 140)));
         } catch (Exception $e) {
             Logger::error("Error calculating pantheon intervention modifier: " . $e->getMessage());
+            return 1.0;
+        }
+    }
+
+    private function calculateCivilizationAgendaModifier(string $regionId): float
+    {
+        try {
+            $agendaScore = 0;
+            foreach ((new CivilizationBehaviorService())->status()['regionAgendas'] ?? [] as $agenda) {
+                if (!is_array($agenda) || (string)($agenda['regionId'] ?? '') !== $regionId) {
+                    continue;
+                }
+
+                $agendaScore = max($agendaScore, (int)($agenda['score'] ?? 0));
+            }
+
+            if ($agendaScore <= 0) {
+                return 1.35;
+            }
+
+            return max(0.55, min(1.45, 1.42 - ($agendaScore / 130)));
+        } catch (Exception $e) {
+            Logger::error("Error calculating civilization agenda modifier: " . $e->getMessage());
             return 1.0;
         }
     }

@@ -289,7 +289,9 @@ class ContainerConfig
                     $container->get(BettingRepository::class),
                     $container->get(OddsCalculationService::class),
                     $container->get(DivineBettingService::class),
-                    $container->get(ChampionService::class)
+                    $container->get(ChampionService::class),
+                    $container->get(PantheonService::class),
+                    $container->get(CivilizationBehaviorService::class)
                 );
             },
             InfluenceActions::class => function ($container) {

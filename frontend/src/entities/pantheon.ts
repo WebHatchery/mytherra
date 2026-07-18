@@ -4,6 +4,12 @@ export type PantheonPressureTier = 'dominant' | 'active' | 'watch' | 'quiet' | s
 
 export type PantheonCounterplayMode = 'appease' | 'challenge';
 
+export type PantheonEventType =
+  | 'pantheon_intervention'
+  | 'pantheon_counterplay'
+  | 'pantheon_relationship_arc'
+  | string;
+
 export interface PantheonSignal {
   label: string;
   value: string;
@@ -112,6 +118,37 @@ export interface PantheonPoliticalEscalation {
   summary: string;
 }
 
+export interface PantheonRelationshipArc {
+  id: string;
+  arcKey: string;
+  year: number;
+  sourceId: string;
+  sourceName: string;
+  targetId: string;
+  targetName: string;
+  stance: 'ally' | 'rival' | string;
+  stage: string;
+  momentum: number;
+  tension: number;
+  pressureScore: number;
+  targetRegionId?: string | null;
+  targetRegionName?: string | null;
+  startedYear: number;
+  lastAdvancedYear: number;
+  stepCount: number;
+  title: string;
+  summary: string;
+  eventId?: string | null;
+  eventIds: string[];
+  changes: PantheonChanges;
+  relatedRegionIds: string[];
+  relatedSettlementIds: string[];
+  relatedHeroIds: string[];
+  relatedLandmarkIds: string[];
+  relatedResourceIds: string[];
+  nextPressure?: string | null;
+}
+
 export interface PantheonPoliticsStatus {
   summary: string;
   escalations: PantheonPoliticalEscalation[];
@@ -194,6 +231,7 @@ export interface PantheonStatusResponse {
   recentInterventions: PantheonIntervention[];
   relationships: PantheonRelationship[];
   politics?: PantheonPoliticsStatus | null;
+  relationshipArcs: PantheonRelationshipArc[];
   bettingHooks: PantheonBettingHook[];
   counterplay?: PantheonCounterplayStatus | null;
 }
@@ -203,5 +241,6 @@ export interface PantheonTickSummary {
   changed?: number;
   events?: number;
   interventions?: PantheonIntervention[];
+  arcs?: PantheonRelationshipArc[];
   errors?: Array<string | { deityId?: string | null; regionId?: string | null; message?: string }>;
 }

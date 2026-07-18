@@ -136,6 +136,39 @@ const WeatherInfluenceCard: React.FC<WeatherInfluenceCardProps> = ({ influence }
         )}
       </div>
 
+      {(influence.chains ?? []).length > 0 && (
+        <div className="mt-4 rounded border border-[#2f334d] bg-gray-900/50 p-4">
+          <div className="mb-3 text-sm font-semibold uppercase text-gray-400">
+            Consequence Chains
+          </div>
+          <div className="space-y-3">
+            {(influence.chains ?? []).slice(0, 3).map(chain => (
+              <div key={chain.id} className="text-sm">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="font-semibold text-gray-200">{chain.title}</span>
+                  <span className="text-xs text-amber-300">
+                    {chain.status} {chain.step}/{chain.maxSteps}
+                    {chain.nextYear ? ` • year ${chain.nextYear}` : ''}
+                  </span>
+                </div>
+                <div className="mt-1 text-gray-500">{chain.latestSummary}</div>
+                <div className="mt-1">
+                  {chain.eventIds.slice(-2).map(eventId => (
+                    <Link
+                      key={eventId}
+                      to={`/events/${eventId}`}
+                      className="mr-2 text-xs text-blue-300 hover:text-blue-100"
+                    >
+                      Event {eventId}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
         <EntityChanges
           title="Settlement Effects"

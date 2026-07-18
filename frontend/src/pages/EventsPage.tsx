@@ -16,6 +16,7 @@ const eventTypeOptions = [
   'region_tick',
   'settlement_tick',
   'resource_tick',
+  'admin_world_edit',
   'hero_level',
   'hero_travel',
   'hero_death',

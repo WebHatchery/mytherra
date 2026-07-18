@@ -22,7 +22,8 @@ final class EraComparisonWiringTest extends TestCase
     {
         self::assertStringContainsString('class EraComparisonService', $this->serviceSource);
 
-        foreach ([
+        foreach (
+            [
             'worldSnapshot',
             'compareSnapshots',
             'latestComparison',
@@ -33,7 +34,8 @@ final class EraComparisonWiringTest extends TestCase
             'Landmark::all()',
             'ResourceNode::all()',
             'DivineBet::all()',
-        ] as $expected) {
+            ] as $expected
+        ) {
             self::assertStringContainsString($expected, $this->serviceSource);
         }
     }

@@ -98,8 +98,16 @@ const ArtifactCard: React.FC<ArtifactCardProps> = ({
             >
               {artifact.status}
             </span>
+            {artifact.seeded && (
+              <span className="rounded bg-violet-900 px-2 py-0.5 text-xs font-semibold text-violet-100">
+                starter relic
+              </span>
+            )}
           </div>
           <p className="mt-1 text-sm text-gray-300">{artifact.summary}</p>
+          {artifact.originSummary && (
+            <p className="mt-1 text-xs text-gray-500">{artifact.originSummary}</p>
+          )}
         </div>
         <div className="text-sm font-semibold text-cyan-300">Power {artifact.powerLevel}</div>
       </div>
@@ -305,7 +313,7 @@ const ArtifactsPage: React.FC = () => {
   const canCreate =
     artifactName.trim().length >= 2 &&
     currentDivineFavor >= (artifactStatus?.creationCost ?? 40) &&
-    artifacts.length < (artifactStatus?.artifactLimit ?? 5) &&
+    artifacts.length < (artifactStatus?.artifactLimit ?? 9) &&
     !loadingAction.create;
 
   return (
@@ -319,7 +327,7 @@ const ArtifactsPage: React.FC = () => {
     >
       <PageHeader
         title="Divine Artifacts"
-        subtitle={`${artifacts.length}/${artifactStatus?.artifactLimit ?? 5} artifacts shaped`}
+        subtitle={`${artifacts.length}/${artifactStatus?.artifactLimit ?? 9} artifacts shaped`}
         icon="◆"
       />
 

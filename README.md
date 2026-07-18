@@ -1,6 +1,6 @@
 # Mytherra
 
-Mytherra is a browser-based god simulation game about prophecy, wagers, and subtle divine pressure. You play as a minor deity watching a persistent fantasy world change through autonomous heroes, regions, settlements, resources, magic, myths, civilization agendas, and eras.
+Mytherra is a browser-based god simulation game about prophecy, wagers, and subtle divine pressure. You play as a minor deity watching a persistent fantasy world change through autonomous heroes, regions, settlements, resources, magic, myths, civilization agendas/diplomacy, and eras.
 
 You do not command mortals directly. You read the world, spend Divine Favor, cultivate champions, create risky artifacts, shape weather, research magic, promote myths, and bet on what the simulation will do next.
 
@@ -9,8 +9,8 @@ You do not command mortals directly. You read the world, spend Divine Favor, cul
 - **Role:** A watching deity with limited power over a living world.
 - **Core resource:** Divine Favor, spent on influence, research, champions, artifacts, omens, weather, myths, civilization nudges, and divine bets.
 - **Main tension:** Decide when to observe, when to nudge, and when to wager on fate.
-- **Session rhythm:** Read events, inspect entities, forecast pressure, spend favor, place bets, run or wait for ticks, then review the consequences.
-- **World structure:** Regions contain settlements, landmarks, resources, heroes, histories, magical pressure, cultural drift, and era legacy signals.
+- **Session rhythm:** Read events, inspect entities, forecast pressure, spend favor, place bets, run or wait for ticks, then review immediate, delayed, and chained consequences.
+- **World structure:** Regions contain settlements, landmarks, resources, heroes, histories, trade routes, magical pressure, cultural drift, and era legacy signals.
 
 ## Core Loop
 
@@ -55,13 +55,14 @@ The Divine Observatory is the prediction layer. Speculation events present possi
 Betting currently draws from real simulation state, including:
 
 - Settlement growth and transformation
-- Landmark discovery and danger
-- Cultural shifts
+- Landmark discovery, danger, and corruption risk
+- Cultural shifts from regional traits, magic, and trade-route pressure
 - Region prosperity and danger changes
 - Resource disruption
 - Hero milestones and mortality
 - Champion quest or rivalry outcomes
 - Emerging magic paths becoming known
+- Civilization agendas becoming recorded civic decisions
 
 Resolved bets explain why they won, lost, or expired, and link back into event history.
 
@@ -69,36 +70,36 @@ Resolved bets explain why they won, lost, or expired, and link back into event h
 
 Mytherra now has several divine tools beyond direct region and hero influence:
 
-- **Artifacts:** Create named divine artifacts, empower them, stabilize them, transfer them to heroes, unbind them, and inspect artifact history.
+- **Artifacts:** Inspect starter relics such as the Crystal Aegis of First Dawn, Goldtide Ledger, Moonwell Lens, and Ashen Banner of Broken Oaths; create named divine artifacts, empower them, stabilize them, transfer them to heroes, unbind them, and follow artifact history.
 - **Weather:** Nudge regional weather to affect danger, resources, settlements, travel pressure, and conflict pressure.
 - **Omens:** Spend favor on world, region, or hero forecasts without mutating the world state.
-- **Magic:** Research hidden, emerging, and known magic paths through regions, heroes, and landmarks, then wager on emerging paths becoming known.
+- **Magic:** Research hidden, emerging, and known magic paths through regions, heroes, and landmarks, watch paths progress during ticks, then wager on emerging paths becoming known.
 - **Myths:** Promote major events into durable myths that shape regional identity, hero reputation, landmark memory, and future pressure.
-- **Civilization:** Inspect and advance regional agendas such as expansion, defense, trade, rivalry, research, and recovery.
-- **Pantheon:** Watch non-player deities pursue domains such as prosperity, strife, secrets, and entropy, then appease or challenge their pressure with Divine Favor.
+- **Civilization:** Inspect and advance regional agendas such as expansion, defense, trade, rivalry, research, and recovery, while watching trade compacts and rivalry fronts form between regions.
+- **Pantheon:** Watch non-player deities pursue domains such as prosperity, strife, secrets, and entropy, follow persistent alliance/rival arcs, then appease or challenge their pressure with Divine Favor.
 
 ### Watch Eras Rise And End
 
 Era pressure tracks long-run world risk from collapse, conquest, cataclysm, magical rupture, divine war, and other ending conditions. The game surfaces continuity forecasts showing which heroes, places, scars, myths, and bets may matter after an era boundary.
 
-Era transitions can transform the existing world, create new era-born foundations, preserve selected legacies, expire or carry bets, and record comparison snapshots for the dashboard.
+Era transitions can transform the existing world, create new era-born foundations and named descendants, preserve selected legacies, expire or carry bets, and record comparison snapshots for the dashboard.
 
 ## Main Screens
 
 - **Events:** Timeline feed, event details, entity filters, and era filters.
 - **World Map:** Region selection, region details, influence, resources, history, settlements, landmarks, and pressure signals.
 - **Heroes:** Hero list, hero lifecycle, direct timelines, influence actions, and champion controls.
-- **Artifacts:** Divine artifact creation, empowerment, stabilization, transfer, unbinding, and history.
+- **Artifacts:** Starter relic inspection, divine artifact creation, empowerment, stabilization, transfer, unbinding, and history.
 - **Weather:** Regional weather nudges and effect history.
 - **Omens:** Temporal forecasts for world, region, and hero targets.
-- **Magic:** Research paths, evidence signals, discovered systems, magic history, and discovery betting hooks.
-- **Myths:** Candidate legends, promoted myths, source events, and world effects.
-- **Civilization:** Regional agenda scores, civic decisions, recent behavior, and linked events.
-- **Pantheon:** AI deity goals, domains, rivalries, pressure targets, counterplay, and recent interventions.
+- **Magic:** Research paths, evidence signals, discovered systems, autonomous progression, magic history, and discovery betting hooks.
+- **Myths:** Candidate legends, promoted myths, source events, autonomous myth echoes, and world effects.
+- **Civilization:** Regional agenda scores, civic decisions, trade compacts, rivalry fronts, recent behavior, and linked events.
+- **Pantheon:** AI deity goals, domains, rivalries, pressure targets, alliance/rival arcs, counterplay, and recent interventions.
 - **Betting:** Speculation events, odds factors, portfolio summary, active bets, and resolved bets.
-- **Eras:** Era pressure, legacy continuity, rollover readiness, era history, and comparison data.
-- **Dashboard:** Current status, last tick results, champion outcomes, resolved bets, era panels, chronicles, statistics, full world export, and chronicle share export.
-- **Admin World Editor:** Admin-only creation and editing for regions, settlements, landmarks, resources, and heroes.
+- **Eras:** Era pressure, legacy continuity, rollover readiness, named descendants, era history, and comparison data.
+- **Dashboard:** Current status, last tick results, champion outcomes, resolved bets, era panels, chronicles, chronicle replay, statistics, full world export, chronicle share export, public chronicle replay pages, share-link management, and share-governance status.
+- **Admin World Editor:** Admin-only creation, editing, compatibility previews, and audit browsing for regions, settlements, landmarks, resources, and heroes.
 
 ## Strategy Notes
 
@@ -107,9 +108,10 @@ Era transitions can transform the existing world, create new era-born foundation
 - Influence after betting only when the payout justifies the favor cost.
 - Champions are long-term investments. Their outcomes can become myths, betting targets, and era-legacy material.
 - Omens do not change the world, but they can help decide where to spend favor next.
-- Artifacts and weather create stronger direct pressure, but their risks are easier to misread.
-- Pantheon pressure can help or complicate your plans; you can inspect political escalation, bet on direct interventions, and appease or challenge a deity to suppress near-term pressure.
-- Prosperity, chaos, danger, magic affinity, culture, resources, hero presence, landmarks, civilization agendas, and pantheon actors matter together.
+- Artifacts, weather, and omens can leave multi-step chains after their first delayed consequence, so a single divine tool can keep shaping later ticks.
+- Artifacts and weather create stronger direct pressure, but their risks are easier to misread once chains begin.
+- Pantheon pressure can help or complicate your plans; you can inspect political escalation, follow alliance/rival arcs, bet on direct interventions, and appease or challenge a deity to suppress near-term pressure.
+- Prosperity, chaos, danger, magic affinity, culture, trade routes, resources, hero presence, landmarks, civilization agendas/diplomacy, and pantheon actors matter together.
 - Era pressure changes what "winning" means. Sometimes preserving a legacy matters more than stabilizing the current year.
 
 ## Current Status
@@ -120,15 +122,15 @@ Playable foundations are in place:
 - PHP backend with MySQL persistence
 - Protected gameplay API routes
 - Event timeline and event detail pages
-- Region map, region tabs, resources, settlements, landmarks, and scoped history
+- Region map, region tabs, trade-route culture pressure, resources, settlements, landmarks, and scoped history
 - Hero lifecycle, hero influence, direct hero timelines, and mortal champions
-- Divine betting, odds explanations, payout previews, portfolio summary, and real tick resolution
-- Artifacts, weather, temporal omens, magic discovery, mythology, civilization behavior, AI pantheon pressure/politics, and era systems
-- Dashboard last-tick inspection, champion outcomes, pantheon interventions, resolved bets, entity chronicles, era panels, chronicle share export, and export/status surfaces
-- Admin-only world editing for primary simulation entities
+- Divine betting, culture-shift and civilization-agenda forecasts, odds explanations, payout previews, portfolio summary, and real tick resolution
+- Starter divine artifacts, artifact forging, weather, temporal omens, multi-step divine-tool consequence chains, magic discovery/progression, autonomous mythology echoes, civilization behavior/diplomacy, AI pantheon pressure/politics/alliance-rival arcs, and era systems
+- Dashboard last-tick inspection, champion outcomes, myth echoes, pantheon interventions/arcs, resolved bets, entity chronicles, chronicle replay, era panels, chronicle share export, public chronicle share/replay pages, share-link management, share-governance status, and export/status surfaces
+- Admin-only world editing, compatibility previews, and audit browsing for primary simulation entities
 - Production game-loop commands and health monitoring
 
-Active development now focuses on richer magic/myth/civilization evolution, richer pantheon alliance/rival arcs, broader new-era variety, descendant identity, multi-step divine-tool consequence chains, interactive replay/share presentation, safer bulk admin workflows, and long-run simulation balance.
+Active development now focuses on magic progression balance, civilization diplomacy balance and deeper inter-region strategy, mythology echo balance, pantheon arc balance and variety, broader new-era and descendant variety, divine-tool chain balance and variety, deeper replay polish/advanced share governance, safer bulk admin workflows, and long-run simulation balance.
 
 ## Running Locally
 

@@ -59,7 +59,8 @@ class DivineBet extends Model
         'war_outcome',
         'prosperity_threshold',
         'magic_discovery',
-        'pantheon_intervention'
+        'pantheon_intervention',
+        'civilization_agenda'
     ];
 
     // Confidence levels based on Node.js backend
@@ -150,6 +151,11 @@ class DivineBet extends Model
             'description' => 'A bet on an AI deity intervening in a pressured region',
             'base_odds' => 3.2,
             'resolve_conditions' => 'An AI pantheon intervention event targets the region within timeframe'
+        ],
+        'civilization_agenda' => [
+            'description' => 'A bet on a visible civilization agenda becoming a recorded civic decision',
+            'base_odds' => 3.1,
+            'resolve_conditions' => 'A civilization behavior event matching the region agenda occurs within timeframe'
         ]
     ];
 

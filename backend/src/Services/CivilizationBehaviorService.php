@@ -16,9 +16,13 @@ class CivilizationBehaviorService
 {
     private const CONFIG_CATEGORY = 'civilization';
     private const CONFIG_KEY_DECISIONS = 'behavior_decisions';
+    private const CONFIG_KEY_DIPLOMACY = 'diplomacy_state';
     private const HISTORY_LIMIT = 16;
+    private const DIPLOMACY_LIMIT = 12;
+    private const DIPLOMACY_COOLDOWN_YEARS = 5;
 
     private ?array $decisionCache = null;
+    private ?array $diplomacyCache = null;
 
     public function __construct(
         private ?GameConfigService $configService = null,
@@ -33,14 +37,18 @@ class CivilizationBehaviorService
         $agendas = $this->regionAgendas();
         $topAgenda = $agendas[0] ?? null;
         $recentDecisions = $this->loadDecisions();
+        $diplomacyState = $this->loadDiplomacyState();
+        $diplomacy = $this->civilizationDiplomacy($diplomacyState);
 
         return [
             'currentYear' => $this->currentYear(),
-            'summary' => $this->summary($agendas, $recentDecisions),
+            'summary' => $this->summary($agendas, $recentDecisions, $diplomacy),
             'behaviorOptions' => $this->behaviorOptions(),
             'topAgenda' => $topAgenda,
             'regionAgendas' => $agendas,
             'recentDecisions' => $recentDecisions,
+            'diplomacySummary' => $this->diplomacySummary($diplomacy),
+            'diplomacy' => $diplomacy,
             'behaviorCounts' => $this->behaviorCounts($agendas),
         ];
     }
@@ -71,6 +79,7 @@ class CivilizationBehaviorService
         $summary = [
             'processed' => 0,
             'decisions' => [],
+            'diplomacy' => [],
             'events' => 0,
             'errors' => [],
         ];
@@ -92,6 +101,12 @@ class CivilizationBehaviorService
                 ];
             }
         }
+
+        $diplomacySummary = $this->advanceDiplomacy($currentYear);
+        $summary['processed'] += $diplomacySummary['processed'];
+        $summary['diplomacy'] = $diplomacySummary['diplomacy'];
+        $summary['events'] += $diplomacySummary['events'];
+        $summary['errors'] = array_merge($summary['errors'], $diplomacySummary['errors']);
 
         return $summary;
     }
@@ -436,6 +451,362 @@ class CivilizationBehaviorService
         $this->saveDecisions(array_slice($history, 0, self::HISTORY_LIMIT));
 
         return $decision;
+    }
+
+    private function advanceDiplomacy(int $currentYear): array
+    {
+        $summary = [
+            'processed' => 0,
+            'diplomacy' => [],
+            'events' => 0,
+            'errors' => [],
+        ];
+        $state = $this->loadDiplomacyState();
+
+        foreach ($this->diplomacyCandidates($currentYear, $state) as $candidate) {
+            $summary['processed']++;
+
+            try {
+                $diplomacy = $this->applyDiplomacy($candidate, $currentYear);
+                $summary['diplomacy'][] = $diplomacy;
+                $summary['events']++;
+                break;
+            } catch (\Throwable $error) {
+                $summary['errors'][] = [
+                    'sourceRegionId' => $candidate['sourceRegionId'] ?? null,
+                    'targetRegionId' => $candidate['targetRegionId'] ?? null,
+                    'message' => $error->getMessage(),
+                ];
+            }
+        }
+
+        return $summary;
+    }
+
+    private function diplomacyCandidates(int $currentYear, array $state): array
+    {
+        $candidates = [];
+        foreach ($this->regionAgendas() as $agenda) {
+            $behavior = (string)($agenda['dominantBehavior'] ?? '');
+            if (!in_array($behavior, ['trade', 'rivalry'], true) || (int)($agenda['score'] ?? 0) < 42) {
+                continue;
+            }
+
+            $source = Region::find((string)$agenda['regionId']);
+            if (!$source instanceof Region) {
+                continue;
+            }
+
+            $target = $behavior === 'trade'
+                ? $this->tradeDiplomacyTarget($source)
+                : $this->rivalryDiplomacyTarget($source);
+            if (!$target instanceof Region) {
+                continue;
+            }
+
+            $kind = $behavior === 'trade' ? 'trade_compact' : 'rivalry_front';
+            $pactKey = $this->diplomacyKey((string)$source->id, (string)$target->id, $kind);
+            $existing = $this->diplomacyByKey($state, $pactKey);
+            $lastAdvancedYear = $existing === null ? 0 : (int)($existing['lastAdvancedYear'] ?? 0);
+            if ($lastAdvancedYear > 0 && $currentYear - $lastAdvancedYear < self::DIPLOMACY_COOLDOWN_YEARS) {
+                continue;
+            }
+
+            $candidates[] = [
+                'pactKey' => $pactKey,
+                'kind' => $kind,
+                'sourceRegionId' => (string)$source->id,
+                'sourceRegionName' => (string)$source->name,
+                'targetRegionId' => (string)$target->id,
+                'targetRegionName' => (string)$target->name,
+                'behavior' => $behavior,
+                'score' => (int)$agenda['score'],
+                'priority' => (int)$agenda['score'] + $this->diplomacyTargetWeight($target, $behavior),
+                'summary' => (string)$agenda['summary'],
+                'existing' => $existing,
+            ];
+        }
+
+        usort(
+            $candidates,
+            fn(array $left, array $right): int => ((int)$right['priority'] <=> (int)$left['priority'])
+                ?: strcmp((string)$left['pactKey'], (string)$right['pactKey'])
+        );
+
+        return $candidates;
+    }
+
+    private function tradeDiplomacyTarget(Region $source): ?Region
+    {
+        $sourceRoutes = $this->ids($source->trade_routes ?? []);
+        $targets = [];
+        foreach (Region::where('id', '!=', (string)$source->id)->get() as $region) {
+            $alreadyConnected = in_array((string)$region->id, $sourceRoutes, true);
+            $targets[] = [
+                'region' => $region,
+                'score' => (int)$region->prosperity
+                    + (int)$region->magic_affinity
+                    + ($alreadyConnected ? 18 : 0)
+                    + ((string)$region->cultural_influence === 'mercantile' ? 16 : 0),
+            ];
+        }
+
+        if ($targets === []) {
+            return null;
+        }
+
+        usort(
+            $targets,
+            fn(array $left, array $right): int => ((int)$right['score'] <=> (int)$left['score'])
+                ?: strcmp((string)$left['region']->name, (string)$right['region']->name)
+        );
+
+        return $targets[0]['region'];
+    }
+
+    private function rivalryDiplomacyTarget(Region $source): ?Region
+    {
+        $targets = [];
+        foreach (Region::where('id', '!=', (string)$source->id)->get() as $region) {
+            $routePressure = in_array((string)$region->id, $this->ids($source->trade_routes ?? []), true) ? 15 : 0;
+            $targets[] = [
+                'region' => $region,
+                'score' => (int)$region->chaos + (int)$region->danger_level + $routePressure
+                    + ((string)$region->cultural_influence === 'martial' ? 12 : 0),
+            ];
+        }
+
+        if ($targets === []) {
+            return null;
+        }
+
+        usort(
+            $targets,
+            fn(array $left, array $right): int => ((int)$right['score'] <=> (int)$left['score'])
+                ?: strcmp((string)$left['region']->name, (string)$right['region']->name)
+        );
+
+        return $targets[0]['region'];
+    }
+
+    private function diplomacyTargetWeight(Region $target, string $behavior): int
+    {
+        if ($behavior === 'trade') {
+            return intdiv((int)$target->prosperity + (int)$target->magic_affinity, 5);
+        }
+
+        return intdiv((int)$target->chaos + (int)$target->danger_level, 5);
+    }
+
+    private function applyDiplomacy(array $candidate, int $year): array
+    {
+        $source = Region::find((string)$candidate['sourceRegionId']);
+        $target = Region::find((string)$candidate['targetRegionId']);
+        if (!$source instanceof Region || !$target instanceof Region) {
+            throw new \InvalidArgumentException('Diplomacy regions could not be resolved.');
+        }
+
+        $kind = (string)$candidate['kind'];
+        $changes = $kind === 'trade_compact'
+            ? $this->applyTradeCompact($source, $target)
+            : $this->applyRivalryFront($source, $target);
+        $effectSummary = $this->effectSummary($changes);
+        $related = $this->relatedIdsFromDiplomacy($changes, $source, $target);
+        $title = $kind === 'trade_compact'
+            ? "Civilization Diplomacy: {$source->name} and {$target->name} Trade Compact"
+            : "Civilization Diplomacy: {$source->name} and {$target->name} Rivalry Front";
+        $summary = $kind === 'trade_compact'
+            ? "{$source->name} and {$target->name} formalized a trade compact from civic trade pressure. {$candidate['summary']} {$effectSummary}"
+            : "{$source->name} and {$target->name} hardened a rivalry front from civic conflict pressure. {$candidate['summary']} {$effectSummary}";
+        $event = $this->eventRepository->createEvent([
+            'title' => $title,
+            'description' => $summary,
+            'type' => 'civilization_diplomacy',
+            'region_id' => (string)$source->id,
+            'related_region_ids' => $related['regions'],
+            'related_hero_ids' => $related['heroes'],
+            'related_settlement_ids' => $related['settlements'],
+            'related_landmark_ids' => $related['landmarks'],
+            'related_resource_ids' => $related['resources'],
+            'year' => $year,
+        ]);
+
+        $existing = is_array($candidate['existing'] ?? null) ? $candidate['existing'] : [];
+        $eventIds = $this->ids(array_merge([(string)$event->id], is_array($existing['eventIds'] ?? null) ? $existing['eventIds'] : []));
+        $diplomacy = [
+            'id' => (string)($existing['id'] ?? ('civ-diplomacy-' . bin2hex(random_bytes(5)))),
+            'pactKey' => (string)$candidate['pactKey'],
+            'kind' => $kind,
+            'kindLabel' => $kind === 'trade_compact' ? 'Trade Compact' : 'Rivalry Front',
+            'sourceRegionId' => (string)$source->id,
+            'sourceRegionName' => (string)$source->name,
+            'targetRegionId' => (string)$target->id,
+            'targetRegionName' => (string)$target->name,
+            'score' => (int)$candidate['score'],
+            'startedYear' => (int)($existing['startedYear'] ?? $year),
+            'lastAdvancedYear' => $year,
+            'stepCount' => (int)($existing['stepCount'] ?? 0) + 1,
+            'eventId' => (string)$event->id,
+            'eventIds' => array_slice($eventIds, 0, 6),
+            'summary' => $summary,
+            'effectSummary' => $effectSummary,
+            'changes' => $changes,
+            'relatedRegionIds' => $related['regions'],
+            'relatedSettlementIds' => $related['settlements'],
+            'relatedHeroIds' => $related['heroes'],
+            'relatedLandmarkIds' => $related['landmarks'],
+            'relatedResourceIds' => $related['resources'],
+        ];
+
+        $this->recordDiplomacy($diplomacy);
+
+        return $diplomacy;
+    }
+
+    private function applyTradeCompact(Region $source, Region $target): array
+    {
+        $changes = $this->emptyChanges();
+        $sourceId = (string)$source->id;
+        $targetId = (string)$target->id;
+
+        $this->changeRegion($changes, $source, function (Region $region) use ($targetId): void {
+            $region->prosperity = $this->clamp((int)$region->prosperity + 2);
+            $region->chaos = $this->clamp((int)$region->chaos - 1);
+            $region->cultural_influence = 'mercantile';
+            $region->trade_routes = $this->addUnique($region->trade_routes ?? [], $targetId);
+            $region->addTrait('civic_trade_compact');
+        });
+        $this->changeRegion($changes, $target, function (Region $region) use ($sourceId): void {
+            $region->prosperity = $this->clamp((int)$region->prosperity + 1);
+            $region->trade_routes = $this->addUnique($region->trade_routes ?? [], $sourceId);
+            $region->addTrait('civic_trade_compact');
+        });
+
+        return $changes;
+    }
+
+    private function applyRivalryFront(Region $source, Region $target): array
+    {
+        $changes = $this->emptyChanges();
+
+        $this->changeRegion($changes, $source, function (Region $region): void {
+            $region->chaos = $this->clamp((int)$region->chaos + 2);
+            $region->danger_level = $this->clamp((int)$region->danger_level + 1);
+            $region->cultural_influence = 'martial';
+            $region->addTrait('civic_rivalry_front');
+        });
+        $this->changeRegion($changes, $target, function (Region $region): void {
+            $region->chaos = $this->clamp((int)$region->chaos + 1);
+            $region->danger_level = $this->clamp((int)$region->danger_level + 2);
+            $region->addTrait('civic_rivalry_front');
+        });
+
+        return $changes;
+    }
+
+    private function recordDiplomacy(array $diplomacy): void
+    {
+        $state = $this->loadDiplomacyState();
+        $pactKey = (string)$diplomacy['pactKey'];
+        $pacts = array_values(array_filter(
+            $this->civilizationDiplomacy($state),
+            fn(array $entry): bool => (string)($entry['pactKey'] ?? '') !== $pactKey
+        ));
+        array_unshift($pacts, $diplomacy);
+        $state['pacts'] = array_slice($pacts, 0, self::DIPLOMACY_LIMIT);
+        $state['lastDiplomacyYear'] = $diplomacy['lastAdvancedYear'];
+        $state['lastDiplomacyId'] = $diplomacy['id'];
+        $this->saveDiplomacyState($state);
+    }
+
+    private function diplomacyByKey(array $state, string $pactKey): ?array
+    {
+        foreach ($this->civilizationDiplomacy($state) as $diplomacy) {
+            if ((string)($diplomacy['pactKey'] ?? '') === $pactKey) {
+                return $diplomacy;
+            }
+        }
+
+        return null;
+    }
+
+    private function diplomacyKey(string $sourceId, string $targetId, string $kind): string
+    {
+        $ids = [$sourceId, $targetId];
+        sort($ids);
+
+        return implode(':', $ids) . ':' . $kind;
+    }
+
+    private function civilizationDiplomacy(array $state): array
+    {
+        $items = $state['pacts'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $pacts = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $kind = (string)($item['kind'] ?? 'trade_compact');
+            $pactKey = (string)($item['pactKey'] ?? $item['pact_key'] ?? '');
+            if ($pactKey === '') {
+                continue;
+            }
+
+            $eventIds = is_array($item['eventIds'] ?? null)
+                ? $item['eventIds']
+                : (isset($item['eventId']) ? [$item['eventId']] : []);
+            $pacts[] = [
+                'id' => (string)($item['id'] ?? $pactKey),
+                'pactKey' => $pactKey,
+                'kind' => $kind,
+                'kindLabel' => (string)($item['kindLabel'] ?? $item['kind_label'] ?? ($kind === 'trade_compact' ? 'Trade Compact' : 'Rivalry Front')),
+                'sourceRegionId' => (string)($item['sourceRegionId'] ?? $item['source_region_id'] ?? ''),
+                'sourceRegionName' => (string)($item['sourceRegionName'] ?? $item['source_region_name'] ?? ''),
+                'targetRegionId' => (string)($item['targetRegionId'] ?? $item['target_region_id'] ?? ''),
+                'targetRegionName' => (string)($item['targetRegionName'] ?? $item['target_region_name'] ?? ''),
+                'score' => (int)($item['score'] ?? 0),
+                'startedYear' => (int)($item['startedYear'] ?? $item['started_year'] ?? 0),
+                'lastAdvancedYear' => (int)($item['lastAdvancedYear'] ?? $item['last_advanced_year'] ?? 0),
+                'stepCount' => (int)($item['stepCount'] ?? $item['step_count'] ?? 1),
+                'eventId' => isset($item['eventId']) ? (string)$item['eventId'] : ($eventIds[0] ?? null),
+                'eventIds' => array_slice($this->ids($eventIds), 0, 6),
+                'summary' => (string)($item['summary'] ?? ''),
+                'effectSummary' => (string)($item['effectSummary'] ?? $item['effect_summary'] ?? ''),
+                'changes' => $this->normalizeChangeGroups($item['changes'] ?? []),
+                'relatedRegionIds' => $this->ids(is_array($item['relatedRegionIds'] ?? null) ? $item['relatedRegionIds'] : []),
+                'relatedSettlementIds' => $this->ids(is_array($item['relatedSettlementIds'] ?? null) ? $item['relatedSettlementIds'] : []),
+                'relatedHeroIds' => $this->ids(is_array($item['relatedHeroIds'] ?? null) ? $item['relatedHeroIds'] : []),
+                'relatedLandmarkIds' => $this->ids(is_array($item['relatedLandmarkIds'] ?? null) ? $item['relatedLandmarkIds'] : []),
+                'relatedResourceIds' => $this->ids(is_array($item['relatedResourceIds'] ?? null) ? $item['relatedResourceIds'] : []),
+            ];
+        }
+
+        usort(
+            $pacts,
+            fn(array $left, array $right): int => ((int)$right['lastAdvancedYear'] <=> (int)$left['lastAdvancedYear'])
+                ?: strcmp((string)$left['pactKey'], (string)$right['pactKey'])
+        );
+
+        return array_slice($pacts, 0, self::DIPLOMACY_LIMIT);
+    }
+
+    private function relatedIdsFromDiplomacy(array $changes, Region $source, Region $target): array
+    {
+        return [
+            'regions' => $this->ids(array_merge(
+                [(string)$source->id, (string)$target->id],
+                array_map(fn(array $change): string => (string)$change['id'], $changes['regions'])
+            )),
+            'settlements' => $this->ids(array_map(fn(array $change): string => (string)$change['id'], $changes['settlements'])),
+            'heroes' => $this->ids(array_map(fn(array $change): string => (string)$change['id'], $changes['heroes'])),
+            'landmarks' => $this->ids(array_map(fn(array $change): string => (string)$change['id'], $changes['landmarks'])),
+            'resources' => $this->ids(array_map(fn(array $change): string => (string)$change['id'], $changes['resources'])),
+        ];
     }
 
     private function applyExpansion(Region $region): array
@@ -861,16 +1232,62 @@ class CivilizationBehaviorService
             : implode(', ', $parts) . ' changed through the civic agenda.';
     }
 
-    private function summary(array $agendas, array $recentDecisions): string
+    private function normalizeChangeGroups(array $changes): array
+    {
+        $normalized = $this->emptyChanges();
+        foreach (array_keys($normalized) as $group) {
+            $items = $changes[$group] ?? [];
+            if (!is_array($items)) {
+                continue;
+            }
+
+            foreach ($items as $item) {
+                if (!is_array($item)) {
+                    continue;
+                }
+
+                $normalized[$group][] = [
+                    'id' => (string)($item['id'] ?? ''),
+                    'name' => (string)($item['name'] ?? ''),
+                    'before' => is_array($item['before'] ?? null) ? $item['before'] : [],
+                    'after' => is_array($item['after'] ?? null) ? $item['after'] : [],
+                    'summary' => (string)($item['summary'] ?? ''),
+                ];
+            }
+        }
+
+        return $normalized;
+    }
+
+    private function summary(array $agendas, array $recentDecisions, array $diplomacy): string
     {
         if ($agendas === []) {
             return 'No regions are available for civilization behavior.';
         }
 
         $top = $agendas[0];
+        $diplomacyText = $diplomacy === []
+            ? 'No active civic diplomacy is recorded yet.'
+            : count($diplomacy) . ' active civic diplomacy pact' . (count($diplomacy) === 1 ? ' is' : 's are') . ' recorded.';
 
         return count($agendas) . " regional agendas are visible; {$top['regionName']} currently leads with {$top['dominantBehaviorLabel']} at {$top['score']}/100. " .
-            count($recentDecisions) . ' recent decisions are recorded.';
+            count($recentDecisions) . " recent decisions are recorded. {$diplomacyText}";
+    }
+
+    private function diplomacySummary(array $diplomacy): string
+    {
+        if ($diplomacy === []) {
+            return 'No active civic diplomacy has formed yet.';
+        }
+
+        $latest = $diplomacy[0];
+        $label = (string)($latest['kindLabel'] ?? 'Civic Pact');
+        $source = (string)($latest['sourceRegionName'] ?? 'Unknown region');
+        $target = (string)($latest['targetRegionName'] ?? 'Unknown region');
+        $year = (int)($latest['lastAdvancedYear'] ?? 0);
+        $yearText = $year > 0 ? " in year {$year}" : '';
+
+        return count($diplomacy) . " active pact(s). Latest: {$label} between {$source} and {$target}{$yearText}.";
     }
 
     private function behaviorCounts(array $agendas): array
@@ -1068,6 +1485,42 @@ class CivilizationBehaviorService
             $decisions,
             'array',
             'Recent autonomous civilization behavior decisions.'
+        );
+    }
+
+    private function loadDiplomacyState(): array
+    {
+        if ($this->diplomacyCache !== null) {
+            return $this->diplomacyCache;
+        }
+
+        $value = $this->configService->getConfig(self::CONFIG_CATEGORY, self::CONFIG_KEY_DIPLOMACY, []);
+        $this->diplomacyCache = is_array($value) ? $value : [];
+        $this->diplomacyCache['pacts'] = array_values(array_filter(
+            is_array($this->diplomacyCache['pacts'] ?? null) ? $this->diplomacyCache['pacts'] : [],
+            fn($pact): bool => is_array($pact)
+        ));
+
+        return $this->diplomacyCache;
+    }
+
+    private function saveDiplomacyState(array $state): void
+    {
+        $state['pacts'] = array_slice(
+            array_values(array_filter(
+                is_array($state['pacts'] ?? null) ? $state['pacts'] : [],
+                fn($pact): bool => is_array($pact)
+            )),
+            0,
+            self::DIPLOMACY_LIMIT
+        );
+        $this->diplomacyCache = $state;
+        $this->configService->setConfig(
+            self::CONFIG_CATEGORY,
+            self::CONFIG_KEY_DIPLOMACY,
+            $state,
+            'array',
+            'Persistent inter-region civic diplomacy state.'
         );
     }
 

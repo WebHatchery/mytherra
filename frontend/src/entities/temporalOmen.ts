@@ -40,6 +40,21 @@ export interface TemporalOmenPrediction {
   relatedResourceIds: string[];
 }
 
+export interface TemporalOmenChain {
+  id: string;
+  status: string;
+  startedYear?: number | null;
+  lastAdvancedYear?: number | null;
+  nextYear?: number | null;
+  step: number;
+  maxSteps: number;
+  lastRiskScore?: number;
+  sourceEventId?: string | null;
+  eventIds: string[];
+  title: string;
+  latestSummary: string;
+}
+
 export interface TemporalOmenEntry {
   id: string;
   eventId?: string | null;
@@ -61,6 +76,7 @@ export interface TemporalOmenEntry {
   relatedHeroIds: string[];
   relatedSettlementIds: string[];
   relatedResourceIds: string[];
+  chains?: TemporalOmenChain[];
   consistencyNote: string;
 }
 

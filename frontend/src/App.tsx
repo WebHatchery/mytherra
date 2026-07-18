@@ -15,6 +15,7 @@ import PantheonPage from './pages/PantheonPage';
 import BettingPage from './pages/BettingPage';
 import ErasPage from './pages/ErasPage';
 import AdminWorldEditorPage from './pages/AdminWorldEditorPage';
+import ChronicleSharePage from './pages/ChronicleSharePage';
 import { Dashboard } from './pages/Dashboard';
 import { RegionProvider } from './contexts/RegionProvider';
 import { AuthProvider } from './contexts/AuthProvider';
@@ -35,6 +36,7 @@ const App: React.FC = () => {
       <RegionProvider>
         <Router basename={getBasename()}>
           <Routes>
+            <Route path="/chronicle-share/:shareId" element={<ChronicleSharePage />} />
             <Route
               path="/"
               element={

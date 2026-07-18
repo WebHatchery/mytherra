@@ -19,6 +19,9 @@ class MythologyService
     private const PROMOTION_COST = 22;
     private const MYTH_LIMIT = 24;
     private const CANDIDATE_LIMIT = 8;
+    private const ECHO_COOLDOWN_YEARS = 4;
+    private const ECHO_THRESHOLD = 58;
+    private const ECHO_LIMIT_PER_TICK = 3;
 
     private ?array $stateCache = null;
 
@@ -39,6 +42,8 @@ class MythologyService
             'currentYear' => $this->currentYear(),
             'promotionCost' => self::PROMOTION_COST,
             'summary' => $this->summary($myths, $candidates),
+            'evolutionSummary' => $this->evolutionSummary($myths),
+            'recentEchoes' => $this->recentEchoes($myths),
             'mythTypeOptions' => $this->mythTypeOptions(),
             'myths' => array_values($myths),
             'candidates' => $candidates,
@@ -102,6 +107,51 @@ class MythologyService
             'myth' => $myth,
             'status' => $this->status(),
         ];
+    }
+
+    public function advanceWorld(int $currentYear, int $maxEchoes = self::ECHO_LIMIT_PER_TICK): array
+    {
+        $state = $this->loadState();
+        $summary = [
+            'processed' => count($state),
+            'changed' => 0,
+            'events' => 0,
+            'echoes' => [],
+            'errors' => [],
+        ];
+
+        if ($state === []) {
+            return $summary;
+        }
+
+        foreach ($state as $index => $myth) {
+            if ($summary['events'] >= $maxEchoes) {
+                break;
+            }
+
+            try {
+                $echo = $this->evolveMythIfReady($myth, $currentYear);
+                if ($echo === null) {
+                    continue;
+                }
+
+                $state[$index] = $echo['myth'];
+                $summary['changed']++;
+                $summary['events']++;
+                $summary['echoes'][] = $echo['summary'];
+            } catch (\Throwable $error) {
+                $summary['errors'][] = [
+                    'mythId' => (string)($myth['id'] ?? ''),
+                    'message' => $error->getMessage(),
+                ];
+            }
+        }
+
+        if ($summary['changed'] > 0) {
+            $this->saveState($state);
+        }
+
+        return $summary;
     }
 
     private function loadState(): array
@@ -169,12 +219,12 @@ class MythologyService
         ));
 
         $baseScore = match ($type) {
-            'era_transition', 'era_generation' => 58,
+            'era_transition', 'era_generation', 'era_descendant' => 58,
             'era_pressure', 'time_omen' => 45,
-            'magic_discovery' => 52,
+            'magic_discovery', 'magic_progression' => 52,
             'champion_quest_completed', 'champion_rivalry_resolved', 'champion_rivalry_escalated' => 56,
             'champion_designated', 'champion_cultivated' => 46,
-            'artifact_consequence', 'weather_consequence', 'time_omen_followup', 'pantheon_intervention', 'pantheon_counterplay' => 50,
+            'artifact_consequence', 'weather_consequence', 'time_omen_followup', 'artifact_chain', 'weather_chain', 'time_omen_chain', 'pantheon_intervention', 'pantheon_counterplay', 'pantheon_relationship_arc', 'civilization_diplomacy' => 50,
             'artifact_created', 'artifact_empowered', 'artifact_corrupted', 'artifact_stolen', 'artifact_stabilized', 'artifact_transferred' => 44,
             'weather_influence', 'divine_influence' => 40,
             'hero_level', 'hero_death' => 38,
@@ -355,7 +405,345 @@ class MythologyService
             'reason' => $candidate['reason'],
             'influenceSummary' => $this->effectSummary($effects),
             'effects' => $effects,
+            'echoCount' => 0,
+            'lastEchoYear' => null,
+            'latestEcho' => null,
+            'evolutionHistory' => [],
+            'autonomousEvolution' => 'This myth has not echoed autonomously yet.',
         ];
+    }
+
+    private function evolveMythIfReady(array $myth, int $currentYear): ?array
+    {
+        $promotedYear = (int)($myth['promotedYear'] ?? $currentYear);
+        $lastEchoYear = isset($myth['lastEchoYear']) && $myth['lastEchoYear'] !== null
+            ? (int)$myth['lastEchoYear']
+            : $promotedYear;
+        if (($currentYear - $lastEchoYear) < self::ECHO_COOLDOWN_YEARS) {
+            return null;
+        }
+
+        $activity = $this->recentRelatedActivity($myth, $currentYear);
+        $ageBonus = min(10, max(0, (int)floor(($currentYear - $promotedYear) / 8)));
+        $echoCount = (int)($myth['echoCount'] ?? 0);
+        $echoFatigue = min(12, $echoCount * 3);
+        $resonance = min(
+            100,
+            max(0, (int)($myth['score'] ?? 0)) + $ageBonus + ($activity['count'] * 5) - $echoFatigue
+        );
+
+        if ($resonance < self::ECHO_THRESHOLD) {
+            return null;
+        }
+
+        $effects = $this->applyMythEchoEffects($myth, $resonance);
+        $regionIds = $this->mythRegionIds($myth, $effects);
+        $heroIds = $this->ids(array_merge(
+            $myth['relatedHeroIds'] ?? [],
+            array_map(fn(array $hero): string => (string)($hero['id'] ?? ''), $effects['heroes'] ?? [])
+        ));
+        $settlementIds = $this->ids($myth['relatedSettlementIds'] ?? []);
+        $landmarkIds = $this->ids(array_merge(
+            $myth['relatedLandmarkIds'] ?? [],
+            array_map(fn(array $landmark): string => (string)($landmark['id'] ?? ''), $effects['landmarks'] ?? [])
+        ));
+        $resourceIds = $this->ids($myth['relatedResourceIds'] ?? []);
+        $summary = $this->mythEchoSummary($myth, $resonance, $activity, $effects);
+
+        $event = $this->eventRepository->createEvent([
+            'title' => 'Myth Echo: ' . (string)($myth['title'] ?? 'Untitled Myth'),
+            'description' => $summary,
+            'type' => 'myth_echo',
+            'region_id' => $myth['regionId'] ?? ($regionIds[0] ?? null),
+            'related_region_ids' => $regionIds,
+            'related_hero_ids' => $heroIds,
+            'related_settlement_ids' => $settlementIds,
+            'related_landmark_ids' => $landmarkIds,
+            'related_resource_ids' => $resourceIds,
+            'year' => $currentYear,
+        ]);
+
+        $echo = [
+            'id' => 'myth-echo-' . bin2hex(random_bytes(5)),
+            'year' => $currentYear,
+            'eventId' => (string)$event->id,
+            'resonance' => $resonance,
+            'activityCount' => $activity['count'],
+            'summary' => $summary,
+            'effects' => $effects,
+            'signals' => $activity['signals'],
+        ];
+
+        $history = is_array($myth['evolutionHistory'] ?? null) ? $myth['evolutionHistory'] : [];
+        array_unshift($history, $echo);
+        $myth['evolutionHistory'] = array_slice($history, 0, 6);
+        $myth['latestEcho'] = $echo;
+        $myth['lastEchoYear'] = $currentYear;
+        $myth['echoCount'] = $echoCount + 1;
+        $myth['score'] = min(100, (int)($myth['score'] ?? 0) + 2 + min(3, count($effects['regions'] ?? [])));
+        $myth['strength'] = $this->strengthLabel((int)$myth['score']);
+        $myth['autonomousEvolution'] = $this->autonomousEvolutionText($myth);
+
+        return [
+            'myth' => $myth,
+            'summary' => [
+                'id' => $echo['id'],
+                'mythId' => (string)($myth['id'] ?? ''),
+                'title' => (string)($myth['title'] ?? ''),
+                'mythType' => (string)($myth['mythType'] ?? 'chronicle'),
+                'mythTypeLabel' => (string)($myth['mythTypeLabel'] ?? $this->mythTypeLabel((string)($myth['mythType'] ?? 'chronicle'))),
+                'year' => $currentYear,
+                'eventId' => (string)$event->id,
+                'resonance' => $resonance,
+                'summary' => $summary,
+                'affected' => [
+                    'regions' => count($effects['regions'] ?? []),
+                    'heroes' => count($effects['heroes'] ?? []),
+                    'landmarks' => count($effects['landmarks'] ?? []),
+                ],
+            ],
+        ];
+    }
+
+    private function recentRelatedActivity(array $myth, int $currentYear): array
+    {
+        $regionIds = $this->mythRegionIds($myth);
+        $heroIds = $this->ids($myth['relatedHeroIds'] ?? []);
+        $settlementIds = $this->ids($myth['relatedSettlementIds'] ?? []);
+        $landmarkIds = $this->ids($myth['relatedLandmarkIds'] ?? []);
+        $resourceIds = $this->ids($myth['relatedResourceIds'] ?? []);
+        $fromYear = max(1, $currentYear - 8);
+
+        if ($regionIds === [] && $heroIds === [] && $settlementIds === [] && $landmarkIds === [] && $resourceIds === []) {
+            return [
+                'count' => 0,
+                'signals' => [],
+            ];
+        }
+
+        $query = GameEvent::whereBetween('year', [$fromYear, $currentYear])
+            ->where('type', '!=', 'myth_echo');
+
+        $query->where(function ($inner) use ($regionIds, $heroIds, $settlementIds, $landmarkIds, $resourceIds) {
+            foreach ($regionIds as $regionId) {
+                $inner->orWhere('region_id', $regionId)
+                    ->orWhereJsonContains('related_region_ids', $regionId);
+            }
+            foreach ($heroIds as $heroId) {
+                $inner->orWhereJsonContains('related_hero_ids', $heroId);
+            }
+            foreach ($settlementIds as $settlementId) {
+                $inner->orWhereJsonContains('related_settlement_ids', $settlementId);
+            }
+            foreach ($landmarkIds as $landmarkId) {
+                $inner->orWhereJsonContains('related_landmark_ids', $landmarkId);
+            }
+            foreach ($resourceIds as $resourceId) {
+                $inner->orWhereJsonContains('related_resource_ids', $resourceId);
+            }
+        });
+
+        $events = $query->orderByDesc('year')->take(6)->get();
+
+        return [
+            'count' => $events->count(),
+            'signals' => $events
+                ->map(fn(GameEvent $event): string => (string)$event->title)
+                ->filter()
+                ->values()
+                ->take(4)
+                ->all(),
+        ];
+    }
+
+    private function applyMythEchoEffects(array $myth, int $resonance): array
+    {
+        $mythType = (string)($myth['mythType'] ?? 'chronicle');
+        $trait = 'myth_echo_' . $mythType;
+        $effects = [
+            'regions' => [],
+            'heroes' => [],
+            'landmarks' => [],
+        ];
+
+        foreach ($this->mythRegionIds($myth) as $regionId) {
+            $region = Region::find($regionId);
+            if (!$region instanceof Region) {
+                continue;
+            }
+
+            $before = [
+                'prosperity' => (int)$region->prosperity,
+                'chaos' => (int)$region->chaos,
+                'danger' => (int)($region->danger_level ?? 0),
+                'magic' => (int)$region->magic_affinity,
+            ];
+            $region->addTrait('myth_echo');
+            $region->addTrait($trait);
+            $deltas = $this->regionEchoDeltas($mythType, $resonance);
+            $region->prosperity = $this->bounded((int)$region->prosperity + $deltas['prosperity']);
+            $region->chaos = $this->bounded((int)$region->chaos + $deltas['chaos']);
+            $region->danger_level = $this->bounded((int)($region->danger_level ?? 0) + $deltas['danger']);
+            $region->magic_affinity = $this->bounded((int)$region->magic_affinity + $deltas['magic']);
+            $region->save();
+
+            $effects['regions'][] = [
+                'id' => (string)$region->id,
+                'name' => (string)$region->name,
+                'trait' => $trait,
+                'summary' => "{$region->name} was shaped by an autonomous myth echo.",
+                'before' => $before,
+                'after' => [
+                    'prosperity' => (int)$region->prosperity,
+                    'chaos' => (int)$region->chaos,
+                    'danger' => (int)$region->danger_level,
+                    'magic' => (int)$region->magic_affinity,
+                ],
+            ];
+        }
+
+        foreach ($this->ids($myth['relatedHeroIds'] ?? []) as $heroId) {
+            $hero = Hero::find($heroId);
+            if (!$hero instanceof Hero || !(bool)$hero->is_alive) {
+                continue;
+            }
+
+            $feat = 'Myth Echo: ' . (string)($myth['title'] ?? 'Untitled Myth');
+            $feats = is_array($hero->feats ?? null) ? $hero->feats : [];
+            if (!in_array($feat, $feats, true)) {
+                $feats[] = $feat;
+                $hero->feats = $feats;
+                $hero->level = min(100, (int)$hero->level + 1);
+                $hero->save();
+            }
+
+            $effects['heroes'][] = [
+                'id' => (string)$hero->id,
+                'name' => (string)$hero->name,
+                'summary' => "{$hero->name} carries a renewed myth echo.",
+            ];
+        }
+
+        foreach ($this->ids($myth['relatedLandmarkIds'] ?? []) as $landmarkId) {
+            $landmark = Landmark::find($landmarkId);
+            if (!$landmark instanceof Landmark) {
+                continue;
+            }
+
+            $traits = is_array($landmark->traits ?? null) ? $landmark->traits : [];
+            foreach (['myth_echo', $trait] as $landmarkTrait) {
+                if (!in_array($landmarkTrait, $traits, true)) {
+                    $traits[] = $landmarkTrait;
+                }
+            }
+            $landmark->traits = $traits;
+            $landmark->magic_level = min(100, (int)$landmark->magic_level + 1);
+            $landmark->save();
+            $effects['landmarks'][] = [
+                'id' => (string)$landmark->id,
+                'name' => (string)$landmark->name,
+                'summary' => "{$landmark->name} resonates with a renewed myth echo.",
+            ];
+        }
+
+        return $effects;
+    }
+
+    private function regionEchoDeltas(string $mythType, int $resonance): array
+    {
+        $scale = $resonance >= 82 ? 2 : 1;
+
+        return match ($mythType) {
+            'heroic_legend', 'divine_intervention', 'discovery_myth' => [
+                'prosperity' => $scale,
+                'chaos' => -$scale,
+                'danger' => -1,
+                'magic' => $scale,
+            ],
+            'martyr_legend', 'world_change', 'relic_myth' => [
+                'prosperity' => 0,
+                'chaos' => $scale,
+                'danger' => $scale,
+                'magic' => $scale,
+            ],
+            'weather_sign', 'omen_cycle', 'era_myth' => [
+                'prosperity' => 0,
+                'chaos' => 0,
+                'danger' => 0,
+                'magic' => $scale,
+            ],
+            default => [
+                'prosperity' => 0,
+                'chaos' => 0,
+                'danger' => 0,
+                'magic' => 1,
+            ],
+        };
+    }
+
+    private function mythRegionIds(array $myth, array $effects = []): array
+    {
+        return $this->ids(array_merge(
+            [$myth['regionId'] ?? null],
+            $myth['relatedRegionIds'] ?? [],
+            array_map(fn(array $region): string => (string)($region['id'] ?? ''), $effects['regions'] ?? [])
+        ));
+    }
+
+    private function mythEchoSummary(array $myth, int $resonance, array $activity, array $effects): string
+    {
+        $activityText = $activity['count'] > 0
+            ? $activity['count'] . ' recent linked event(s)'
+            : 'the age and strength of the myth itself';
+
+        return (string)($myth['title'] ?? 'A promoted myth') .
+            " echoed autonomously at {$resonance}/100 resonance from {$activityText}, shaping " .
+            count($effects['regions'] ?? []) . ' region(s), ' .
+            count($effects['heroes'] ?? []) . ' hero(es), and ' .
+            count($effects['landmarks'] ?? []) . ' landmark(s).';
+    }
+
+    private function autonomousEvolutionText(array $myth): string
+    {
+        $echoCount = (int)($myth['echoCount'] ?? 0);
+        $lastEchoYear = $myth['lastEchoYear'] ?? null;
+        if ($echoCount <= 0 || $lastEchoYear === null) {
+            return 'This myth has not echoed autonomously yet.';
+        }
+
+        return "This myth has echoed {$echoCount} time(s), most recently in year {$lastEchoYear}.";
+    }
+
+    private function recentEchoes(array $myths): array
+    {
+        $echoes = [];
+        foreach ($myths as $myth) {
+            foreach (($myth['evolutionHistory'] ?? []) as $echo) {
+                if (is_array($echo)) {
+                    $echoes[] = $echo + [
+                        'mythId' => (string)($myth['id'] ?? ''),
+                        'mythTitle' => (string)($myth['title'] ?? ''),
+                    ];
+                }
+            }
+        }
+
+        usort(
+            $echoes,
+            fn(array $left, array $right): int => ((int)($right['year'] ?? 0)) <=> ((int)($left['year'] ?? 0))
+        );
+
+        return array_slice($echoes, 0, 6);
+    }
+
+    private function evolutionSummary(array $myths): string
+    {
+        $echoCount = array_sum(array_map(fn(array $myth): int => (int)($myth['echoCount'] ?? 0), $myths));
+        if ($echoCount <= 0) {
+            return 'No promoted myth has echoed autonomously yet.';
+        }
+
+        return count($myths) . " promoted myth(s) have produced {$echoCount} autonomous echo(es).";
     }
 
     private function mythTypeForEvent(string $type): string
@@ -364,14 +752,14 @@ class MythologyService
             'hero_level', 'champion_designated', 'champion_cultivated', 'champion_quest_completed', 'champion_rivalry_resolved' => 'heroic_legend',
             'champion_rivalry_escalated' => 'world_change',
             'hero_death' => 'martyr_legend',
-            'artifact_created', 'artifact_empowered', 'artifact_corrupted', 'artifact_stolen', 'artifact_stabilized', 'artifact_transferred', 'artifact_consequence' => 'relic_myth',
-            'magic_discovery' => 'discovery_myth',
-            'weather_influence', 'weather_consequence' => 'weather_sign',
-            'time_omen', 'time_omen_followup', 'era_pressure' => 'omen_cycle',
-            'era_transition', 'era_generation' => 'era_myth',
-            'divine_influence', 'pantheon_intervention', 'pantheon_counterplay' => 'divine_intervention',
+            'artifact_created', 'artifact_empowered', 'artifact_corrupted', 'artifact_stolen', 'artifact_stabilized', 'artifact_transferred', 'artifact_consequence', 'artifact_chain' => 'relic_myth',
+            'magic_discovery', 'magic_progression' => 'discovery_myth',
+            'weather_influence', 'weather_consequence', 'weather_chain' => 'weather_sign',
+            'time_omen', 'time_omen_followup', 'time_omen_chain', 'era_pressure' => 'omen_cycle',
+            'era_transition', 'era_generation', 'era_descendant' => 'era_myth',
+            'divine_influence', 'pantheon_intervention', 'pantheon_counterplay', 'pantheon_relationship_arc' => 'divine_intervention',
             'bet_resolution' => 'divine_wager',
-            'region_tick', 'settlement_tick', 'resource_tick' => 'world_change',
+            'region_tick', 'settlement_tick', 'resource_tick', 'civilization_diplomacy' => 'world_change',
             default => 'chronicle',
         };
     }
@@ -487,6 +875,11 @@ class MythologyService
             fn($value): string => (string)$value,
             $values
         ))));
+    }
+
+    private function bounded(int $value, int $min = 0, int $max = 100): int
+    {
+        return max($min, min($max, $value));
     }
 
     private function currentYear(): int

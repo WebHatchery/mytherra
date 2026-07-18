@@ -58,6 +58,20 @@ export interface WeatherRiskOutcome {
   summary: string;
 }
 
+export interface WeatherConsequenceChain {
+  id: string;
+  status: string;
+  startedYear?: number | null;
+  lastAdvancedYear?: number | null;
+  nextYear?: number | null;
+  step: number;
+  maxSteps: number;
+  sourceEventId?: string | null;
+  eventIds: string[];
+  title: string;
+  latestSummary: string;
+}
+
 export interface WeatherInfluenceEntry {
   id: string;
   eventId?: string | null;
@@ -78,6 +92,7 @@ export interface WeatherInfluenceEntry {
   regionChange: Record<string, WeatherChangeDelta>;
   settlementChanges: WeatherEntityChange[];
   resourceChanges: WeatherEntityChange[];
+  chains?: WeatherConsequenceChain[];
 }
 
 export interface WeatherStatusResponse {

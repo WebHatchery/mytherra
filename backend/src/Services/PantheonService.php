@@ -18,6 +18,8 @@ class PantheonService
     private const CONFIG_CATEGORY = 'pantheon';
     private const CONFIG_KEY_STATE = 'state';
     private const HISTORY_LIMIT = 18;
+    private const ARC_HISTORY_LIMIT = 16;
+    private const ARC_COOLDOWN_YEARS = 3;
     private const COUNTERPLAY_COSTS = [
         'appease' => 12,
         'challenge' => 18,
@@ -85,6 +87,7 @@ class PantheonService
         $topActor = $this->topActor($deities);
         $relationships = $this->relationships();
         $politics = $this->politics($relationships, $pressure, $recentInterventions);
+        $relationshipArcs = $this->relationshipArcs($state);
 
         return [
             'currentYear' => $this->currentYear(),
@@ -95,6 +98,7 @@ class PantheonService
             'recentInterventions' => $recentInterventions,
             'relationships' => $relationships,
             'politics' => $politics,
+            'relationshipArcs' => $relationshipArcs,
             'bettingHooks' => $this->bettingHooks($pressure, $politics),
             'counterplay' => $this->counterplayStatus($state),
         ];
@@ -107,6 +111,7 @@ class PantheonService
             'changed' => 0,
             'events' => 0,
             'interventions' => [],
+            'arcs' => [],
             'errors' => [],
         ];
 
@@ -136,6 +141,12 @@ class PantheonService
                 ];
             }
         }
+
+        $arcSummary = $this->advanceRelationshipArcs($currentYear);
+        $summary['changed'] += $arcSummary['changed'];
+        $summary['events'] += $arcSummary['events'];
+        $summary['arcs'] = $arcSummary['arcs'];
+        $summary['errors'] = array_merge($summary['errors'], $arcSummary['errors']);
 
         return $summary;
     }
@@ -949,6 +960,364 @@ class PantheonService
         return is_array($items)
             ? array_values(array_filter($items, fn($item): bool => is_array($item)))
             : [];
+    }
+
+    private function advanceRelationshipArcs(int $currentYear): array
+    {
+        $summary = [
+            'processed' => 0,
+            'changed' => 0,
+            'events' => 0,
+            'arcs' => [],
+            'errors' => [],
+        ];
+
+        $state = $this->loadState();
+        $politics = $this->politics(
+            $this->relationships(),
+            $this->pressureMap(),
+            $this->recentInterventions($state)
+        );
+
+        foreach ($this->relationshipArcCandidates($politics) as $candidate) {
+            $summary['processed']++;
+            $currentArc = $this->relationshipArcForCandidate($state, $candidate);
+            $lastAdvancedYear = $currentArc === null ? null : (int)($currentArc['lastAdvancedYear'] ?? 0);
+            if ($lastAdvancedYear !== null && $currentYear - $lastAdvancedYear < self::ARC_COOLDOWN_YEARS) {
+                continue;
+            }
+
+            try {
+                $arc = $this->resolveRelationshipArc($candidate, $currentArc, $currentYear);
+                $summary['arcs'][] = $arc;
+                $summary['changed'] += $this->changeCount($arc['changes'] ?? []);
+                $summary['events']++;
+                break;
+            } catch (\Throwable $error) {
+                $summary['errors'][] = [
+                    'sourceId' => $candidate['sourceId'] ?? null,
+                    'targetId' => $candidate['targetId'] ?? null,
+                    'regionId' => $candidate['targetRegionId'] ?? null,
+                    'message' => $error->getMessage(),
+                ];
+            }
+        }
+
+        return $summary;
+    }
+
+    private function relationshipArcCandidates(array $politics): array
+    {
+        $candidates = [];
+        foreach (($politics['escalations'] ?? []) as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+
+            $stage = (string)($entry['stage'] ?? 'watchful');
+            $targetRegionId = $entry['targetRegionId'] ?? null;
+            if (in_array($stage, ['quiet_alliance', 'watchful'], true) || !is_string($targetRegionId) || $targetRegionId === '') {
+                continue;
+            }
+
+            if ((string)($entry['sourceId'] ?? '') === '' || (string)($entry['targetId'] ?? '') === '') {
+                continue;
+            }
+
+            $candidates[] = $entry;
+        }
+
+        usort(
+            $candidates,
+            fn(array $left, array $right): int => $this->relationshipArcPriority($right)
+                <=> $this->relationshipArcPriority($left)
+        );
+
+        return $candidates;
+    }
+
+    private function relationshipArcPriority(array $candidate): int
+    {
+        $stageWeight = match ((string)($candidate['stage'] ?? 'watchful')) {
+            'open_rivalry' => 44,
+            'strained_alliance' => 38,
+            'active_alliance' => 30,
+            'rising_tension' => 28,
+            default => 0,
+        };
+
+        return $stageWeight
+            + (int)($candidate['pressureScore'] ?? 0)
+            + (int)($candidate['tension'] ?? 0)
+            + ((int)($candidate['interventionCount'] ?? 0) * 4);
+    }
+
+    private function resolveRelationshipArc(array $candidate, ?array $currentArc, int $currentYear): array
+    {
+        $regionId = (string)($candidate['targetRegionId'] ?? '');
+        $region = Region::find($regionId);
+        if (!$region instanceof Region) {
+            throw new \InvalidArgumentException("Region not found for pantheon relationship arc: {$regionId}");
+        }
+
+        $changes = $this->applyRelationshipArcEffects($candidate, $region, $currentYear);
+        $related = $this->relatedIdsFromChanges($changes, (string)$region->id);
+        $effectSummary = $this->effectSummary($changes);
+        $title = $this->relationshipArcTitle($candidate);
+        $summary = $this->relationshipArcSummary($candidate, $region, $currentArc, $effectSummary);
+        $event = $this->eventRepository->createEvent([
+            'title' => $title,
+            'description' => $summary,
+            'type' => 'pantheon_relationship_arc',
+            'region_id' => (string)$region->id,
+            'related_region_ids' => $related['regions'],
+            'related_hero_ids' => $related['heroes'],
+            'related_settlement_ids' => $related['settlements'],
+            'related_landmark_ids' => $related['landmarks'],
+            'related_resource_ids' => $related['resources'],
+            'year' => $currentYear,
+        ]);
+
+        $sourceId = (string)$candidate['sourceId'];
+        $targetId = (string)$candidate['targetId'];
+        $stance = (string)($candidate['stance'] ?? 'rival');
+        $eventIds = $this->ids(array_merge(
+            [(string)$event->id],
+            is_array($currentArc['eventIds'] ?? null) ? $currentArc['eventIds'] : []
+        ));
+        $stepCount = (int)($currentArc['stepCount'] ?? 0) + 1;
+        $arc = [
+            'id' => $currentArc['id'] ?? ('pantheon-arc-' . $sourceId . '-' . $targetId . '-' . $stance . '-' . bin2hex(random_bytes(4))),
+            'arcKey' => $this->relationshipArcKey($sourceId, $targetId, $stance),
+            'year' => $currentYear,
+            'sourceId' => $sourceId,
+            'sourceName' => (string)($candidate['sourceName'] ?? (self::ROSTER[$sourceId]['name'] ?? $sourceId)),
+            'targetId' => $targetId,
+            'targetName' => (string)($candidate['targetName'] ?? (self::ROSTER[$targetId]['name'] ?? $targetId)),
+            'stance' => $stance,
+            'stage' => (string)($candidate['stage'] ?? 'watchful'),
+            'momentum' => $this->relationshipArcMomentum($candidate, $currentArc),
+            'tension' => (int)($candidate['tension'] ?? 0),
+            'pressureScore' => (int)($candidate['pressureScore'] ?? 0),
+            'targetRegionId' => (string)$region->id,
+            'targetRegionName' => (string)$region->name,
+            'startedYear' => (int)($currentArc['startedYear'] ?? $currentYear),
+            'lastAdvancedYear' => $currentYear,
+            'stepCount' => $stepCount,
+            'title' => $title,
+            'summary' => $summary,
+            'eventId' => (string)$event->id,
+            'eventIds' => array_slice($eventIds, 0, 6),
+            'changes' => $changes,
+            'relatedRegionIds' => $related['regions'],
+            'relatedSettlementIds' => $related['settlements'],
+            'relatedHeroIds' => $related['heroes'],
+            'relatedLandmarkIds' => $related['landmarks'],
+            'relatedResourceIds' => $related['resources'],
+            'nextPressure' => "Can advance again after " . self::ARC_COOLDOWN_YEARS . " years if this front stays escalated.",
+        ];
+
+        $this->recordRelationshipArc($arc);
+
+        return $arc;
+    }
+
+    private function applyRelationshipArcEffects(array $candidate, Region $region, int $currentYear): array
+    {
+        $changes = $this->emptyChanges();
+        $sourceId = (string)($candidate['sourceId'] ?? '');
+        $sourceDomain = (string)(self::ROSTER[$sourceId]['domain'] ?? '');
+        $stance = (string)($candidate['stance'] ?? 'rival');
+        $stage = (string)($candidate['stage'] ?? 'watchful');
+
+        $this->changeRegion($changes, $region, function (Region $target) use ($sourceDomain, $stance, $stage): void {
+            if ($stance === 'ally') {
+                $target->divine_resonance = $this->clamp((int)($target->divine_resonance ?? 50) + 2);
+                if ($stage === 'strained_alliance') {
+                    $target->chaos = $this->clamp((int)$target->chaos + 1);
+                    $target->danger_level = $this->clamp((int)$target->danger_level + 1);
+                    $target->addTrait('pantheon_strained_alliance');
+                } else {
+                    $target->prosperity = $this->clamp((int)$target->prosperity + 2);
+                    $target->danger_level = $this->clamp((int)$target->danger_level - 1);
+                    $target->addTrait('pantheon_alliance_front');
+                }
+            } else {
+                $target->chaos = $this->clamp((int)$target->chaos + ($stage === 'open_rivalry' ? 3 : 2));
+                $target->danger_level = $this->clamp((int)$target->danger_level + ($stage === 'open_rivalry' ? 2 : 1));
+                $target->divine_resonance = $this->clamp((int)($target->divine_resonance ?? 50) + 1);
+                $target->addTrait($stage === 'open_rivalry' ? 'pantheon_open_rivalry' : 'pantheon_rival_front');
+            }
+
+            if ($sourceDomain === 'prosperity') {
+                $target->prosperity = $this->clamp((int)$target->prosperity + 1);
+            } elseif ($sourceDomain === 'strife') {
+                $target->danger_level = $this->clamp((int)$target->danger_level + 1);
+            } elseif ($sourceDomain === 'secrets') {
+                $target->magic_affinity = $this->clamp((int)$target->magic_affinity + 2);
+            } elseif ($sourceDomain === 'entropy') {
+                $target->prosperity = $this->clamp((int)$target->prosperity - 1);
+                $target->chaos = $this->clamp((int)$target->chaos + 1);
+            }
+
+            $target->status = $this->deriveRegionStatus($target);
+        });
+
+        return $changes;
+    }
+
+    private function relationshipArcs(array $state): array
+    {
+        $items = $state['relationshipArcs'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $arcs = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $sourceId = (string)($item['sourceId'] ?? '');
+            $targetId = (string)($item['targetId'] ?? '');
+            $stance = (string)($item['stance'] ?? 'rival');
+            if ($sourceId === '' || $targetId === '') {
+                continue;
+            }
+
+            $eventIds = is_array($item['eventIds'] ?? null)
+                ? $item['eventIds']
+                : (is_string($item['eventId'] ?? null) ? [$item['eventId']] : []);
+            $changes = $this->normalizeChangeGroups($item['changes'] ?? []);
+
+            $arcs[] = [
+                'id' => (string)($item['id'] ?? $this->relationshipArcKey($sourceId, $targetId, $stance)),
+                'arcKey' => (string)($item['arcKey'] ?? $this->relationshipArcKey($sourceId, $targetId, $stance)),
+                'year' => (int)($item['year'] ?? $item['lastAdvancedYear'] ?? $this->currentYear()),
+                'sourceId' => $sourceId,
+                'sourceName' => (string)($item['sourceName'] ?? (self::ROSTER[$sourceId]['name'] ?? $sourceId)),
+                'targetId' => $targetId,
+                'targetName' => (string)($item['targetName'] ?? (self::ROSTER[$targetId]['name'] ?? $targetId)),
+                'stance' => $stance,
+                'stage' => (string)($item['stage'] ?? 'watchful'),
+                'momentum' => (int)($item['momentum'] ?? 0),
+                'tension' => (int)($item['tension'] ?? 0),
+                'pressureScore' => (int)($item['pressureScore'] ?? 0),
+                'targetRegionId' => isset($item['targetRegionId']) ? (string)$item['targetRegionId'] : null,
+                'targetRegionName' => isset($item['targetRegionName']) ? (string)$item['targetRegionName'] : null,
+                'startedYear' => (int)($item['startedYear'] ?? $item['year'] ?? $this->currentYear()),
+                'lastAdvancedYear' => (int)($item['lastAdvancedYear'] ?? $item['year'] ?? $this->currentYear()),
+                'stepCount' => (int)($item['stepCount'] ?? 1),
+                'title' => (string)($item['title'] ?? $this->relationshipArcTitle($item)),
+                'summary' => (string)($item['summary'] ?? ''),
+                'eventId' => isset($item['eventId']) ? (string)$item['eventId'] : ($eventIds[0] ?? null),
+                'eventIds' => array_slice($this->ids($eventIds), 0, 6),
+                'changes' => $changes,
+                'relatedRegionIds' => $this->ids(is_array($item['relatedRegionIds'] ?? null) ? $item['relatedRegionIds'] : []),
+                'relatedSettlementIds' => $this->ids(is_array($item['relatedSettlementIds'] ?? null) ? $item['relatedSettlementIds'] : []),
+                'relatedHeroIds' => $this->ids(is_array($item['relatedHeroIds'] ?? null) ? $item['relatedHeroIds'] : []),
+                'relatedLandmarkIds' => $this->ids(is_array($item['relatedLandmarkIds'] ?? null) ? $item['relatedLandmarkIds'] : []),
+                'relatedResourceIds' => $this->ids(is_array($item['relatedResourceIds'] ?? null) ? $item['relatedResourceIds'] : []),
+                'nextPressure' => (string)($item['nextPressure'] ?? ''),
+            ];
+        }
+
+        usort(
+            $arcs,
+            fn(array $left, array $right): int => ((int)$right['lastAdvancedYear'] <=> (int)$left['lastAdvancedYear'])
+                ?: ((int)$right['momentum'] <=> (int)$left['momentum'])
+        );
+
+        return array_slice($arcs, 0, self::ARC_HISTORY_LIMIT);
+    }
+
+    private function recordRelationshipArc(array $arc): void
+    {
+        $state = $this->loadState();
+        $arcKey = (string)$arc['arcKey'];
+        $history = array_values(array_filter(
+            $this->relationshipArcs($state),
+            fn(array $item): bool => (string)($item['arcKey'] ?? '') !== $arcKey
+        ));
+        array_unshift($history, $arc);
+        $state['relationshipArcs'] = array_slice($history, 0, self::ARC_HISTORY_LIMIT);
+        $state['lastRelationshipArcYear'] = $arc['lastAdvancedYear'];
+        $state['lastRelationshipArcId'] = $arc['id'];
+
+        $this->saveState($state);
+    }
+
+    private function relationshipArcForCandidate(array $state, array $candidate): ?array
+    {
+        $arcKey = $this->relationshipArcKey(
+            (string)($candidate['sourceId'] ?? ''),
+            (string)($candidate['targetId'] ?? ''),
+            (string)($candidate['stance'] ?? 'rival')
+        );
+
+        foreach ($this->relationshipArcs($state) as $arc) {
+            if ((string)($arc['arcKey'] ?? '') === $arcKey) {
+                return $arc;
+            }
+        }
+
+        return null;
+    }
+
+    private function relationshipArcKey(string $sourceId, string $targetId, string $stance): string
+    {
+        return $sourceId . ':' . $targetId . ':' . $stance;
+    }
+
+    private function relationshipArcMomentum(array $candidate, ?array $currentArc): int
+    {
+        $base = (int)round(((int)($candidate['pressureScore'] ?? 0) + (int)($candidate['tension'] ?? 0)) / 2);
+        $previous = $currentArc === null ? 0 : (int)($currentArc['momentum'] ?? 0);
+
+        return $this->clamp(max($base, $previous + 6));
+    }
+
+    private function relationshipArcTitle(array $candidate): string
+    {
+        $stance = (string)($candidate['stance'] ?? 'rival');
+        $source = (string)($candidate['sourceName'] ?? $candidate['sourceId'] ?? 'Pantheon actor');
+        $target = (string)($candidate['targetName'] ?? $candidate['targetId'] ?? 'another deity');
+
+        return 'Pantheon ' . ($stance === 'ally' ? 'Alliance' : 'Rivalry') . " Arc: {$source} and {$target}";
+    }
+
+    private function relationshipArcSummary(array $candidate, Region $region, ?array $currentArc, string $effectSummary): string
+    {
+        $source = (string)($candidate['sourceName'] ?? $candidate['sourceId'] ?? 'A deity');
+        $target = (string)($candidate['targetName'] ?? $candidate['targetId'] ?? 'another deity');
+        $stance = (string)($candidate['stance'] ?? 'rival');
+        $stage = (string)($candidate['stage'] ?? 'watchful');
+        $step = (int)($currentArc['stepCount'] ?? 0) + 1;
+        $verb = $stance === 'ally'
+            ? ($stage === 'strained_alliance' ? 'strained an alliance with' : 'reinforced an alliance with')
+            : ($stage === 'open_rivalry' ? 'opened a rivalry front against' : 'pushed rivalry tension against');
+        $continuity = $step === 1
+            ? 'This begins a persistent pantheon political arc.'
+            : "This advances persistent pantheon arc step {$step}.";
+
+        return "{$source} {$verb} {$target} around {$region->name}. {$candidate['summary']} {$continuity} {$effectSummary}";
+    }
+
+    private function normalizeChangeGroups(mixed $value): array
+    {
+        $changes = $this->emptyChanges();
+        if (!is_array($value)) {
+            return $changes;
+        }
+
+        foreach (array_keys($changes) as $key) {
+            if (isset($value[$key]) && is_array($value[$key])) {
+                $changes[$key] = array_values(array_filter($value[$key], fn($item): bool => is_array($item)));
+            }
+        }
+
+        return $changes;
     }
 
     private function recordCounterplayAction(

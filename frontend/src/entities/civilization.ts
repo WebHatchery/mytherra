@@ -100,6 +100,33 @@ export interface CivilizationDecision {
   relatedResourceIds: string[];
 }
 
+export type CivilizationDiplomacyKind = 'trade_compact' | 'rivalry_front';
+
+export interface CivilizationDiplomacy {
+  id: string;
+  pactKey: string;
+  kind: CivilizationDiplomacyKind | string;
+  kindLabel: string;
+  sourceRegionId: string;
+  sourceRegionName: string;
+  targetRegionId: string;
+  targetRegionName: string;
+  score: number;
+  startedYear: number;
+  lastAdvancedYear: number;
+  stepCount: number;
+  eventId?: string | null;
+  eventIds: string[];
+  summary: string;
+  effectSummary: string;
+  changes: CivilizationChanges;
+  relatedRegionIds: string[];
+  relatedSettlementIds: string[];
+  relatedHeroIds: string[];
+  relatedLandmarkIds: string[];
+  relatedResourceIds: string[];
+}
+
 export interface CivilizationStatusResponse {
   currentYear: number;
   summary: string;
@@ -107,6 +134,8 @@ export interface CivilizationStatusResponse {
   topAgenda?: CivilizationRegionAgenda | null;
   regionAgendas: CivilizationRegionAgenda[];
   recentDecisions: CivilizationDecision[];
+  diplomacySummary: string;
+  diplomacy: CivilizationDiplomacy[];
   behaviorCounts: Record<CivilizationBehaviorKey, number>;
 }
 
@@ -120,6 +149,15 @@ export interface CivilizationAdvanceResponse {
 export interface CivilizationTickSummary {
   processed?: number;
   decisions?: CivilizationDecision[];
+  diplomacy?: CivilizationDiplomacy[];
   events?: number;
-  errors?: Array<string | { regionId?: string | null; message?: string }>;
+  errors?: Array<
+    | string
+    | {
+        regionId?: string | null;
+        sourceRegionId?: string | null;
+        targetRegionId?: string | null;
+        message?: string;
+      }
+  >;
 }

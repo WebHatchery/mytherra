@@ -11,6 +11,7 @@ import PageLayout from '../components/PageLayout';
 import { useGameStatus } from '../hooks/useGameStatus';
 import type {
   MythCandidate,
+  MythEcho,
   MythologyStatusResponse,
   PromotedMyth,
 } from '../entities/mythology';
@@ -64,8 +65,11 @@ const MythCard: React.FC<MythCardProps> = ({ myth }) => {
       <div className="mt-4 rounded bg-gray-800 px-3 py-2 text-sm text-gray-300">
         {myth.influenceSummary}
       </div>
+      <div className="mt-2 rounded bg-gray-900/70 px-3 py-2 text-sm text-gray-300">
+        {myth.autonomousEvolution}
+      </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
         <div className="rounded bg-gray-900/70 px-3 py-2">
           <div className="text-xs uppercase text-gray-500">Regions</div>
           <div className="mt-1 text-sm text-gray-200">{myth.effects.regions.length}</div>
@@ -78,6 +82,10 @@ const MythCard: React.FC<MythCardProps> = ({ myth }) => {
           <div className="text-xs uppercase text-gray-500">Landmarks</div>
           <div className="mt-1 text-sm text-gray-200">{myth.effects.landmarks.length}</div>
         </div>
+        <div className="rounded bg-gray-900/70 px-3 py-2">
+          <div className="text-xs uppercase text-gray-500">Autonomous Echoes</div>
+          <div className="mt-1 text-sm text-gray-200">{myth.echoCount}</div>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3 text-sm">
@@ -87,11 +95,40 @@ const MythCard: React.FC<MythCardProps> = ({ myth }) => {
         <Link to={`/events/${myth.promotionEventId}`} className="text-blue-300 hover:text-blue-100">
           Promotion Event
         </Link>
+        {myth.latestEcho?.eventId && (
+          <Link to={`/events/${myth.latestEcho.eventId}`} className="text-blue-300 hover:text-blue-100">
+            Latest Myth Echo
+          </Link>
+        )}
         {affectedCount === 0 && <span className="text-gray-500">No direct entity effects recorded.</span>}
       </div>
     </article>
   );
 };
+
+const MythEchoCard: React.FC<{ echo: MythEcho }> = ({ echo }) => (
+  <article className="rounded-lg border border-[#2f334d] bg-[#1a1b26] p-4">
+    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+      <div>
+        <div className="text-xs uppercase text-gray-500">Year {echo.year} Myth Echo</div>
+        <h3 className="mt-1 font-semibold text-white">{echo.mythTitle ?? 'Autonomous myth echo'}</h3>
+      </div>
+      <div className="text-sm font-semibold text-fuchsia-200">{echo.resonance}/100 resonance</div>
+    </div>
+    <p className="mt-2 text-sm text-gray-300">{echo.summary}</p>
+    <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-400">
+      <span className="rounded bg-gray-900 px-2 py-1">{echo.activityCount} linked events</span>
+      <span className="rounded bg-gray-900 px-2 py-1">{echo.effects.regions.length} regions</span>
+      <span className="rounded bg-gray-900 px-2 py-1">{echo.effects.heroes.length} heroes</span>
+      <span className="rounded bg-gray-900 px-2 py-1">{echo.effects.landmarks.length} landmarks</span>
+    </div>
+    {echo.eventId && (
+      <Link to={`/events/${echo.eventId}`} className="mt-3 inline-block text-sm text-blue-300 hover:text-blue-100">
+        Echo Event
+      </Link>
+    )}
+  </article>
+);
 
 interface CandidateCardProps {
   candidate: MythCandidate;
@@ -188,6 +225,7 @@ const MythologyPage: React.FC = () => {
   const promotionCost = mythology?.promotionCost ?? gameStatus?.mythology?.promotionCost ?? 22;
   const promotedMyths = mythology?.myths ?? [];
   const candidates = mythology?.candidates ?? [];
+  const recentEchoes = mythology?.recentEchoes ?? [];
   const isLoading = isLoadingStatus || isLoadingMythology;
   const error = statusError || mythologyError;
   const strongestCandidate = candidates[0] ?? null;
@@ -239,7 +277,7 @@ const MythologyPage: React.FC = () => {
           <div>
             <h2 className="text-xl font-bold text-white">Living Myth Index</h2>
             <p className="mt-1 text-sm text-gray-400">
-              Promote major feats, discoveries, disasters, and interventions into identity-shaping myths.
+              Promote major feats, discoveries, disasters, and interventions into identity-shaping myths that can echo autonomously.
             </p>
           </div>
           <div className="text-sm font-semibold text-yellow-300">Favor {currentDivineFavor}</div>
@@ -257,7 +295,7 @@ const MythologyPage: React.FC = () => {
           </div>
         )}
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
           <div className="rounded bg-gray-800 px-3 py-2">
             <div className="text-xs uppercase text-gray-500">Promoted</div>
             <div className="mt-1 text-sm font-semibold text-gray-200">{promotedMyths.length}</div>
@@ -267,12 +305,33 @@ const MythologyPage: React.FC = () => {
             <div className="mt-1 text-sm font-semibold text-gray-200">{candidates.length}</div>
           </div>
           <div className="rounded bg-gray-800 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Autonomous Evolution</div>
+            <div className="mt-1 text-sm text-gray-200">
+              {mythology?.evolutionSummary ?? 'No promoted myth has echoed autonomously yet.'}
+            </div>
+          </div>
+          <div className="rounded bg-gray-800 px-3 py-2">
             <div className="text-xs uppercase text-gray-500">Influence</div>
             <div className="mt-1 text-sm text-gray-200">
               {mythology?.influenceSummary ?? 'No mythic influence yet.'}
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-white">Recent Myth Echoes</h2>
+        {recentEchoes.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            {recentEchoes.map(echo => <MythEchoCard key={echo.id} echo={echo} />)}
+          </div>
+        ) : (
+          <EmptyState
+            title="No Myth Echoes"
+            message="Promoted myths can echo during future ticks when linked world activity reinforces them."
+            icon="✧"
+          />
+        )}
       </section>
 
       <section className="space-y-4">

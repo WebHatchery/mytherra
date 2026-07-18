@@ -134,6 +134,13 @@ class EraTransitionService
                 $eraLegacy,
                 $eraPressure
             );
+            $changes['descendants'] = $this->createDescendants(
+                $eraLegacy,
+                $transitionEra,
+                $nextEra,
+                max($currentYear, $nextEraYear),
+                $changes['generation']['settlements'] ?? []
+            );
             $this->refreshRegionPopulationTotals();
 
             $newCurrentYear = max($currentYear, $nextEraYear);
@@ -480,6 +487,222 @@ class EraTransitionService
         ];
     }
 
+    private function createDescendants(
+        array $eraLegacy,
+        int $transitionEra,
+        int $nextEra,
+        int $currentYear,
+        array $generatedSettlements
+    ): array {
+        $descendants = [];
+
+        foreach ($this->descendantSources($eraLegacy) as $index => $source) {
+            $sourceHero = Hero::find((string)$source['sourceHeroId']);
+            if (!$sourceHero instanceof Hero) {
+                continue;
+            }
+
+            $region = Region::find((string)($source['regionId'] ?? $sourceHero->region_id));
+            if (!$region instanceof Region) {
+                continue;
+            }
+
+            $settlement = $this->descendantSettlement($region, $source, $generatedSettlements);
+            $lineageType = (string)($source['lineageType'] ?? $source['legacyType'] ?? 'heroic_lineage');
+            $name = $this->descendantName($sourceHero, $source, $nextEra, $index);
+            $role = $this->descendantRole($sourceHero, $lineageType);
+            $level = $this->clamp(((int)($sourceHero->level ?? 1) * 0.28) + 2 + $index, 2, 12);
+            $alignment = is_array($sourceHero->alignment ?? null)
+                ? $sourceHero->alignment
+                : ['good' => 52, 'chaotic' => 48];
+            $id = $this->uniqueHeroId('hero-descendant-');
+
+            $descendant = Hero::create([
+                'id' => $id,
+                'name' => $name,
+                'region_id' => (string)$region->id,
+                'role' => $role,
+                'description' => "{$name} carries the remembered lineage of {$sourceHero->name} into Era {$nextEra}.",
+                'feats' => [
+                    "Born as a descendant of {$sourceHero->name}",
+                    "Carries {$lineageType} from Era {$transitionEra}",
+                ],
+                'level' => $level,
+                'is_alive' => true,
+                'age' => 16 + ($index * 2),
+                'death_reason' => null,
+                'personality_traits' => array_values(array_unique(array_filter([
+                    'era_descendant',
+                    'legacy_lineage',
+                    "legacy_of_era_{$transitionEra}",
+                    "era_{$nextEra}_born",
+                    $this->lineageTrait($lineageType),
+                ]))),
+                'alignment' => [
+                    'good' => $this->clamp((int)($alignment['good'] ?? 52) + random_int(-8, 8)),
+                    'chaotic' => $this->clamp((int)($alignment['chaotic'] ?? 48) + random_int(-8, 8)),
+                    'legacySource' => (string)$sourceHero->name,
+                ],
+                'status' => 'living',
+            ]);
+
+            $summary = "{$name} entered Era {$nextEra} as a {$role}, visibly descended from {$sourceHero->name}.";
+            $eventId = $this->recordDescendantEvent(
+                $transitionEra,
+                $nextEra,
+                $currentYear,
+                $sourceHero,
+                $descendant,
+                $region,
+                $settlement,
+                $summary
+            );
+            $descendants[] = [
+                'id' => $id,
+                'name' => $name,
+                'sourceHeroId' => (string)$sourceHero->id,
+                'sourceHeroName' => (string)$sourceHero->name,
+                'sourceLegacyType' => (string)($source['legacyType'] ?? ''),
+                'lineageType' => $lineageType,
+                'regionId' => (string)$region->id,
+                'regionName' => (string)$region->name,
+                'settlementId' => $settlement instanceof Settlement ? (string)$settlement->id : null,
+                'settlementName' => $settlement instanceof Settlement ? (string)$settlement->name : null,
+                'role' => $role,
+                'level' => $level,
+                'eventId' => $eventId,
+                'summary' => $summary,
+            ];
+        }
+
+        return [
+            'processed' => count($descendants),
+            'changed' => count($descendants),
+            'events' => count($descendants),
+            'descendants' => $descendants,
+        ];
+    }
+
+    private function descendantSources(array $eraLegacy): array
+    {
+        $sources = [];
+        foreach ($eraLegacy['bloodlineSeeds'] ?? [] as $seed) {
+            if (!is_array($seed) || empty($seed['sourceHeroId'])) {
+                continue;
+            }
+
+            $sources[(string)$seed['sourceHeroId']] = [
+                'sourceHeroId' => (string)$seed['sourceHeroId'],
+                'regionId' => $seed['regionId'] ?? null,
+                'settlementId' => $seed['settlementId'] ?? null,
+                'lineageType' => $seed['lineageType'] ?? 'regional_lineage',
+                'legacyType' => 'bloodline_seed',
+                'strength' => $seed['strength'] ?? null,
+            ];
+        }
+
+        foreach ($eraLegacy['heroLegacies'] ?? [] as $legacy) {
+            if (!is_array($legacy) || empty($legacy['heroId'])) {
+                continue;
+            }
+
+            $heroId = (string)$legacy['heroId'];
+            $sources[$heroId] = array_merge($sources[$heroId] ?? [], [
+                'sourceHeroId' => $heroId,
+                'regionId' => $legacy['regionId'] ?? ($sources[$heroId]['regionId'] ?? null),
+                'lineageType' => $sources[$heroId]['lineageType'] ?? $legacy['legacyType'] ?? 'heroic_lineage',
+                'legacyType' => $legacy['legacyType'] ?? ($sources[$heroId]['legacyType'] ?? 'hero_legacy'),
+                'strength' => $legacy['strength'] ?? ($sources[$heroId]['strength'] ?? null),
+            ]);
+        }
+
+        return array_slice(array_values($sources), 0, 4);
+    }
+
+    private function descendantSettlement(Region $region, array $source, array $generatedSettlements): ?Settlement
+    {
+        foreach ($generatedSettlements as $settlement) {
+            if (is_array($settlement) && (string)($settlement['regionId'] ?? '') === (string)$region->id) {
+                return Settlement::find((string)($settlement['id'] ?? ''));
+            }
+        }
+
+        if (!empty($source['settlementId'])) {
+            $settlement = Settlement::find((string)$source['settlementId']);
+            if ($settlement instanceof Settlement) {
+                return $settlement;
+            }
+        }
+
+        return Settlement::where('region_id', $region->id)
+            ->orderByDesc('population')
+            ->first();
+    }
+
+    private function descendantName(Hero $sourceHero, array $source, int $nextEra, int $index): string
+    {
+        $prefix = str_contains((string)($source['legacyType'] ?? ''), 'reincarnation')
+            ? 'Echo'
+            : ($index % 2 === 0 ? 'Scion' : 'Heir');
+
+        return "{$prefix} of {$sourceHero->name} {$nextEra}";
+    }
+
+    private function descendantRole(Hero $sourceHero, string $lineageType): string
+    {
+        $role = match ($lineageType) {
+            'champion_bloodline' => 'warrior',
+            'scholarly_lineage' => 'scholar',
+            'prophetic_lineage' => 'prophet',
+            'reformer_lineage' => 'agent of change',
+            default => (string)($sourceHero->role ?? 'undecided'),
+        };
+
+        return in_array($role, Hero::ROLES, true) ? $role : 'undecided';
+    }
+
+    private function lineageTrait(string $lineageType): string
+    {
+        return match ($lineageType) {
+            'champion_bloodline' => 'champion_lineage',
+            'scholarly_lineage' => 'scholarly_lineage',
+            'prophetic_lineage' => 'prophetic_lineage',
+            'reformer_lineage' => 'reformer_lineage',
+            default => 'regional_lineage',
+        };
+    }
+
+    private function recordDescendantEvent(
+        int $transitionEra,
+        int $nextEra,
+        int $currentYear,
+        Hero $sourceHero,
+        Hero $descendant,
+        Region $region,
+        ?Settlement $settlement,
+        string $summary
+    ): string {
+        $eventId = 'event-' . bin2hex(random_bytes(8));
+
+        GameEvent::create([
+            'id' => $eventId,
+            'title' => "Era {$nextEra} Descendant: {$descendant->name}",
+            'description' => "{$summary} The lineage reaches back to {$sourceHero->name} from Era {$transitionEra}.",
+            'type' => 'era_descendant',
+            'status' => 'completed',
+            'region_id' => (string)$region->id,
+            'timestamp' => date('c'),
+            'related_region_ids' => [(string)$region->id],
+            'related_hero_ids' => [(string)$sourceHero->id, (string)$descendant->id],
+            'related_settlement_ids' => $settlement instanceof Settlement ? [(string)$settlement->id] : [],
+            'related_landmark_ids' => [],
+            'related_resource_ids' => [],
+            'year' => $currentYear,
+        ]);
+
+        return $eventId;
+    }
+
     private function recordTransitionEvent(
         int $transitionEra,
         int $nextEra,
@@ -529,6 +752,7 @@ class EraTransitionService
             "{$changes['heroes']['changed']} heroes, {$changes['settlements']['changed']} settlements, " .
             "{$changes['regions']['changed']} regions, {$changes['resources']['changed']} resources, and " .
             "{$changes['bets']['carried']} bets carried forward. " .
+            "{$changes['descendants']['changed']} descendant heroes emerged. " .
             (string)($changes['generation']['summary'] ?? '');
         $transitionDelta = $this->eraComparisonService->compareSnapshots($beforeSnapshot, $afterSnapshot);
 
@@ -563,6 +787,7 @@ class EraTransitionService
                 'generatedHeroes' => count($changes['generation']['heroes'] ?? []),
                 'generatedLandmarks' => count($changes['generation']['landmarks'] ?? []),
                 'generatedResources' => count($changes['generation']['resources'] ?? []),
+                'generatedDescendants' => count($changes['descendants']['descendants'] ?? []),
             ],
             'generated' => [
                 'eventId' => $changes['generation']['eventId'] ?? null,
@@ -571,6 +796,7 @@ class EraTransitionService
                 'heroes' => $changes['generation']['heroes'] ?? [],
                 'landmarks' => $changes['generation']['landmarks'] ?? [],
                 'resources' => $changes['generation']['resources'] ?? [],
+                'descendants' => $changes['descendants']['descendants'] ?? [],
             ],
             'beforeSnapshot' => $beforeSnapshot,
             'afterSnapshot' => $afterSnapshot,
@@ -623,6 +849,15 @@ class EraTransitionService
     {
         $items[] = $item;
         return array_values(array_unique(array_filter($items)));
+    }
+
+    private function uniqueHeroId(string $prefix): string
+    {
+        do {
+            $id = $prefix . bin2hex(random_bytes(6));
+        } while (Hero::where('id', $id)->exists());
+
+        return $id;
     }
 
     private function regionStatusFor(int $prosperity, int $chaos, int $danger, int $magic): string

@@ -27,4 +27,9 @@ class AdminWorldEditorActions
     {
         return $this->worldEditorService->update($entityType, $id, $payload);
     }
+
+    public function preview(string $entityType, array $payload): array
+    {
+        return $this->worldEditorService->preview($entityType, $payload);
+    }
 }

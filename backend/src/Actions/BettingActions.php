@@ -20,6 +20,7 @@ use App\Models\Region;
 use App\Models\ResourceNode;
 use App\Models\Settlement;
 use App\Services\ChampionService;
+use App\Services\CivilizationBehaviorService;
 use App\Services\GameLoopService;
 use App\Services\MagicDiscoveryService;
 use App\Services\PantheonService;
@@ -31,10 +32,12 @@ class BettingActions
         private OddsCalculationService $oddsCalculator,
         private DivineBettingService $divineBettingService,
         private ?ChampionService $championService = null,
-        private ?PantheonService $pantheonService = null
+        private ?PantheonService $pantheonService = null,
+        private ?CivilizationBehaviorService $civilizationBehaviorService = null
     ) {
         $this->championService ??= new ChampionService();
         $this->pantheonService ??= new PantheonService();
+        $this->civilizationBehaviorService ??= new CivilizationBehaviorService();
     }
 
     /**
@@ -181,7 +184,7 @@ class BettingActions
                 'hero_settlement_bond', 'hero_location_visit', 'settlement_transformation',
                 'corruption_spread', 'hero_level_milestone', 'hero_death',
                 'region_danger_change', 'prosperity_threshold', 'magic_discovery',
-                'pantheon_intervention'
+                'pantheon_intervention', 'civilization_agenda'
             ];
             $defaultTimeframe = 5;
             $defaultConfidence = 'possible';
@@ -261,7 +264,9 @@ class BettingActions
             case 'hero_death':
                 return $sampleTargets['hero'][0]['id'] ?? 'sample-hero-id';
             case 'corruption_spread':
+            case 'cultural_shift':
             case 'region_danger_change':
+            case 'civilization_agenda':
                 return $sampleTargets['region'][0]['id'] ?? 'sample-region-id';
             case 'magic_discovery':
                 return $sampleTargets['region'][0]['id'] ?? $sampleTargets['landmark'][0]['id'] ?? 'sample-magic-target-id';
@@ -361,6 +366,68 @@ class BettingActions
                         10,
                         $maximumYears,
                         (string)($hook['confidence'] ?? 'possible')
+                    )
+                ]
+            );
+        }
+
+        foreach ($this->civilizationAgendaCandidates() as $candidate) {
+            $agenda = $candidate['agenda'];
+            $regionId = (string)$agenda['regionId'];
+            $regionName = (string)$agenda['regionName'];
+            $behavior = (string)$agenda['dominantBehavior'];
+            $behaviorLabel = (string)$agenda['dominantBehaviorLabel'];
+            $score = (int)$agenda['score'];
+            $maximumYears = (int)$candidate['maximumYears'];
+
+            $events[] = $this->makeSpeculationEvent(
+                'civilization-agenda-' . $regionId . '-' . $behavior,
+                'Civilization Agenda: ' . $regionName,
+                "{$regionName} shows {$behaviorLabel} pressure at {$score}/100. Will its civic agenda become a recorded decision?",
+                'civilization_agenda',
+                $regionId,
+                $regionId,
+                1,
+                $maximumYears,
+                [
+                    $this->makeBettingOption(
+                        'civilization-' . $behavior,
+                        "{$regionName} follows a {$behaviorLabel} agenda",
+                        $regionId,
+                        'civilization_agenda',
+                        10,
+                        $maximumYears,
+                        (string)$candidate['confidence']
+                    )
+                ]
+            );
+        }
+
+        foreach ($this->cultureShiftCandidates() as $candidate) {
+            /** @var Region $region */
+            $region = $candidate['region'];
+            $targetCulture = (string)$candidate['targetCulture'];
+            $confidence = (string)$candidate['confidence'];
+            $maximumYears = (int)$candidate['maximumYears'];
+
+            $events[] = $this->makeSpeculationEvent(
+                'culture-shift-' . $region->id . '-' . $targetCulture,
+                'Culture Shift: ' . $region->name,
+                "{$region->name} is {$region->cultural_influence} with {$candidate['summary']} Will it develop a stronger {$targetCulture} identity?",
+                'cultural_shift',
+                $region->id,
+                $region->id,
+                2,
+                $maximumYears,
+                [
+                    $this->makeBettingOption(
+                        'culture-' . $targetCulture,
+                        "{$region->name} develops a distinct {$targetCulture} culture",
+                        $region->id,
+                        'cultural_shift',
+                        10,
+                        $maximumYears,
+                        $confidence
                     )
                 ]
             );
@@ -472,6 +539,35 @@ class BettingActions
             );
         }
 
+        foreach ($this->landmarkCorruptionCandidates() as $candidate) {
+            /** @var Landmark $landmark */
+            $landmark = $candidate['landmark'];
+            $confidence = (string)$candidate['confidence'];
+            $maximumYears = (int)$candidate['maximumYears'];
+
+            $events[] = $this->makeSpeculationEvent(
+                'landmark-corruption-' . $landmark->id,
+                'Landmark Corruption: ' . $landmark->name,
+                "{$landmark->name} is {$landmark->status} {$landmark->type} with magic {$landmark->magic_level}, danger {$landmark->danger_level}, and {$candidate['summary']} Will corruption overtake it?",
+                'corruption_spread',
+                $landmark->id,
+                $landmark->region_id,
+                2,
+                $maximumYears,
+                [
+                    $this->makeBettingOption(
+                        'landmark-corrupted',
+                        "{$landmark->name} becomes corrupted",
+                        $landmark->id,
+                        'corruption_spread',
+                        10,
+                        $maximumYears,
+                        $confidence
+                    )
+                ]
+            );
+        }
+
         foreach (ResourceNode::whereIn('status', ['active', 'contested', 'corrupted'])->take(2)->get() as $resource) {
             $events[] = $this->makeSpeculationEvent(
                 'resource-disruption-' . $resource->id,
@@ -488,7 +584,7 @@ class BettingActions
             );
         }
 
-        return array_slice($events, 0, 17);
+        return array_slice($events, 0, 25);
     }
 
     private function makeSpeculationEvent(
@@ -599,16 +695,28 @@ class BettingActions
         }
 
         if ($region = Region::find($targetId)) {
+            $signals = [
+                ['label' => 'Prosperity', 'value' => (string)$region->prosperity],
+                ['label' => 'Chaos', 'value' => (string)$region->chaos],
+                ['label' => 'Danger', 'value' => (string)$region->danger_level],
+                ['label' => 'Magic', 'value' => (string)$region->magic_affinity],
+                ['label' => 'Culture', 'value' => $this->formatLabel((string)$region->cultural_influence)],
+                ['label' => 'Trade routes', 'value' => (string)count($region->trade_routes ?? [])],
+            ];
+            $summary = "{$region->name}: prosperity {$region->prosperity}, chaos {$region->chaos}, danger {$region->danger_level}, magic {$region->magic_affinity}, culture {$region->cultural_influence}.";
+            $agenda = $this->civilizationAgendaForRegion((string)$region->id);
+            if ($agenda !== null) {
+                $signals[] = ['label' => 'Civic agenda', 'value' => (string)$agenda['dominantBehaviorLabel']];
+                $signals[] = ['label' => 'Agenda score', 'value' => (string)$agenda['score'] . '/100'];
+                $signals[] = ['label' => 'Agenda priority', 'value' => $this->formatLabel((string)$agenda['priorityTier'])];
+                $summary .= " Civic agenda: {$agenda['dominantBehaviorLabel']} at {$agenda['score']}/100.";
+            }
+
             return [
                 'type' => 'region',
                 'name' => $region->name,
-                'summary' => "{$region->name}: prosperity {$region->prosperity}, chaos {$region->chaos}, danger {$region->danger_level}, magic {$region->magic_affinity}.",
-                'signals' => [
-                    ['label' => 'Prosperity', 'value' => (string)$region->prosperity],
-                    ['label' => 'Chaos', 'value' => (string)$region->chaos],
-                    ['label' => 'Danger', 'value' => (string)$region->danger_level],
-                    ['label' => 'Magic', 'value' => (string)$region->magic_affinity],
-                ],
+                'summary' => $summary,
+                'signals' => $signals,
             ];
         }
 
@@ -635,6 +743,8 @@ class BettingActions
                     ['label' => 'Status', 'value' => $this->formatLabel($landmark->status)],
                     ['label' => 'Magic', 'value' => (string)$landmark->magic_level],
                     ['label' => 'Danger', 'value' => (string)$landmark->danger_level],
+                    ['label' => 'Discovery', 'value' => $landmark->discovered_year === null ? 'Hidden' : 'Known'],
+                    ['label' => 'Traits', 'value' => (string)count($landmark->traits ?? [])],
                 ],
             ];
         }
@@ -691,12 +801,37 @@ class BettingActions
             $factors[] = ['label' => 'Chaos', 'value' => (string)$region->chaos, 'effect' => 'Chaos raises corruption and instability risk.'];
             $factors[] = ['label' => 'Danger', 'value' => (string)$region->danger_level, 'effect' => 'Danger pushes extreme-state predictions closer.'];
             $factors[] = ['label' => 'Magic affinity', 'value' => (string)$region->magic_affinity, 'effect' => 'Magic-heavy regions are more volatile.'];
+            if ($betType === 'cultural_shift') {
+                $cultureForecast = $this->cultureShiftForecastForRegion($region);
+                $factors[] = ['label' => 'Current culture', 'value' => $this->formatLabel((string)$region->cultural_influence), 'effect' => 'This wager resolves when the region develops a distinct non-pastoral culture.'];
+                $factors[] = ['label' => 'Trade routes', 'value' => (string)count($region->trade_routes ?? []), 'effect' => 'Connected regions can now push culture across trade routes.'];
+                if ($cultureForecast !== null) {
+                    $factors[] = ['label' => 'Forecast culture', 'value' => $this->formatLabel((string)$cultureForecast['targetCulture']), 'effect' => (string)$cultureForecast['summary']];
+                }
+            }
+            if ($betType === 'civilization_agenda') {
+                $agenda = $this->civilizationAgendaForRegion((string)$region->id);
+                if ($agenda !== null) {
+                    $factors[] = ['label' => 'Dominant agenda', 'value' => (string)$agenda['dominantBehaviorLabel'], 'effect' => (string)$agenda['summary']];
+                    $factors[] = ['label' => 'Agenda pressure', 'value' => (string)$agenda['score'] . '/100', 'effect' => 'Higher pressure makes an automated civic decision more likely before the window closes.'];
+                    $factors[] = ['label' => 'Priority tier', 'value' => $this->formatLabel((string)$agenda['priorityTier']), 'effect' => 'Urgent and active agendas are processed sooner by the world tick.'];
+                    $signalSummary = $this->civilizationSignalSummary($agenda);
+                    if ($signalSummary !== '') {
+                        $factors[] = ['label' => 'Agenda signals', 'value' => $signalSummary, 'effect' => 'Visible score signals explain the civic pressure behind this forecast.'];
+                    }
+                }
+            }
         } elseif ($resource = ResourceNode::find($targetId)) {
             $factors[] = ['label' => 'Output', 'value' => (string)$resource->output, 'effect' => 'Low output makes disruption and depletion more likely.'];
             $factors[] = ['label' => 'Status', 'value' => $this->formatLabel($resource->status), 'effect' => 'Contested, corrupted, and unstable nodes carry more risk.'];
         } elseif ($landmark = Landmark::find($targetId)) {
             $factors[] = ['label' => 'Magic', 'value' => (string)$landmark->magic_level, 'effect' => 'High magic can draw discoveries and disruption.'];
             $factors[] = ['label' => 'Danger', 'value' => (string)$landmark->danger_level, 'effect' => 'Danger can delay safe discovery.'];
+            if ($betType === 'corruption_spread') {
+                $risk = $this->landmarkCorruptionRisk($landmark);
+                $factors[] = ['label' => 'Corruption risk', 'value' => (string)$risk['score'] . '/100', 'effect' => (string)$risk['summary']];
+                $factors[] = ['label' => 'Landmark status', 'value' => $this->formatLabel((string)$landmark->status), 'effect' => 'Haunted, active, magical, and dangerous landmarks are more likely to cross into corruption.'];
+            }
         }
 
         if ($betType === 'magic_discovery') {
@@ -732,6 +867,251 @@ class BettingActions
         }
 
         return null;
+    }
+
+    private function civilizationAgendaCandidates(): array
+    {
+        $candidates = [];
+        foreach ($this->civilizationBehaviorService->status()['regionAgendas'] ?? [] as $agenda) {
+            if (!is_array($agenda)) {
+                continue;
+            }
+
+            $score = (int)($agenda['score'] ?? 0);
+            if ($score < 35 || empty($agenda['regionId']) || empty($agenda['dominantBehavior'])) {
+                continue;
+            }
+
+            $candidates[] = [
+                'agenda' => $agenda,
+                'score' => $score,
+                'confidence' => $score >= 75 ? 'likely' : 'possible',
+                'maximumYears' => $score >= 75 ? 4 : 6,
+            ];
+        }
+
+        usort(
+            $candidates,
+            fn(array $left, array $right): int => ((int)$right['score'] <=> (int)$left['score'])
+                ?: strcmp((string)($left['agenda']['regionName'] ?? ''), (string)($right['agenda']['regionName'] ?? ''))
+        );
+
+        return array_slice($candidates, 0, 3);
+    }
+
+    private function civilizationAgendaForRegion(string $regionId): ?array
+    {
+        foreach ($this->civilizationBehaviorService->status()['regionAgendas'] ?? [] as $agenda) {
+            if (!is_array($agenda) || (string)($agenda['regionId'] ?? '') !== $regionId) {
+                continue;
+            }
+
+            return $agenda;
+        }
+
+        return null;
+    }
+
+    private function civilizationSignalSummary(array $agenda): string
+    {
+        $signals = [];
+        foreach (array_slice($agenda['signals'] ?? [], 0, 3) as $signal) {
+            if (!is_array($signal) || empty($signal['label']) || !isset($signal['value'])) {
+                continue;
+            }
+
+            $signals[] = $signal['label'] . ' ' . $signal['value'];
+        }
+
+        return implode(', ', $signals);
+    }
+
+    private function cultureShiftCandidates(): array
+    {
+        $candidates = [];
+        foreach (Region::orderByDesc('magic_affinity')->get() as $region) {
+            $candidate = $this->cultureShiftForecastForRegion($region);
+            if ($candidate === null) {
+                continue;
+            }
+
+            $candidates[] = array_merge($candidate, ['region' => $region]);
+        }
+
+        usort(
+            $candidates,
+            fn(array $left, array $right): int => ((int)$right['score'] <=> (int)$left['score'])
+                ?: strcmp((string)$left['region']->name, (string)$right['region']->name)
+        );
+
+        return array_slice($candidates, 0, 3);
+    }
+
+    private function cultureShiftForecastForRegion(Region $region): ?array
+    {
+        $currentCulture = (string)($region->cultural_influence ?? 'pastoral');
+        if (!in_array($currentCulture, ['pastoral', 'stable', 'peaceful', 'scholarly'], true)) {
+            return null;
+        }
+
+        $scores = [
+            'scholarly' => 0,
+            'martial' => 0,
+            'mystical' => 0,
+            'mercantile' => 0,
+        ];
+        $routeSignals = [];
+        foreach ($this->connectedCultureRegions($region) as $connectedRegion) {
+            $culture = (string)($connectedRegion->cultural_influence ?? 'pastoral');
+            if (!array_key_exists($culture, $scores)) {
+                continue;
+            }
+
+            $strength = 1
+                + ((int)$connectedRegion->prosperity >= 70 ? 1 : 0)
+                + ((int)($connectedRegion->population_total ?? 0) >= 2000 ? 1 : 0);
+            $scores[$culture] += min(3, $strength);
+            $routeSignals[] = "{$connectedRegion->name} exports {$culture}";
+        }
+
+        if ((int)$region->magic_affinity >= 65) {
+            $scores['mystical'] += 2;
+            $scores['scholarly'] += 1;
+        }
+        if ((int)$region->danger_level >= 55 || (int)$region->chaos >= 60) {
+            $scores['martial'] += 2;
+        }
+        if ((int)$region->prosperity >= 70) {
+            $scores['mercantile'] += 1;
+            $scores['scholarly'] += 1;
+        }
+        foreach ($region->regional_traits ?? [] as $trait) {
+            if (str_starts_with((string)$trait, 'myth_') || in_array($trait, ['mythic_memory', 'cross_region_lore'], true)) {
+                $scores['mystical'] += 1;
+                $scores['scholarly'] += 1;
+            }
+            if (in_array($trait, ['border_tension', 'martial_tradition'], true)) {
+                $scores['martial'] += 1;
+            }
+            if ($trait === 'trade_culture_exchange') {
+                $scores['mercantile'] += 1;
+            }
+        }
+
+        arsort($scores);
+        $targetCulture = (string)array_key_first($scores);
+        $score = (int)($scores[$targetCulture] ?? 0);
+        if ($score < 3 || $targetCulture === $currentCulture) {
+            return null;
+        }
+
+        return [
+            'targetCulture' => $targetCulture,
+            'score' => $score,
+            'confidence' => $score >= 6 ? 'likely' : 'possible',
+            'maximumYears' => $score >= 6 ? 5 : 7,
+            'summary' => $routeSignals === []
+                ? "local pressure favors {$targetCulture} culture"
+                : implode(', ', array_slice($routeSignals, 0, 2)) . "; pressure favors {$targetCulture} culture",
+        ];
+    }
+
+    private function connectedCultureRegions(Region $region): array
+    {
+        $directRouteIds = array_values(array_unique(array_filter(array_map(
+            fn($value): string => (string)$value,
+            $region->trade_routes ?? []
+        ))));
+        $reverseRouteIds = [];
+        foreach (Region::where('id', '!=', (string)$region->id)->get() as $candidate) {
+            $candidateRoutes = array_values(array_unique(array_filter(array_map(
+                fn($value): string => (string)$value,
+                $candidate->trade_routes ?? []
+            ))));
+            if (in_array((string)$region->id, $candidateRoutes, true)) {
+                $reverseRouteIds[] = (string)$candidate->id;
+            }
+        }
+
+        $connectedIds = array_values(array_unique(array_merge($directRouteIds, $reverseRouteIds)));
+        if ($connectedIds === []) {
+            return [];
+        }
+
+        return Region::whereIn('id', $connectedIds)->get()->all();
+    }
+
+    private function landmarkCorruptionCandidates(): array
+    {
+        $candidates = [];
+        foreach (Landmark::orderByDesc('danger_level')->orderByDesc('magic_level')->get() as $landmark) {
+            if ($landmark->isCorrupted() || (string)$landmark->status === Landmark::STATUS_CORRUPTED) {
+                continue;
+            }
+            if ($landmark->discovered_year === null && !$landmark->isAccessible()) {
+                continue;
+            }
+
+            $risk = $this->landmarkCorruptionRisk($landmark);
+            if ((int)$risk['score'] < 45) {
+                continue;
+            }
+
+            $score = (int)$risk['score'];
+            $candidates[] = [
+                'landmark' => $landmark,
+                'score' => $score,
+                'summary' => $risk['summary'],
+                'confidence' => $score >= 75 ? 'likely' : 'possible',
+                'maximumYears' => $score >= 75 ? 5 : 8,
+            ];
+        }
+
+        usort(
+            $candidates,
+            fn(array $left, array $right): int => ((int)$right['score'] <=> (int)$left['score'])
+                ?: strcmp((string)$left['landmark']->name, (string)$right['landmark']->name)
+        );
+
+        return array_slice($candidates, 0, 3);
+    }
+
+    private function landmarkCorruptionRisk(Landmark $landmark): array
+    {
+        $score = (int)round(((int)$landmark->danger_level * 0.55) + ((int)$landmark->magic_level * 0.30));
+        $signals = [];
+
+        if ((int)$landmark->danger_level >= 60) {
+            $signals[] = 'high danger';
+            $score += 10;
+        }
+        if ((int)$landmark->magic_level >= 70) {
+            $signals[] = 'high magic';
+            $score += 8;
+        }
+        if ((string)$landmark->status === Landmark::STATUS_HAUNTED) {
+            $signals[] = 'haunted status';
+            $score += 12;
+        }
+        if ((string)$landmark->status === Landmark::STATUS_ACTIVE) {
+            $signals[] = 'active power';
+            $score += 5;
+        }
+        foreach ($landmark->traits ?? [] as $trait) {
+            if (in_array((string)$trait, [Landmark::TRAIT_PORTAL, Landmark::TRAIT_MAGICAL, Landmark::TRAIT_ANCIENT], true)) {
+                $signals[] = $this->formatLabel((string)$trait);
+                $score += 5;
+            }
+        }
+
+        $signals = array_values(array_unique($signals));
+
+        return [
+            'score' => max(0, min(100, $score)),
+            'summary' => $signals === []
+                ? 'low visible landmark risk'
+                : 'risk signals: ' . implode(', ', array_slice($signals, 0, 4)),
+        ];
     }
 
     private function collectEventOddsFactors(array $options): array

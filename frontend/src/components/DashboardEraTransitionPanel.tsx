@@ -19,6 +19,7 @@ const listText = (items: string[]): string => {
 const generatedNames = (entry: EraTransitionHistoryEntry): string[] => [
   ...(entry.generated?.settlements ?? []).map(item => item.name),
   ...(entry.generated?.heroes ?? []).map(item => item.name),
+  ...(entry.generated?.descendants ?? []).map(item => item.name),
   ...(entry.generated?.landmarks ?? []).map(item => item.name),
   ...(entry.generated?.resources ?? []).map(item => item.name),
 ];
@@ -48,6 +49,14 @@ const HistoryRow: React.FC<{ entry: EraTransitionHistoryEntry }> = ({ entry }) =
       {generated.length > 0 && (
         <div className="mt-2 text-xs text-gray-500">
           New foundations: <span className="text-gray-300">{listText(generated)}</span>
+        </div>
+      )}
+      {(entry.generated?.descendants ?? []).length > 0 && (
+        <div className="mt-1 text-xs text-gray-500">
+          Descendants:{' '}
+          <span className="text-gray-300">
+            {listText((entry.generated?.descendants ?? []).map(item => item.name))}
+          </span>
         </div>
       )}
     </div>

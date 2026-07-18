@@ -15,6 +15,7 @@ import type {
   MagicDiscoveryBettingHook,
   MagicDiscoveryPath,
   MagicDiscoveryPathStatus,
+  MagicDiscoveryProgression,
   MagicDiscoveryStatusResponse,
   MagicDiscoverySuggestedTarget,
   MagicDiscoveryTargetType,
@@ -61,6 +62,9 @@ const MagicPathCard: React.FC<MagicPathCardProps> = ({ path }) => {
         </div>
         <div className="text-right text-sm">
           <div className="font-semibold text-cyan-200">{path.progress}% progress</div>
+          {path.status === 'known' && (
+            <div className="font-semibold text-emerald-200">{path.maturity}/100 maturity</div>
+          )}
           <div className="text-gray-500">Evidence {path.evidenceScore}</div>
         </div>
       </div>
@@ -75,6 +79,7 @@ const MagicPathCard: React.FC<MagicPathCardProps> = ({ path }) => {
         <div className="mt-4 rounded bg-gray-800 px-3 py-2 text-sm text-gray-300">
           Last researched through {path.lastTarget.name}
           {path.lastResearchedYear ? ` in year ${path.lastResearchedYear}` : ''}.
+          {path.lastProgressionYear ? ` Last progressed in year ${path.lastProgressionYear}.` : ''}
         </div>
       )}
 
@@ -119,6 +124,68 @@ const MagicPathCard: React.FC<MagicPathCardProps> = ({ path }) => {
     </article>
   );
 };
+
+const progressionChangeCount = (progression: MagicDiscoveryProgression): number =>
+  progression.changes.regions.length +
+  progression.changes.settlements.length +
+  progression.changes.resources.length +
+  progression.changes.heroes.length +
+  progression.changes.landmarks.length;
+
+const RecentProgressions: React.FC<{ progressions: MagicDiscoveryProgression[]; summary?: string }> = ({
+  progressions,
+  summary,
+}) => (
+  <section className="rounded-lg border border-[#2f334d] bg-[#1a1b26] p-5">
+    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+      <div>
+        <h2 className="text-xl font-bold text-white">Autonomous Progression</h2>
+        <p className="mt-1 text-sm text-gray-400">
+          {summary ?? 'Known and emerging paths can advance during world ticks.'}
+        </p>
+      </div>
+      <Link to="/events?type=magic_progression" className="text-sm font-semibold text-blue-300 hover:text-blue-100">
+        Timeline
+      </Link>
+    </div>
+
+    {progressions.length === 0 ? (
+      <div className="mt-4 text-sm text-gray-500">
+        No magic progression has resolved autonomously yet.
+      </div>
+    ) : (
+      <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {progressions.slice(0, 4).map(progression => (
+          <article key={progression.id} className="rounded bg-gray-800 px-3 py-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="font-semibold text-gray-100">{progression.title}</div>
+                <div className="mt-1 text-sm text-gray-400">{progression.summary}</div>
+              </div>
+              <div className="text-sm text-cyan-200">Year {progression.year}</div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+              <span className="text-gray-500">
+                {progression.progress}% progress / {progression.maturity} maturity
+              </span>
+              <span className="text-gray-500">
+                {progressionChangeCount(progression)} changed entities
+              </span>
+              {progression.eventId && (
+                <Link
+                  to={`/events/${progression.eventId}`}
+                  className="text-blue-300 hover:text-blue-100"
+                >
+                  Event
+                </Link>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    )}
+  </section>
+);
 
 interface SuggestedTargetListProps {
   targets: MagicDiscoverySuggestedTarget[];
@@ -284,6 +351,7 @@ const MagicDiscoveryPage: React.FC = () => {
   const canResearch = Boolean(targetId) && !isResearching && currentDivineFavor >= researchCost;
   const pathOptions = magicStatus?.pathOptions ?? [];
   const paths = magicStatus?.paths ?? [];
+  const recentProgressions = magicStatus?.recentProgressions ?? [];
   const bettingHooks = magicStatus?.bettingHooks ?? [];
   const suggestedTargets = magicStatus?.suggestedTargets ?? [];
   const isLoading = isLoadingStatus || isLoadingRegions || isLoadingHeroes || isLoadingMagic;
@@ -472,6 +540,11 @@ const MagicDiscoveryPage: React.FC = () => {
           icon="✦"
         />
       )}
+
+      <RecentProgressions
+        progressions={recentProgressions}
+        summary={magicStatus?.progressionSummary}
+      />
 
       <BettingHooks hooks={bettingHooks} />
 

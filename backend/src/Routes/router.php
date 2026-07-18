@@ -40,6 +40,7 @@ return function (Router $router): void {
 
     $router->get($api . '/auth/login-info', [AuthController::class, 'getLoginInfo']);
     $router->post($api . '/auth/guest-session', [AuthController::class, 'createGuestSession']);
+    $router->get($api . '/public/chronicle-share/{shareId}', [ExportController::class, 'getPublicChronicleShare']);
 
     $router->get($api . '/auth/session', [AuthController::class, 'getCurrentUser'], $auth);
     $router->get($api . '/auth/me', [AuthController::class, 'getCurrentUser'], $auth);
@@ -107,6 +108,10 @@ return function (Router $router): void {
     $router->get($api . '/export/types', [ExportController::class, 'getExportTypes'], $auth);
     $router->get($api . '/export/full', [ExportController::class, 'exportFull'], $auth);
     $router->get($api . '/export/chronicle-share', [ExportController::class, 'exportChronicleShare'], $auth);
+    $router->get($api . '/export/chronicle-share/public', [ExportController::class, 'listPublicChronicleShares'], $auth);
+    $router->post($api . '/export/chronicle-share/public', [ExportController::class, 'publishChronicleShare'], $auth);
+    $router->delete($api . '/export/chronicle-share/public/{shareId}', [ExportController::class, 'revokePublicChronicleShare'], $auth);
+    $router->get($api . '/export/chronicle-replay', [ExportController::class, 'exportChronicleReplay'], $auth);
     $router->get($api . '/export/{type}', [ExportController::class, 'exportByType'], $auth);
     $router->post($api . '/influence/divine/calculate-cost', [InfluenceController::class, 'calculateDivineInfluenceCost'], $auth);
     $router->post($api . '/influence/divine/apply', [InfluenceController::class, 'applyDivineInfluence'], $auth);
@@ -121,6 +126,7 @@ return function (Router $router): void {
     $router->post($api . '/admin/game-loop/stop', [StatusController::class, 'stopGameLoop'], $admin);
     $router->post($api . '/admin/era/transition', [StatusController::class, 'runEraTransition'], $admin);
     $router->get($api . '/admin/world-editor', [AdminWorldEditorController::class, 'getStatus'], $admin);
+    $router->post($api . '/admin/world-editor/{entityType}/preview', [AdminWorldEditorController::class, 'previewEntity'], $admin);
     $router->post($api . '/admin/world-editor/{entityType}', [AdminWorldEditorController::class, 'createEntity'], $admin);
     $router->put($api . '/admin/world-editor/{entityType}/{id}', [AdminWorldEditorController::class, 'updateEntity'], $admin);
     $router->get($api . '/statistics/summary', [StatisticsController::class, 'getSummary'], $auth);

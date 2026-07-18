@@ -134,6 +134,7 @@ class WeatherInfluenceService
             'changed' => 0,
             'events' => 0,
             'consequences' => [],
+            'chains' => [],
             'errors' => [],
         ];
         $history = $this->loadHistory();
@@ -145,25 +146,41 @@ class WeatherInfluenceService
 
             $summary['processed']++;
             try {
-                if (!$this->shouldResolveConsequence($entry, $currentYear)) {
-                    continue;
+                $changed = false;
+                $chainResults = $this->advanceWeatherChains($entry, $currentYear);
+                foreach ($chainResults as $chainResult) {
+                    $summary['events']++;
+                    $summary['chains'][] = $chainResult;
+                    $changed = true;
                 }
 
-                $consequence = $this->resolveWeatherConsequence($entry, $currentYear);
-                if ($consequence === null) {
-                    continue;
+                if ($this->shouldResolveConsequence($entry, $currentYear)) {
+                    $consequence = $this->resolveWeatherConsequence($entry, $currentYear);
+                    if ($consequence !== null) {
+                        $entry['lastConsequenceYear'] = $currentYear;
+                        $entry['consequences'] = $this->prependLimited(
+                            is_array($entry['consequences'] ?? null) ? $entry['consequences'] : [],
+                            $consequence,
+                            6
+                        );
+                        $chain = $this->seedWeatherChain($entry, $consequence, $currentYear);
+                        if ($chain !== null) {
+                            $entry['chains'] = $this->prependLimited(
+                                is_array($entry['chains'] ?? null) ? $entry['chains'] : [],
+                                $chain,
+                                6
+                            );
+                        }
+                        $summary['events']++;
+                        $summary['consequences'][] = $consequence;
+                        $changed = true;
+                    }
                 }
 
-                $entry['lastConsequenceYear'] = $currentYear;
-                $entry['consequences'] = $this->prependLimited(
-                    is_array($entry['consequences'] ?? null) ? $entry['consequences'] : [],
-                    $consequence,
-                    6
-                );
-                $history[$index] = $entry;
-                $summary['changed']++;
-                $summary['events']++;
-                $summary['consequences'][] = $consequence;
+                if ($changed) {
+                    $history[$index] = $entry;
+                    $summary['changed']++;
+                }
             } catch (\Throwable $error) {
                 $summary['errors'][] = [
                     'id' => isset($entry['id']) ? (string)$entry['id'] : null,
@@ -576,6 +593,190 @@ class WeatherInfluenceService
             'relatedSettlementIds' => $relatedSettlementIds,
             'relatedResourceIds' => $relatedResourceIds,
         ];
+    }
+
+    private function seedWeatherChain(array $entry, array $consequence, int $currentYear): ?array
+    {
+        if ($this->hasActiveWeatherChain($entry['chains'] ?? [])) {
+            return null;
+        }
+
+        $patternKey = $this->normalizePattern((string)($entry['pattern'] ?? 'gentle_rains'));
+        $intensityKey = $this->normalizeIntensity((string)($entry['intensity'] ?? 'minor'));
+        $risk = (int)self::INTENSITIES[$intensityKey]['risk'];
+        $touches = count($consequence['settlementChanges'] ?? []) + count($consequence['resourceChanges'] ?? []);
+
+        if ($risk < 18 && $touches === 0 && !in_array($patternKey, ['drought', 'tempest', 'arcane_mist'], true)) {
+            return null;
+        }
+
+        $maxSteps = $intensityKey === 'severe' || in_array($patternKey, ['drought', 'tempest'], true) ? 3 : 2;
+        $weatherId = (string)($entry['id'] ?? bin2hex(random_bytes(4)));
+
+        return [
+            'id' => 'weather-chain-' . $weatherId . '-' . $currentYear,
+            'tool' => 'weather',
+            'status' => 'active',
+            'startedYear' => $currentYear,
+            'lastAdvancedYear' => null,
+            'nextYear' => $currentYear + 1,
+            'step' => 0,
+            'maxSteps' => $maxSteps,
+            'sourceEventId' => (string)($consequence['eventId'] ?? ''),
+            'eventIds' => array_values(array_filter([(string)($consequence['eventId'] ?? '')])),
+            'title' => 'Weather Chain: ' . ($entry['patternLabel'] ?? self::PATTERNS[$patternKey]['label']),
+            'latestSummary' => "A {$maxSteps}-step weather chain began from {$consequence['title']}.",
+        ];
+    }
+
+    private function advanceWeatherChains(array &$entry, int $currentYear): array
+    {
+        $chains = is_array($entry['chains'] ?? null) ? array_values($entry['chains']) : [];
+        $results = [];
+
+        foreach ($chains as $index => $chain) {
+            if (!is_array($chain) || !$this->shouldAdvanceWeatherChain($chain, $currentYear)) {
+                continue;
+            }
+
+            [$updatedChain, $result] = $this->resolveWeatherChainStep($entry, $chain, $currentYear);
+            $chains[$index] = $updatedChain;
+            $results[] = $result;
+        }
+
+        if ($results !== []) {
+            $entry['chains'] = array_slice(array_values($chains), 0, 6);
+        }
+
+        return $results;
+    }
+
+    private function resolveWeatherChainStep(array $entry, array $chain, int $currentYear): array
+    {
+        $regionId = (string)($entry['regionId'] ?? '');
+        $region = $regionId !== '' ? Region::find($regionId) : null;
+        if (!$region instanceof Region) {
+            throw new \RuntimeException('Weather chain target region no longer exists.');
+        }
+
+        $step = max(1, (int)($chain['step'] ?? 0) + 1);
+        $maxSteps = max($step, (int)($chain['maxSteps'] ?? 2));
+        $patternKey = $this->normalizePattern((string)($entry['pattern'] ?? 'gentle_rains'));
+        $intensityKey = $this->normalizeIntensity((string)($entry['intensity'] ?? 'minor'));
+        $pattern = self::PATTERNS[$patternKey];
+        $intensity = self::INTENSITIES[$intensityKey];
+        $multiplier = max(0.18, $this->followThroughMultiplier($intensityKey) - ($step * 0.08));
+        $before = $this->regionSnapshot($region);
+        $this->applyWeatherFollowThroughToRegion($region, $patternKey, $pattern, $multiplier);
+        $region->save();
+        $after = $this->regionSnapshot($region->fresh() ?? $region);
+        $settlementChanges = $this->applyWeatherFollowThroughToSettlements(
+            (string)$region->id,
+            $pattern,
+            $multiplier,
+            "weather-chain:{$chain['id']}:settlements:{$currentYear}",
+            $currentYear
+        );
+        $resourceChanges = $this->applyWeatherFollowThroughToResources(
+            (string)$region->id,
+            $patternKey,
+            $pattern,
+            $multiplier,
+            "weather-chain:{$chain['id']}:resources:{$currentYear}"
+        );
+        $relatedSettlementIds = array_values(array_unique(array_map(
+            fn(array $change): string => (string)$change['id'],
+            $settlementChanges
+        )));
+        $relatedResourceIds = array_values(array_unique(array_map(
+            fn(array $change): string => (string)$change['id'],
+            $resourceChanges
+        )));
+        $finished = $step >= $maxSteps;
+        $title = 'Weather Chain: ' . $pattern['label'];
+        $summary = "{$intensity['label']} {$pattern['label']} continued as chain step {$step}/{$maxSteps} in {$after['name']}: prosperity {$before['prosperity']}->{$after['prosperity']}, chaos {$before['chaos']}->{$after['chaos']}, danger {$before['dangerLevel']}->{$after['dangerLevel']}, magic {$before['magicAffinity']}->{$after['magicAffinity']}. "
+            . count($settlementChanges) . ' settlements and ' . count($resourceChanges) . ' resources echoed the chain.'
+            . ($finished ? ' The weather chain resolved.' : ' More follow-through remains possible.');
+        $event = $this->eventRepository->createEvent([
+            'title' => $title,
+            'description' => $summary,
+            'type' => 'weather_chain',
+            'region_id' => $region->id,
+            'related_region_ids' => [(string)$region->id],
+            'related_settlement_ids' => $relatedSettlementIds,
+            'related_resource_ids' => $relatedResourceIds,
+            'year' => $currentYear,
+        ]);
+
+        $chain['step'] = $step;
+        $chain['lastAdvancedYear'] = $currentYear;
+        $chain['nextYear'] = $finished ? null : $currentYear + ($patternKey === 'drought' ? 2 : 1);
+        $chain['status'] = $finished ? 'completed' : 'active';
+        $chain['latestSummary'] = $summary;
+        $eventIds = is_array($chain['eventIds'] ?? null) ? $chain['eventIds'] : [];
+        $eventIds[] = $event->id;
+        $chain['eventIds'] = array_slice(array_values($eventIds), -6);
+
+        return [
+            $chain,
+            [
+                'id' => (string)$chain['id'] . '-step-' . $step . '-' . $currentYear,
+                'tool' => 'weather',
+                'title' => $title,
+                'weatherId' => (string)($entry['id'] ?? ''),
+                'pattern' => $patternKey,
+                'patternLabel' => $pattern['label'],
+                'intensity' => $intensityKey,
+                'intensityLabel' => $intensity['label'],
+                'regionId' => (string)$region->id,
+                'regionName' => (string)$region->name,
+                'year' => $currentYear,
+                'summary' => $summary,
+                'eventId' => $event->id,
+                'chainId' => (string)$chain['id'],
+                'chainStep' => $step,
+                'chainMaxSteps' => $maxSteps,
+                'chainStatus' => (string)$chain['status'],
+                'sourceEventId' => (string)($chain['sourceEventId'] ?? ''),
+                'nextYear' => $chain['nextYear'],
+                'regionBefore' => $before,
+                'regionAfter' => $after,
+                'regionChange' => $this->diffSnapshots($before, $after),
+                'settlementChanges' => $settlementChanges,
+                'resourceChanges' => $resourceChanges,
+                'relatedRegionIds' => [(string)$region->id],
+                'relatedSettlementIds' => $relatedSettlementIds,
+                'relatedResourceIds' => $relatedResourceIds,
+            ],
+        ];
+    }
+
+    private function hasActiveWeatherChain(mixed $chains): bool
+    {
+        if (!is_array($chains)) {
+            return false;
+        }
+
+        foreach ($chains as $chain) {
+            if (is_array($chain) && ($chain['status'] ?? null) === 'active') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function shouldAdvanceWeatherChain(array $chain, int $currentYear): bool
+    {
+        if (($chain['status'] ?? null) !== 'active') {
+            return false;
+        }
+
+        if ((int)($chain['lastAdvancedYear'] ?? 0) >= $currentYear) {
+            return false;
+        }
+
+        return (int)($chain['nextYear'] ?? PHP_INT_MAX) <= $currentYear;
     }
 
     private function followThroughMultiplier(string $intensityKey): float

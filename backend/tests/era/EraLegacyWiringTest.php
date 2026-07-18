@@ -21,18 +21,21 @@ final class EraLegacyWiringTest extends TestCase
     public function testEraLegacyServiceForecastsContinuityFromWorldState(): void
     {
         self::assertStringContainsString('class EraLegacyService', $this->serviceSource);
-        foreach ([
+        foreach (
+            [
             'heroLegacies',
             'bloodlineSeeds',
             'landmarkLegacies',
             'worldScars',
             'carriedMyths',
             'eraSpanningBets',
-        ] as $legacyKey) {
+            ] as $legacyKey
+        ) {
             self::assertStringContainsString("'{$legacyKey}'", $this->serviceSource);
         }
 
-        foreach ([
+        foreach (
+            [
             'Hero::all()',
             'Landmark::all()',
             'Region::all()',
@@ -40,7 +43,8 @@ final class EraLegacyWiringTest extends TestCase
             'Settlement::all()',
             'GameEvent::orderBy',
             "DivineBet::where('status', 'active')",
-        ] as $source) {
+            ] as $source
+        ) {
             self::assertStringContainsString($source, $this->serviceSource);
         }
     }

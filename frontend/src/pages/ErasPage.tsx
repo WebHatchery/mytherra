@@ -69,8 +69,22 @@ const GeneratedItemList: React.FC<{ label: string; items: EraGeneratedEntity[] }
       <div className="mb-2 text-xs font-semibold uppercase text-gray-500">{label}</div>
       {items.slice(0, 4).map(item => (
         <div key={item.id} className="border-t border-[#2f334d] py-2 first:border-t-0 first:pt-0">
-          <div className="text-sm text-gray-200">{item.name}</div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-gray-200">{item.name}</div>
+            {item.eventId && (
+              <Link to={`/events/${item.eventId}`} className="text-xs text-blue-300 hover:text-blue-100">
+                Event
+              </Link>
+            )}
+          </div>
           <div className="mt-1 text-xs text-gray-500">{item.summary}</div>
+          {(item.sourceHeroName || item.lineageType || item.lineageSource) && (
+            <div className="mt-1 text-xs text-gray-400">
+              {item.sourceHeroName
+                ? `Lineage: ${item.sourceHeroName}`
+                : `Lineage: ${item.lineageSource ?? item.lineageType}`}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -86,7 +100,8 @@ const GeneratedContent: React.FC<{ generated?: EraGeneratedContent }> = ({ gener
     generated.settlements.length +
     generated.heroes.length +
     generated.landmarks.length +
-    generated.resources.length;
+    generated.resources.length +
+    (generated.descendants ?? []).length;
 
   if (total === 0) {
     return null;
@@ -108,6 +123,7 @@ const GeneratedContent: React.FC<{ generated?: EraGeneratedContent }> = ({ gener
       <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
         <GeneratedItemList label="Settlements" items={generated.settlements} />
         <GeneratedItemList label="Heroes" items={generated.heroes} />
+        <GeneratedItemList label="Descendants" items={generated.descendants ?? []} />
         <GeneratedItemList label="Landmarks" items={generated.landmarks} />
         <GeneratedItemList label="Resources" items={generated.resources} />
       </div>

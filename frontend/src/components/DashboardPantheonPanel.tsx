@@ -20,6 +20,7 @@ const DashboardPantheonPanel: React.FC<DashboardPantheonPanelProps> = ({ pantheo
 
   const topActor = pantheon.topActor ?? pantheon.deities[0] ?? null;
   const latestIntervention = pantheon.recentInterventions[0] ?? null;
+  const latestArc = pantheon.relationshipArcs?.[0] ?? null;
 
   return (
     <section className="mb-8 rounded-lg border border-[#2f334d] bg-[#1a1b26] p-6">
@@ -52,7 +53,7 @@ const DashboardPantheonPanel: React.FC<DashboardPantheonPanelProps> = ({ pantheo
           </div>
         )}
 
-        <div className="rounded border border-[#2f334d] bg-[#16161e] p-4 lg:col-span-2">
+        <div className="rounded border border-[#2f334d] bg-[#16161e] p-4">
           <div className="text-xs uppercase text-gray-500">Recent Intervention</div>
           {latestIntervention ? (
             <div className="mt-3 text-xs">
@@ -75,6 +76,36 @@ const DashboardPantheonPanel: React.FC<DashboardPantheonPanelProps> = ({ pantheo
           ) : (
             <div className="mt-3 text-xs text-gray-500">
               No autonomous pantheon intervention has resolved yet.
+            </div>
+          )}
+        </div>
+
+        <div className="rounded border border-[#2f334d] bg-[#16161e] p-4">
+          <div className="text-xs uppercase text-gray-500">Latest Political Arc</div>
+          {latestArc ? (
+            <div className="mt-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-semibold text-gray-200">
+                  {latestArc.sourceName} to {latestArc.targetName}
+                </span>
+                <span className="text-gray-500">Step {latestArc.stepCount}</span>
+              </div>
+              <div className="mt-1 text-gray-400">{latestArc.summary}</div>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                {latestArc.eventId && (
+                  <Link
+                    to={`/events/${latestArc.eventId}`}
+                    className="text-blue-300 hover:text-blue-100"
+                  >
+                    Event
+                  </Link>
+                )}
+                <span className="text-gray-500">{latestArc.momentum}/100 momentum</span>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-3 text-xs text-gray-500">
+              No alliance or rivalry arc has advanced yet.
             </div>
           )}
         </div>

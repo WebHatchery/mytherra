@@ -8,6 +8,7 @@ import { useGameStatus } from '../hooks/useGameStatus';
 import type { AdvanceCivilizationPayload } from '../api/apiService';
 import type {
   CivilizationDecision,
+  CivilizationDiplomacy,
   CivilizationRegionAgenda,
   CivilizationStatusResponse,
 } from '../entities/civilization';
@@ -192,6 +193,92 @@ const DecisionCard: React.FC<{ decision: CivilizationDecision }> = ({ decision }
   );
 };
 
+const DiplomacyCard: React.FC<{ diplomacy: CivilizationDiplomacy }> = ({ diplomacy }) => {
+  const changeCount =
+    diplomacy.changes.regions.length +
+    diplomacy.changes.settlements.length +
+    diplomacy.changes.resources.length +
+    diplomacy.changes.heroes.length +
+    diplomacy.changes.landmarks.length;
+  const eventIds =
+    diplomacy.eventIds.length > 0
+      ? diplomacy.eventIds
+      : diplomacy.eventId
+        ? [diplomacy.eventId]
+        : [];
+
+  return (
+    <article className="rounded-lg border border-[#2f334d] bg-[#1a1b26] p-5">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-bold text-white">
+              {diplomacy.sourceRegionName} and {diplomacy.targetRegionName}
+            </h2>
+            <span
+              className={`text-sm font-semibold ${
+                diplomacy.kind === 'rivalry_front' ? 'text-red-200' : 'text-emerald-200'
+              }`}
+            >
+              {diplomacy.kindLabel}
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-gray-300">
+            {diplomacy.effectSummary || diplomacy.summary}
+          </p>
+        </div>
+        <div className="text-right text-sm text-gray-400">
+          <div>Step {diplomacy.stepCount}</div>
+          <div>Year {diplomacy.lastAdvancedYear || diplomacy.startedYear}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="rounded bg-gray-800 px-3 py-2">
+          <div className="text-xs uppercase text-gray-500">Pressure</div>
+          <div className="mt-1 text-sm font-semibold text-yellow-300">{diplomacy.score}</div>
+        </div>
+        <div className="rounded bg-gray-800 px-3 py-2">
+          <div className="text-xs uppercase text-gray-500">Started</div>
+          <div className="mt-1 text-sm text-gray-200">Year {diplomacy.startedYear}</div>
+        </div>
+        <div className="rounded bg-gray-800 px-3 py-2">
+          <div className="text-xs uppercase text-gray-500">Changed</div>
+          <div className="mt-1 text-sm text-gray-200">{changeCount} entities</div>
+        </div>
+        <div className="rounded bg-gray-800 px-3 py-2">
+          <div className="text-xs uppercase text-gray-500">Regions</div>
+          <div className="mt-1 text-sm text-gray-200">{diplomacy.relatedRegionIds.length}</div>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-sm">
+        {eventIds.slice(0, 3).map(eventId => (
+          <Link
+            key={eventId}
+            to={`/events/${eventId}`}
+            className="text-blue-300 hover:text-blue-100"
+          >
+            Event
+          </Link>
+        ))}
+        <Link
+          to={`/events?regionId=${encodeURIComponent(diplomacy.sourceRegionId)}`}
+          className="text-blue-300 hover:text-blue-100"
+        >
+          Source Timeline
+        </Link>
+        <Link
+          to={`/events?regionId=${encodeURIComponent(diplomacy.targetRegionId)}`}
+          className="text-blue-300 hover:text-blue-100"
+        >
+          Target Timeline
+        </Link>
+      </div>
+    </article>
+  );
+};
+
 const CivilizationPage: React.FC = () => {
   const {
     gameStatus,
@@ -252,6 +339,7 @@ const CivilizationPage: React.FC = () => {
   const topAgenda = statusCivilization?.topAgenda ?? null;
   const agendas = statusCivilization?.regionAgendas ?? [];
   const recentDecisions = statusCivilization?.recentDecisions ?? [];
+  const diplomacy = statusCivilization?.diplomacy ?? [];
   const isLoading = isLoadingStatus || isLoadingCivilization;
   const error = statusError || civilizationError;
 
@@ -315,6 +403,24 @@ const CivilizationPage: React.FC = () => {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-white">Civic Diplomacy</h2>
+          <p className="mt-1 text-sm text-gray-400">
+            {statusCivilization?.diplomacySummary ?? 'No active civic diplomacy has formed yet.'}
+          </p>
+        </div>
+        {diplomacy.length > 0 ? (
+          diplomacy.map(pact => <DiplomacyCard key={pact.id || pact.pactKey} diplomacy={pact} />)
+        ) : (
+          <EmptyState
+            title="No Civic Diplomacy"
+            message="Trade compacts and rivalry fronts form automatically when regional pressure connects two regions."
+            icon="◇"
+          />
+        )}
       </section>
 
       <section className="space-y-4">

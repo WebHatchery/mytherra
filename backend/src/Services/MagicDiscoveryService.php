@@ -19,6 +19,8 @@ class MagicDiscoveryService
     private const CONFIG_KEY_STATE = 'discovery_state';
     private const RESEARCH_COST = 18;
     private const HISTORY_LIMIT = 8;
+    private const PROGRESSION_HISTORY_LIMIT = 10;
+    private const PROGRESSION_COOLDOWN_YEARS = 4;
 
     private const PATHS = [
         'ley_weaving' => [
@@ -83,6 +85,8 @@ class MagicDiscoveryService
             'summary' => $this->summary($paths),
             'pathOptions' => $this->pathOptions(),
             'paths' => $paths,
+            'progressionSummary' => $this->progressionSummary($paths, $state),
+            'recentProgressions' => $this->recentProgressions($state),
             'targetOptions' => $this->targetOptions(),
             'suggestedTargets' => $this->suggestedTargets($state),
             'bettingHooks' => $this->bettingHooks($paths),
@@ -197,6 +201,95 @@ class MagicDiscoveryService
         ];
     }
 
+    public function advanceWorld(int $currentYear, int $limit = 2): array
+    {
+        $summary = [
+            'processed' => 0,
+            'changed' => 0,
+            'events' => 0,
+            'progressions' => [],
+            'errors' => [],
+        ];
+
+        $state = $this->loadState();
+        foreach (array_slice($this->progressionCandidates($state, $currentYear), 0, max(1, $limit)) as $candidate) {
+            $summary['processed']++;
+
+            try {
+                $pathKey = (string)$candidate['pathKey'];
+                $record = $state[$pathKey] ?? $this->initialRecord($pathKey);
+                $beforeStatus = (string)($record['status'] ?? 'hidden');
+                $target = $candidate['target'];
+                $evidence = $candidate['evidence'];
+                $eventType = 'magic_progression';
+                $progressGain = 0;
+                $maturityGain = 0;
+                $changes = $this->emptyChanges();
+
+                if ($beforeStatus === 'known') {
+                    $maturityGain = $this->progressionMaturityGain($pathKey, $record, $evidence);
+                    $record['maturity'] = min(100, (int)($record['maturity'] ?? 0) + $maturityGain);
+                    $record['lastProgressionYear'] = $currentYear;
+                    $record['lastTarget'] = $target;
+                    $record['signals'] = $evidence['signals'];
+                    $record['evidenceScore'] = max((int)($record['evidenceScore'] ?? 0), (int)$evidence['score']);
+                    $changes = $this->applyProgressionEffects($pathKey, $target, $currentYear);
+                } else {
+                    $progressGain = $this->autonomousProgressGain($pathKey, $record, $evidence);
+                    $record['progress'] = min(100, (int)($record['progress'] ?? 0) + $progressGain);
+                    $record['lastProgressionYear'] = $currentYear;
+                    $record['lastTarget'] = $target;
+                    $record['signals'] = $evidence['signals'];
+                    $record['evidenceScore'] = max((int)($record['evidenceScore'] ?? 0), (int)$evidence['score']);
+                    $record['status'] = $this->statusForProgress((int)$record['progress'], (int)$evidence['score']);
+
+                    if ((string)$record['status'] === 'known' && $beforeStatus !== 'known') {
+                        $eventType = 'magic_discovery';
+                        $record['discoveryYear'] = $currentYear;
+                        $this->applyDurableDiscovery($pathKey, $target);
+                    }
+                }
+
+                $event = $this->recordProgressionEvent(
+                    $pathKey,
+                    $record,
+                    $target,
+                    $eventType,
+                    $currentYear,
+                    $changes,
+                    $progressGain,
+                    $maturityGain
+                );
+                $progression = $this->progressionRecord(
+                    $pathKey,
+                    $record,
+                    $target,
+                    $event,
+                    $changes,
+                    $progressGain,
+                    $maturityGain
+                );
+                $record['eventIds'] = array_values(array_unique(array_merge($record['eventIds'] ?? [], [$event['id']])));
+                array_unshift($record['history'], $this->historyEntryFromProgression($progression));
+                $record['history'] = array_slice($record['history'], 0, self::HISTORY_LIMIT);
+                $state[$pathKey] = $record;
+                $state['recentProgressions'] = $this->prependProgression($state, $progression);
+                $this->saveState($state);
+
+                $summary['progressions'][] = $progression;
+                $summary['changed'] += $this->changeCount($changes);
+                $summary['events']++;
+            } catch (\Throwable $error) {
+                $summary['errors'][] = [
+                    'pathKey' => $candidate['pathKey'] ?? null,
+                    'message' => $error->getMessage(),
+                ];
+            }
+        }
+
+        return $summary;
+    }
+
     private function loadState(): array
     {
         if ($this->stateCache !== null) {
@@ -216,6 +309,7 @@ class MagicDiscoveryService
             $state[$key]['eventIds'] = is_array($state[$key]['eventIds']) ? $state[$key]['eventIds'] : [];
             $state[$key]['history'] = is_array($state[$key]['history']) ? $state[$key]['history'] : [];
         }
+        $state['recentProgressions'] = $this->recentProgressions($state);
 
         $this->stateCache = $state;
         return $this->stateCache;
@@ -242,7 +336,9 @@ class MagicDiscoveryService
             'evidenceScore' => 0,
             'discoveryYear' => null,
             'lastResearchedYear' => null,
+            'lastProgressionYear' => null,
             'lastTarget' => null,
+            'maturity' => 0,
             'signals' => [],
             'eventIds' => [],
             'history' => [],
@@ -262,8 +358,10 @@ class MagicDiscoveryService
             'status' => $status,
             'progress' => (int)($record['progress'] ?? 0),
             'evidenceScore' => (int)($record['evidenceScore'] ?? 0),
+            'maturity' => (int)($record['maturity'] ?? 0),
             'discoveryYear' => $record['discoveryYear'] ?? null,
             'lastResearchedYear' => $record['lastResearchedYear'] ?? null,
+            'lastProgressionYear' => $record['lastProgressionYear'] ?? null,
             'lastTarget' => $record['lastTarget'] ?? null,
             'signals' => is_array($record['signals'] ?? null) ? array_values($record['signals']) : [],
             'eventIds' => is_array($record['eventIds'] ?? null) ? array_values($record['eventIds']) : [],
@@ -435,6 +533,349 @@ class MagicDiscoveryService
         ];
     }
 
+    private function progressionCandidates(array $state, int $currentYear): array
+    {
+        $candidates = [];
+        foreach (array_keys(self::PATHS) as $pathKey) {
+            $record = $state[$pathKey] ?? $this->initialRecord($pathKey);
+            $target = $this->targetForProgression($pathKey, $record, $state);
+            if ($target === null) {
+                continue;
+            }
+
+            $lastProgressionYear = (int)($record['lastProgressionYear'] ?? 0);
+            if ($lastProgressionYear > 0 && $currentYear - $lastProgressionYear < self::PROGRESSION_COOLDOWN_YEARS) {
+                continue;
+            }
+
+            $evidence = $this->evidenceForPath($pathKey, $target);
+            $status = (string)($record['status'] ?? 'hidden');
+            $progress = (int)($record['progress'] ?? 0);
+            $maturity = (int)($record['maturity'] ?? 0);
+            $evidenceScore = (int)$evidence['score'];
+            $priority = match ($status) {
+                'known' => $maturity >= 100 ? 0 : 70 + $evidenceScore + (100 - $maturity),
+                'emerging' => 120 + $progress + $evidenceScore,
+                default => $evidenceScore >= 65 ? 90 + $evidenceScore + $progress : 0,
+            };
+
+            if ($priority <= 0) {
+                continue;
+            }
+
+            $candidates[] = [
+                'pathKey' => $pathKey,
+                'target' => $target,
+                'evidence' => $evidence,
+                'priority' => $priority,
+            ];
+        }
+
+        usort(
+            $candidates,
+            fn(array $left, array $right): int => ((int)$right['priority'] <=> (int)$left['priority'])
+                ?: strcmp((string)$left['pathKey'], (string)$right['pathKey'])
+        );
+
+        return $candidates;
+    }
+
+    private function targetForProgression(string $pathKey, array $record, array $state): ?array
+    {
+        $storedTarget = $record['lastTarget'] ?? null;
+        if (is_array($storedTarget)) {
+            $resolved = $this->resolveStoredTarget($storedTarget);
+            if ($resolved !== null) {
+                return $resolved;
+            }
+        }
+
+        $matches = [];
+        foreach ($this->suggestedTargets($state) as $target) {
+            if (($target['bestPath'] ?? null) !== $pathKey) {
+                continue;
+            }
+
+            $resolved = $this->resolveStoredTarget($target);
+            if ($resolved !== null) {
+                $matches[] = array_merge($resolved, [
+                    'evidenceScore' => (int)$this->evidenceForPath($pathKey, $resolved)['score'],
+                ]);
+            }
+        }
+
+        if ($matches === []) {
+            return null;
+        }
+
+        usort(
+            $matches,
+            fn(array $left, array $right): int => ((int)$right['evidenceScore'] <=> (int)$left['evidenceScore'])
+                ?: strcmp((string)$left['name'], (string)$right['name'])
+        );
+        unset($matches[0]['evidenceScore']);
+
+        return $matches[0];
+    }
+
+    private function resolveStoredTarget(array $target): ?array
+    {
+        try {
+            $type = $this->normalizeTargetType((string)($target['type'] ?? 'region'));
+            $id = (string)($target['id'] ?? '');
+            if ($id === '') {
+                return null;
+            }
+
+            return $this->resolveTarget($type, $id);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function progressionMaturityGain(string $pathKey, array $record, array $evidence): int
+    {
+        $base = intdiv((int)$evidence['score'], 10) + intdiv((int)($record['progress'] ?? 100), 25);
+        $variance = (int)(crc32($pathKey . ':' . (string)($record['lastProgressionYear'] ?? 0)) % 4);
+
+        return max(4, min(16, $base + $variance));
+    }
+
+    private function autonomousProgressGain(string $pathKey, array $record, array $evidence): int
+    {
+        $status = (string)($record['status'] ?? 'hidden');
+        $base = intdiv((int)$evidence['score'], 8) + ($status === 'emerging' ? 6 : 2);
+        $variance = (int)(crc32($pathKey . ':' . (string)($record['progress'] ?? 0)) % 5);
+
+        return max(5, min(24, $base + $variance));
+    }
+
+    private function applyProgressionEffects(string $pathKey, array $target, int $currentYear): array
+    {
+        $changes = $this->emptyChanges();
+        $region = is_string($target['regionId'] ?? null) ? Region::find((string)$target['regionId']) : null;
+
+        if ($pathKey === 'ley_weaving' && $region instanceof Region) {
+            $this->changeRegion($changes, $region, function (Region $targetRegion): void {
+                $targetRegion->magic_affinity = $this->clamp((int)$targetRegion->magic_affinity + 2);
+                $targetRegion->prosperity = $this->clamp((int)$targetRegion->prosperity + 1);
+                $targetRegion->addTrait('magic_progression_ley_weaving');
+            });
+
+            $node = ResourceNode::where('region_id', $region->id)
+                ->whereIn('type', ['magical_spring', 'herb_garden'])
+                ->orderByDesc('output')
+                ->first();
+            if ($node instanceof ResourceNode) {
+                $this->changeResource($changes, $node, function (ResourceNode $resource): void {
+                    $resource->output = $this->clamp((int)$resource->output + 3);
+                    $resource->status = (int)$resource->output >= 75 ? 'status-flourishing' : 'active';
+                });
+            }
+        } elseif ($pathKey === 'spirit_compacts') {
+            $hero = $target['type'] === 'hero'
+                ? Hero::find((string)$target['id'])
+                : ($region instanceof Region
+                    ? Hero::where('region_id', $region->id)->where('is_alive', true)->orderByDesc('level')->first()
+                    : null);
+            if ($hero instanceof Hero) {
+                $this->changeHero($changes, $hero, function (Hero $targetHero) use ($currentYear): void {
+                    $targetHero->level = min(100, (int)$targetHero->level + 1);
+                    $targetHero->feats = $this->addUnique($targetHero->feats ?? [], "Renewed spirit compact in year {$currentYear}");
+                });
+            }
+        } elseif ($pathKey === 'ruin_script') {
+            $landmark = $target['type'] === 'landmark'
+                ? Landmark::find((string)$target['id'])
+                : ($region instanceof Region
+                    ? Landmark::where('region_id', $region->id)->orderByDesc('magic_level')->first()
+                    : null);
+            if ($landmark instanceof Landmark) {
+                $this->changeLandmark($changes, $landmark, function (Landmark $targetLandmark): void {
+                    $targetLandmark->magic_level = $this->clamp((int)$targetLandmark->magic_level + 3);
+                    $targetLandmark->traits = $this->addUnique($targetLandmark->traits ?? [], 'magic_progression_ruin_script');
+                    if ((int)$targetLandmark->magic_level >= 75) {
+                        $targetLandmark->status = 'awakened';
+                    }
+                });
+            }
+        } elseif ($pathKey === 'storm_rites' && $region instanceof Region) {
+            $this->changeRegion($changes, $region, function (Region $targetRegion): void {
+                $targetRegion->magic_affinity = $this->clamp((int)$targetRegion->magic_affinity + 2);
+                $targetRegion->chaos = $this->clamp((int)$targetRegion->chaos - 1);
+                $targetRegion->danger_level = $this->clamp((int)$targetRegion->danger_level + 1);
+                $targetRegion->addTrait('magic_progression_storm_rites');
+            });
+        } elseif ($pathKey === 'civic_enchantment' && $region instanceof Region) {
+            $settlement = Settlement::where('region_id', $region->id)
+                ->orderByDesc('prosperity')
+                ->first();
+            if ($settlement instanceof Settlement) {
+                $this->changeSettlement($changes, $settlement, function (Settlement $targetSettlement): void {
+                    $targetSettlement->prosperity = $this->clamp((int)$targetSettlement->prosperity + 3);
+                    $targetSettlement->defensibility = $this->clamp((int)$targetSettlement->defensibility + 1);
+                    $targetSettlement->traits = $this->addUnique($targetSettlement->traits ?? [], 'magic_progression_civic_enchantment');
+                });
+            }
+        }
+
+        return $changes;
+    }
+
+    private function recordProgressionEvent(
+        string $pathKey,
+        array $record,
+        array $target,
+        string $eventType,
+        int $currentYear,
+        array $changes,
+        int $progressGain,
+        int $maturityGain
+    ): array {
+        $path = self::PATHS[$pathKey];
+        $related = $this->relatedIdsFromProgression($changes, $target);
+        $isDiscovery = $eventType === 'magic_discovery';
+        $title = $isDiscovery ? 'Magic Path Discovered: ' . $path['label'] : 'Magic Progression: ' . $path['label'];
+        $description = $isDiscovery
+            ? "{$path['label']} became known through {$target['name']} as autonomous evidence crossed the discovery threshold."
+            : ($maturityGain > 0
+                ? "{$path['label']} matured through {$target['name']} to {$record['maturity']}/100 maturity."
+                : "{$path['label']} advanced autonomously through {$target['name']} to {$record['progress']}% progress.");
+        if ($progressGain > 0) {
+            $description .= " Progress gained {$progressGain}.";
+        }
+        if ($maturityGain > 0) {
+            $description .= " Maturity gained {$maturityGain}.";
+        }
+        $description .= ' ' . $this->effectSummary($changes);
+
+        $event = $this->eventRepository->createEvent([
+            'title' => $title,
+            'description' => $description,
+            'type' => $eventType,
+            'region_id' => $target['regionId'],
+            'related_region_ids' => $related['regions'],
+            'related_hero_ids' => $related['heroes'],
+            'related_landmark_ids' => $related['landmarks'],
+            'related_settlement_ids' => $related['settlements'],
+            'related_resource_ids' => $related['resources'],
+            'year' => $currentYear,
+        ]);
+
+        return [
+            'id' => (string)$event->id,
+            'title' => (string)$event->title,
+            'description' => (string)$event->description,
+            'type' => (string)$event->type,
+            'year' => (int)$event->year,
+        ];
+    }
+
+    private function progressionRecord(
+        string $pathKey,
+        array $record,
+        array $target,
+        array $event,
+        array $changes,
+        int $progressGain,
+        int $maturityGain
+    ): array {
+        return [
+            'id' => 'magic-progression-' . $pathKey . '-' . (string)$event['year'] . '-' . (string)$event['id'],
+            'path' => $pathKey,
+            'pathLabel' => (string)self::PATHS[$pathKey]['label'],
+            'status' => (string)($record['status'] ?? 'hidden'),
+            'progress' => (int)($record['progress'] ?? 0),
+            'maturity' => (int)($record['maturity'] ?? 0),
+            'progressGain' => $progressGain,
+            'maturityGain' => $maturityGain,
+            'targetType' => (string)$target['type'],
+            'targetId' => (string)$target['id'],
+            'targetName' => (string)$target['name'],
+            'regionId' => $target['regionId'] ?? null,
+            'year' => (int)$event['year'],
+            'eventId' => (string)$event['id'],
+            'title' => (string)$event['title'],
+            'summary' => (string)$event['description'],
+            'type' => (string)$event['type'],
+            'changes' => $changes,
+        ];
+    }
+
+    private function historyEntryFromProgression(array $progression): array
+    {
+        return [
+            'eventId' => (string)$progression['eventId'],
+            'title' => (string)$progression['title'],
+            'summary' => (string)$progression['summary'],
+            'type' => (string)$progression['type'],
+            'year' => (int)$progression['year'],
+            'targetType' => (string)$progression['targetType'],
+            'targetId' => (string)$progression['targetId'],
+            'targetName' => (string)$progression['targetName'],
+            'progress' => (int)$progression['progress'],
+            'status' => (string)$progression['status'],
+        ];
+    }
+
+    private function prependProgression(array $state, array $progression): array
+    {
+        $history = $this->recentProgressions($state);
+        array_unshift($history, $progression);
+
+        return array_slice($history, 0, self::PROGRESSION_HISTORY_LIMIT);
+    }
+
+    private function recentProgressions(array $state): array
+    {
+        $items = $state['recentProgressions'] ?? [];
+        if (!is_array($items)) {
+            return [];
+        }
+
+        $progressions = [];
+        foreach ($items as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+
+            $pathKey = (string)($item['path'] ?? '');
+            $progressions[] = [
+                'id' => (string)($item['id'] ?? 'magic-progression-' . $pathKey),
+                'path' => $pathKey,
+                'pathLabel' => (string)($item['pathLabel'] ?? $item['path_label'] ?? (self::PATHS[$pathKey]['label'] ?? $pathKey)),
+                'status' => (string)($item['status'] ?? 'hidden'),
+                'progress' => (int)($item['progress'] ?? 0),
+                'maturity' => (int)($item['maturity'] ?? 0),
+                'progressGain' => (int)($item['progressGain'] ?? 0),
+                'maturityGain' => (int)($item['maturityGain'] ?? 0),
+                'targetType' => (string)($item['targetType'] ?? $item['target_type'] ?? 'region'),
+                'targetId' => (string)($item['targetId'] ?? $item['target_id'] ?? ''),
+                'targetName' => (string)($item['targetName'] ?? $item['target_name'] ?? ''),
+                'regionId' => isset($item['regionId']) ? (string)$item['regionId'] : null,
+                'year' => (int)($item['year'] ?? 0),
+                'eventId' => isset($item['eventId']) ? (string)$item['eventId'] : null,
+                'title' => (string)($item['title'] ?? ''),
+                'summary' => (string)($item['summary'] ?? ''),
+                'type' => (string)($item['type'] ?? 'magic_progression'),
+                'changes' => $this->normalizeChangeGroups($item['changes'] ?? []),
+            ];
+        }
+
+        return array_slice($progressions, 0, self::PROGRESSION_HISTORY_LIMIT);
+    }
+
+    private function progressionSummary(array $paths, array $state): string
+    {
+        $matured = count(array_filter($paths, fn(array $path): bool => (int)($path['maturity'] ?? 0) > 0));
+        $recent = count($this->recentProgressions($state));
+        if ($recent === 0) {
+            return 'No autonomous magic progression has resolved yet.';
+        }
+
+        return "{$matured} magic path(s) have matured through {$recent} recent autonomous progression event(s).";
+    }
+
     private function resolveTarget(string $targetType, string $targetId): array
     {
         if ($targetType === 'region') {
@@ -602,6 +1043,251 @@ class MagicDiscoveryService
             throw new \InvalidArgumentException("Unsupported magic path: {$path}");
         }
         return $normalized;
+    }
+
+    private function emptyChanges(): array
+    {
+        return [
+            'regions' => [],
+            'settlements' => [],
+            'resources' => [],
+            'heroes' => [],
+            'landmarks' => [],
+        ];
+    }
+
+    private function changeRegion(array &$changes, Region $region, callable $mutate): void
+    {
+        $before = $this->regionSnapshot($region);
+        $mutate($region);
+        $region->save();
+        $after = $this->regionSnapshot($region->fresh() ?? $region);
+        $this->appendChange($changes, 'regions', $before, $after);
+    }
+
+    private function changeSettlement(array &$changes, Settlement $settlement, callable $mutate): void
+    {
+        $before = $this->settlementSnapshot($settlement);
+        $mutate($settlement);
+        $settlement->save();
+        $after = $this->settlementSnapshot($settlement->fresh() ?? $settlement);
+        $this->appendChange($changes, 'settlements', $before, $after);
+    }
+
+    private function changeResource(array &$changes, ResourceNode $resource, callable $mutate): void
+    {
+        $before = $this->resourceSnapshot($resource);
+        $mutate($resource);
+        $resource->save();
+        $after = $this->resourceSnapshot($resource->fresh() ?? $resource);
+        $this->appendChange($changes, 'resources', $before, $after);
+    }
+
+    private function changeHero(array &$changes, Hero $hero, callable $mutate): void
+    {
+        $before = $this->heroSnapshot($hero);
+        $mutate($hero);
+        $hero->save();
+        $after = $this->heroSnapshot($hero->fresh() ?? $hero);
+        $this->appendChange($changes, 'heroes', $before, $after);
+    }
+
+    private function changeLandmark(array &$changes, Landmark $landmark, callable $mutate): void
+    {
+        $before = $this->landmarkSnapshot($landmark);
+        $mutate($landmark);
+        $landmark->save();
+        $after = $this->landmarkSnapshot($landmark->fresh() ?? $landmark);
+        $this->appendChange($changes, 'landmarks', $before, $after);
+    }
+
+    private function appendChange(array &$changes, string $type, array $before, array $after): void
+    {
+        if ($before === $after) {
+            return;
+        }
+
+        $changes[$type][] = [
+            'id' => $after['id'],
+            'name' => $after['name'],
+            'before' => $before,
+            'after' => $after,
+            'summary' => $this->changeSummary($type, $before, $after),
+        ];
+    }
+
+    private function changeSummary(string $type, array $before, array $after): string
+    {
+        $labels = [
+            'regions' => ['prosperity', 'chaos', 'dangerLevel', 'magicAffinity'],
+            'settlements' => ['prosperity', 'defensibility', 'status'],
+            'resources' => ['output', 'status'],
+            'heroes' => ['level', 'role', 'status'],
+            'landmarks' => ['magicLevel', 'dangerLevel', 'status'],
+        ];
+        $parts = [];
+
+        foreach ($labels[$type] ?? [] as $key) {
+            if (($before[$key] ?? null) !== ($after[$key] ?? null)) {
+                $parts[] = "{$key} {$before[$key]}->{$after[$key]}";
+            }
+        }
+
+        return $after['name'] . ': ' . ($parts === [] ? 'magic markers changed' : implode(', ', $parts)) . '.';
+    }
+
+    private function regionSnapshot(Region $region): array
+    {
+        return [
+            'id' => (string)$region->id,
+            'name' => (string)$region->name,
+            'prosperity' => (int)$region->prosperity,
+            'chaos' => (int)$region->chaos,
+            'dangerLevel' => (int)$region->danger_level,
+            'magicAffinity' => (int)$region->magic_affinity,
+            'traits' => $region->regional_traits ?? [],
+        ];
+    }
+
+    private function settlementSnapshot(Settlement $settlement): array
+    {
+        return [
+            'id' => (string)$settlement->id,
+            'name' => (string)$settlement->name,
+            'regionId' => (string)$settlement->region_id,
+            'prosperity' => (int)$settlement->prosperity,
+            'defensibility' => (int)$settlement->defensibility,
+            'status' => (string)$settlement->status,
+            'traits' => $settlement->traits ?? [],
+        ];
+    }
+
+    private function resourceSnapshot(ResourceNode $resource): array
+    {
+        return [
+            'id' => (string)$resource->id,
+            'name' => (string)$resource->name,
+            'regionId' => (string)$resource->region_id,
+            'type' => (string)$resource->type,
+            'output' => (int)$resource->output,
+            'status' => (string)$resource->status,
+        ];
+    }
+
+    private function heroSnapshot(Hero $hero): array
+    {
+        return [
+            'id' => (string)$hero->id,
+            'name' => (string)$hero->name,
+            'regionId' => (string)$hero->region_id,
+            'role' => (string)$hero->role,
+            'level' => (int)$hero->level,
+            'status' => (string)$hero->status,
+            'feats' => $hero->feats ?? [],
+        ];
+    }
+
+    private function landmarkSnapshot(Landmark $landmark): array
+    {
+        return [
+            'id' => (string)$landmark->id,
+            'name' => (string)$landmark->name,
+            'regionId' => (string)$landmark->region_id,
+            'type' => (string)$landmark->type,
+            'magicLevel' => (int)$landmark->magic_level,
+            'dangerLevel' => (int)$landmark->danger_level,
+            'status' => (string)$landmark->status,
+            'traits' => $landmark->traits ?? [],
+        ];
+    }
+
+    private function relatedIdsFromProgression(array $changes, array $target): array
+    {
+        return [
+            'regions' => $this->ids(array_merge(
+                isset($target['regionId']) ? [$target['regionId']] : [],
+                array_map(fn(array $change): string => (string)$change['id'], $changes['regions'])
+            )),
+            'settlements' => $this->ids(array_map(fn(array $change): string => (string)$change['id'], $changes['settlements'])),
+            'resources' => $this->ids(array_map(fn(array $change): string => (string)$change['id'], $changes['resources'])),
+            'heroes' => $this->ids(array_merge(
+                (string)($target['type'] ?? '') === 'hero' ? [$target['id']] : [],
+                array_map(fn(array $change): string => (string)$change['id'], $changes['heroes'])
+            )),
+            'landmarks' => $this->ids(array_merge(
+                (string)($target['type'] ?? '') === 'landmark' ? [$target['id']] : [],
+                array_map(fn(array $change): string => (string)$change['id'], $changes['landmarks'])
+            )),
+        ];
+    }
+
+    private function effectSummary(array $changes): string
+    {
+        $labels = [
+            'regions' => 'region',
+            'settlements' => 'settlement',
+            'resources' => 'resource',
+            'heroes' => 'hero',
+            'landmarks' => 'landmark',
+        ];
+        $parts = [];
+
+        foreach ($labels as $key => $label) {
+            $count = count($changes[$key] ?? []);
+            if ($count > 0) {
+                $parts[] = "{$count} {$label}" . ($count === 1 ? '' : 's');
+            }
+        }
+
+        return $parts === []
+            ? 'No durable world effect was needed yet.'
+            : implode(', ', $parts) . ' changed as the magic path matured.';
+    }
+
+    private function changeCount(array $changes): int
+    {
+        return array_sum(array_map(
+            fn($items): int => is_array($items) ? count($items) : 0,
+            $changes
+        ));
+    }
+
+    private function normalizeChangeGroups(mixed $value): array
+    {
+        $changes = $this->emptyChanges();
+        if (!is_array($value)) {
+            return $changes;
+        }
+
+        foreach (array_keys($changes) as $key) {
+            if (isset($value[$key]) && is_array($value[$key])) {
+                $changes[$key] = array_values(array_filter($value[$key], fn($item): bool => is_array($item)));
+            }
+        }
+
+        return $changes;
+    }
+
+    private function addUnique(array $values, string $value): array
+    {
+        if (!in_array($value, $values, true)) {
+            $values[] = $value;
+        }
+
+        return array_values(array_unique(array_map(fn($item): string => (string)$item, $values)));
+    }
+
+    private function ids(array $values): array
+    {
+        return array_values(array_unique(array_filter(array_map(
+            fn($value): string => (string)$value,
+            $values
+        ))));
+    }
+
+    private function clamp(int|float $value, int $min = 0, int $max = 100): int
+    {
+        return (int)max($min, min($max, round($value)));
     }
 
     private function currentYear(): int

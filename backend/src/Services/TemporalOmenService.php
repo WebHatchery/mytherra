@@ -93,6 +93,7 @@ class TemporalOmenService
             'changed' => 0,
             'events' => 0,
             'followUps' => [],
+            'chains' => [],
             'errors' => [],
         ];
         $history = $this->loadHistory();
@@ -104,24 +105,42 @@ class TemporalOmenService
 
             $summary['processed']++;
             try {
-                if (!$this->shouldResolveFollowUp($omen, $currentYear)) {
-                    continue;
+                $changed = false;
+                $chainResults = $this->advanceOmenChains($omen, $currentYear);
+                foreach ($chainResults as $chainResult) {
+                    $summary['events']++;
+                    $summary['chains'][] = $chainResult;
+                    $changed = true;
                 }
 
-                $followUp = $this->resolveOmenFollowUp($omen, $currentYear);
-                $omen['resolvedYear'] = $currentYear;
-                $omen['resolutionStatus'] = $followUp['outcome'];
-                $omen['resolutionSummary'] = $followUp['summary'];
-                $omen['resolutionEventId'] = $followUp['eventId'];
-                $omen['followUps'] = $this->prependLimited(
-                    is_array($omen['followUps'] ?? null) ? $omen['followUps'] : [],
-                    $followUp,
-                    4
-                );
-                $history[$index] = $omen;
-                $summary['changed']++;
-                $summary['events']++;
-                $summary['followUps'][] = $followUp;
+                if ($this->shouldResolveFollowUp($omen, $currentYear)) {
+                    $followUp = $this->resolveOmenFollowUp($omen, $currentYear);
+                    $omen['resolvedYear'] = $currentYear;
+                    $omen['resolutionStatus'] = $followUp['outcome'];
+                    $omen['resolutionSummary'] = $followUp['summary'];
+                    $omen['resolutionEventId'] = $followUp['eventId'];
+                    $omen['followUps'] = $this->prependLimited(
+                        is_array($omen['followUps'] ?? null) ? $omen['followUps'] : [],
+                        $followUp,
+                        4
+                    );
+                    $chain = $this->seedOmenChain($omen, $followUp, $currentYear);
+                    if ($chain !== null) {
+                        $omen['chains'] = $this->prependLimited(
+                            is_array($omen['chains'] ?? null) ? $omen['chains'] : [],
+                            $chain,
+                            5
+                        );
+                    }
+                    $summary['events']++;
+                    $summary['followUps'][] = $followUp;
+                    $changed = true;
+                }
+
+                if ($changed) {
+                    $history[$index] = $omen;
+                    $summary['changed']++;
+                }
             } catch (\Throwable $error) {
                 $summary['errors'][] = [
                     'id' => isset($omen['id']) ? (string)$omen['id'] : null,
@@ -585,6 +604,158 @@ class TemporalOmenService
             'relatedSettlementIds' => $this->ids($omen['relatedSettlementIds'] ?? []),
             'relatedResourceIds' => $this->ids($omen['relatedResourceIds'] ?? []),
         ];
+    }
+
+    private function seedOmenChain(array $omen, array $followUp, int $currentYear): ?array
+    {
+        if ($this->hasActiveOmenChain($omen['chains'] ?? [])) {
+            return null;
+        }
+
+        $outcome = (string)($followUp['outcome'] ?? 'fulfilled');
+        $horizon = (string)($omen['horizon'] ?? 'near');
+        $maxSteps = $outcome === 'darkened' || $horizon === 'era' ? 3 : 2;
+        $omenId = (string)($omen['id'] ?? bin2hex(random_bytes(4)));
+
+        return [
+            'id' => 'omen-chain-' . $omenId . '-' . $currentYear,
+            'tool' => 'omen',
+            'status' => 'active',
+            'startedYear' => $currentYear,
+            'lastAdvancedYear' => null,
+            'nextYear' => $currentYear + 1,
+            'step' => 0,
+            'maxSteps' => $maxSteps,
+            'lastRiskScore' => (int)($followUp['actualRiskScore'] ?? 0),
+            'sourceEventId' => (string)($followUp['eventId'] ?? ''),
+            'eventIds' => array_values(array_filter([(string)($followUp['eventId'] ?? '')])),
+            'title' => 'Temporal Omen Chain: ' . ($omen['targetName'] ?? 'The World'),
+            'latestSummary' => "A {$maxSteps}-step omen chain began after the {$outcome} reading.",
+        ];
+    }
+
+    private function advanceOmenChains(array &$omen, int $currentYear): array
+    {
+        $chains = is_array($omen['chains'] ?? null) ? array_values($omen['chains']) : [];
+        $results = [];
+
+        foreach ($chains as $index => $chain) {
+            if (!is_array($chain) || !$this->shouldAdvanceOmenChain($chain, $currentYear)) {
+                continue;
+            }
+
+            [$updatedChain, $result] = $this->resolveOmenChainStep($omen, $chain, $currentYear);
+            $chains[$index] = $updatedChain;
+            $results[] = $result;
+        }
+
+        if ($results !== []) {
+            $omen['chains'] = array_slice(array_values($chains), 0, 5);
+        }
+
+        return $results;
+    }
+
+    private function resolveOmenChainStep(array $omen, array $chain, int $currentYear): array
+    {
+        $step = max(1, (int)($chain['step'] ?? 0) + 1);
+        $maxSteps = max($step, (int)($chain['maxSteps'] ?? 2));
+        $actual = $this->actualRiskForOmen($omen, $currentYear);
+        $lastRisk = (int)($chain['lastRiskScore'] ?? $this->predictedRiskScore($omen));
+        $delta = (int)$actual['score'] - $lastRisk;
+        $outcome = match (true) {
+            $delta >= 12 => 'darkened',
+            $delta <= -12 => 'faded',
+            default => 'converged',
+        };
+        $title = match ($outcome) {
+            'darkened' => 'Temporal Omen Chain Darkened',
+            'faded' => 'Temporal Omen Chain Faded',
+            default => 'Temporal Omen Chain Converged',
+        };
+        $finished = $step >= $maxSteps;
+        $targetName = (string)($omen['targetName'] ?? 'The World');
+        $summary = "{$title}: step {$step}/{$maxSteps} for {$targetName} read {$actual['score']}/100 risk in year {$currentYear}, from {$lastRisk}/100 at the prior chain step. {$actual['summary']}"
+            . ($finished ? ' The omen chain resolved without changing world state.' : ' The omen chain remains under watch.');
+        $event = $this->eventRepository->createEvent([
+            'title' => $title,
+            'description' => $summary,
+            'type' => 'time_omen_chain',
+            'region_id' => ($omen['relatedRegionIds'] ?? [null])[0] ?? null,
+            'related_region_ids' => $this->ids($omen['relatedRegionIds'] ?? []),
+            'related_hero_ids' => $this->ids($omen['relatedHeroIds'] ?? []),
+            'related_settlement_ids' => $this->ids($omen['relatedSettlementIds'] ?? []),
+            'related_resource_ids' => $this->ids($omen['relatedResourceIds'] ?? []),
+            'year' => $currentYear,
+        ]);
+
+        $chain['step'] = $step;
+        $chain['lastAdvancedYear'] = $currentYear;
+        $chain['nextYear'] = $finished ? null : $currentYear + 1;
+        $chain['status'] = $finished ? 'completed' : 'active';
+        $chain['lastRiskScore'] = (int)$actual['score'];
+        $chain['latestSummary'] = $summary;
+        $eventIds = is_array($chain['eventIds'] ?? null) ? $chain['eventIds'] : [];
+        $eventIds[] = $event->id;
+        $chain['eventIds'] = array_slice(array_values($eventIds), -6);
+
+        return [
+            $chain,
+            [
+                'id' => (string)$chain['id'] . '-step-' . $step . '-' . $currentYear,
+                'tool' => 'omen',
+                'title' => $title,
+                'omenId' => (string)($omen['id'] ?? ''),
+                'targetType' => (string)($omen['targetType'] ?? 'world'),
+                'targetId' => $omen['targetId'] ?? null,
+                'targetName' => (string)($omen['targetName'] ?? 'The World'),
+                'horizon' => (string)($omen['horizon'] ?? 'near'),
+                'outcome' => $outcome,
+                'predictedRiskScore' => $this->predictedRiskScore($omen),
+                'actualRiskScore' => (int)$actual['score'],
+                'year' => $currentYear,
+                'summary' => $summary,
+                'eventId' => $event->id,
+                'chainId' => (string)$chain['id'],
+                'chainStep' => $step,
+                'chainMaxSteps' => $maxSteps,
+                'chainStatus' => (string)$chain['status'],
+                'sourceEventId' => (string)($chain['sourceEventId'] ?? ''),
+                'nextYear' => $chain['nextYear'],
+                'relatedRegionIds' => $this->ids($omen['relatedRegionIds'] ?? []),
+                'relatedHeroIds' => $this->ids($omen['relatedHeroIds'] ?? []),
+                'relatedSettlementIds' => $this->ids($omen['relatedSettlementIds'] ?? []),
+                'relatedResourceIds' => $this->ids($omen['relatedResourceIds'] ?? []),
+            ],
+        ];
+    }
+
+    private function hasActiveOmenChain(mixed $chains): bool
+    {
+        if (!is_array($chains)) {
+            return false;
+        }
+
+        foreach ($chains as $chain) {
+            if (is_array($chain) && ($chain['status'] ?? null) === 'active') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function shouldAdvanceOmenChain(array $chain, int $currentYear): bool
+    {
+        if (($chain['status'] ?? null) !== 'active') {
+            return false;
+        }
+
+        if ((int)($chain['lastAdvancedYear'] ?? 0) >= $currentYear) {
+            return false;
+        }
+
+        return (int)($chain['nextYear'] ?? PHP_INT_MAX) <= $currentYear;
     }
 
     private function predictedRiskScore(array $omen): int

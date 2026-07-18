@@ -21,20 +21,26 @@ final class EraTransitionWiringTest extends TestCase
     public function testEraTransitionServiceTransformsWorldAndStoresHistory(): void
     {
         self::assertStringContainsString('class EraTransitionService', $this->serviceSource);
-        foreach ([
+        foreach (
+            [
             'transformRegions',
             'transformSettlements',
             'transformHeroes',
             'transformLandmarks',
             'transformResources',
             'transformBets',
+            'createDescendants',
+            'recordDescendantEvent',
             "'era_transition'",
+            "'era_descendant'",
             "'transition_history'",
-        ] as $expected) {
+            ] as $expected
+        ) {
             self::assertStringContainsString($expected, $this->serviceSource);
         }
 
-        foreach ([
+        foreach (
+            [
             'Region::all()',
             'Settlement::all()',
             'Hero::all()',
@@ -43,7 +49,8 @@ final class EraTransitionWiringTest extends TestCase
             "DivineBet::where('status', 'active')",
             'GameEvent::create',
             'GameState::getCurrent()',
-        ] as $source) {
+            ] as $source
+        ) {
             self::assertStringContainsString($source, $this->serviceSource);
         }
     }

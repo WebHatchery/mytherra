@@ -1,10 +1,14 @@
 import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   createAdminWorldEntity,
   getAdminWorldEditor,
+  previewAdminWorldEntity,
   updateAdminWorldEntity,
+  type AdminWorldEditorAuditEntry,
   type AdminWorldEditorEntityType,
   type AdminWorldEditorPayload,
+  type AdminWorldEditorPreviewResponse,
   type AdminWorldEditorStatusResponse,
 } from '../api/apiService';
 import EmptyState from '../components/EmptyState';
@@ -55,6 +59,38 @@ const ENTITY_SINGULAR: Record<AdminWorldEditorEntityType, string> = {
 const camelToSnake = (value: string): string => value.replace(/[A-Z]/g, match => `_${match.toLowerCase()}`);
 
 const labelize = (value: string): string => value.replace(/_/g, ' ');
+
+const formatAuditDate = (value: string | null): string => {
+  if (!value) return 'Unknown time';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+};
+
+const auditEntityLabel = (entry: AdminWorldEditorAuditEntry): string => {
+  const entityId = entry.entityId ?? entry.regionId;
+  return entityId
+    ? `${ENTITY_SINGULAR[entry.entityType]} ${entityId}`
+    : ENTITY_SINGULAR[entry.entityType];
+};
+
+const previewRiskClass = (riskTier: AdminWorldEditorPreviewResponse['compatibility']['riskTier']): string => {
+  switch (riskTier) {
+    case 'high':
+      return 'border-red-700 bg-red-950/30 text-red-100';
+    case 'medium':
+      return 'border-amber-700 bg-amber-950/30 text-amber-100';
+    case 'low':
+      return 'border-yellow-700 bg-yellow-950/30 text-yellow-100';
+    default:
+      return 'border-emerald-700 bg-emerald-950/30 text-emerald-100';
+  }
+};
+
+const previewSignalClass = (tone: 'positive' | 'neutral' | 'warning'): string => {
+  if (tone === 'positive') return 'border-emerald-800 bg-emerald-950/20 text-emerald-100';
+  if (tone === 'warning') return 'border-amber-800 bg-amber-950/20 text-amber-100';
+  return 'border-gray-700 bg-gray-900 text-gray-200';
+};
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error) return error.message;
@@ -339,6 +375,7 @@ const AdminWorldEditorPage: React.FC = () => {
   const [isLoadingEditor, setIsLoadingEditor] = useState(false);
   const [editorError, setEditorError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [preview, setPreview] = useState<AdminWorldEditorPreviewResponse | null>(null);
 
   const fetchEditor = useCallback(async () => {
     try {
@@ -364,6 +401,7 @@ const AdminWorldEditorPage: React.FC = () => {
     [entities, selectedId]
   );
   const fields = useMemo(() => fieldConfigs(editor, selectedType), [editor, selectedType]);
+  const auditLog = editor?.auditLog ?? [];
 
   useEffect(() => {
     if (mode === 'update') {
@@ -379,7 +417,24 @@ const AdminWorldEditorPage: React.FC = () => {
   }, [editor, entities, mode, selectedEntity, selectedId, selectedType]);
 
   const updateDraft = (key: string, value: string | boolean) => {
+    setPreview(null);
     setDraft(previous => ({ ...previous, [key]: value }));
+  };
+
+  const runPreview = async () => {
+    try {
+      setEditorError(null);
+      setActionMessage(null);
+      const payload = payloadFromDraft(fields, draft, mode);
+      payload.mode = mode;
+      if (mode === 'update') {
+        payload.id = selectedId;
+      }
+      setPreview(await previewAdminWorldEntity(selectedType, payload));
+    } catch (error: unknown) {
+      setPreview(null);
+      setEditorError(getErrorMessage(error));
+    }
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -387,6 +442,7 @@ const AdminWorldEditorPage: React.FC = () => {
     try {
       setEditorError(null);
       setActionMessage(null);
+      setPreview(null);
       const payload = payloadFromDraft(fields, draft, mode);
       const result =
         mode === 'create'
@@ -500,6 +556,7 @@ const AdminWorldEditorPage: React.FC = () => {
                 setSelectedType(entityType);
                 setSelectedId('');
                 setMode('create');
+                setPreview(null);
               }}
               className={`rounded border px-3 py-3 text-left transition-colors ${
                 selectedType === entityType
@@ -526,7 +583,10 @@ const AdminWorldEditorPage: React.FC = () => {
                 <button
                   key={nextMode}
                   type="button"
-                  onClick={() => setMode(nextMode)}
+                  onClick={() => {
+                    setMode(nextMode);
+                    setPreview(null);
+                  }}
                   className={`rounded px-3 py-1 text-sm font-semibold ${
                     mode === nextMode ? 'bg-cyan-600 text-white' : 'text-gray-300 hover:bg-gray-800'
                   }`}
@@ -538,7 +598,10 @@ const AdminWorldEditorPage: React.FC = () => {
             {mode === 'update' && (
               <select
                 value={selectedId}
-                onChange={event => setSelectedId(event.target.value)}
+                onChange={event => {
+                  setSelectedId(event.target.value);
+                  setPreview(null);
+                }}
                 className="rounded border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-gray-100"
               >
                 {entities.map(entity => (
@@ -554,6 +617,57 @@ const AdminWorldEditorPage: React.FC = () => {
         {actionMessage && (
           <div className="mt-4 rounded border border-emerald-600/50 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-100">
             {actionMessage}
+          </div>
+        )}
+
+        {preview && (
+          <div className={`mt-4 rounded border px-4 py-3 ${previewRiskClass(preview.compatibility.riskTier)}`}>
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="text-xs uppercase opacity-75">Compatibility Preview</div>
+                <div className="mt-1 font-semibold">{preview.summary}</div>
+                <div className="mt-1 text-sm opacity-80">
+                  Risk {labelize(preview.compatibility.riskTier)} - {preview.appliedFields.length} fields checked
+                </div>
+              </div>
+              <div className="text-xs uppercase opacity-75">
+                {preview.wouldPersist ? 'Will save' : 'No changes saved'}
+              </div>
+            </div>
+
+            {preview.compatibility.warnings.length > 0 && (
+              <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                {preview.compatibility.warnings.map(warning => (
+                  <li key={warning}>{warning}</li>
+                ))}
+              </ul>
+            )}
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {preview.compatibility.affectedSystems.map(system => (
+                <span key={system} className="rounded bg-black/20 px-2 py-1 text-xs">
+                  {labelize(system)}
+                </span>
+              ))}
+            </div>
+
+            {preview.compatibility.signals.length > 0 && (
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                {preview.compatibility.signals.map(signal => (
+                  <div
+                    key={`${signal.label}-${signal.value}`}
+                    className={`rounded border px-3 py-2 text-xs ${previewSignalClass(signal.tone)}`}
+                  >
+                    <div className="uppercase opacity-70">{signal.label}</div>
+                    <div className="mt-1 font-semibold">{labelize(signal.value)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {preview.compatibility.notes.length > 0 && (
+              <div className="mt-3 text-xs opacity-80">{preview.compatibility.notes.join(' ')}</div>
+            )}
           </div>
         )}
 
@@ -576,17 +690,79 @@ const AdminWorldEditorPage: React.FC = () => {
               </label>
             ))}
             <div className="md:col-span-2">
-              <button
-                type="submit"
-                disabled={mode === 'update' && !selectedId}
-                className="rounded bg-cyan-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-gray-600"
-              >
-                {mode === 'create' ? `Create ${ENTITY_SINGULAR[selectedType]}` : `Save ${ENTITY_SINGULAR[selectedType]}`}
-              </button>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => { void runPreview(); }}
+                  disabled={mode === 'update' && !selectedId}
+                  className="rounded border border-amber-600 px-5 py-2 text-sm font-bold text-amber-100 transition-colors hover:bg-amber-950/40 disabled:cursor-not-allowed disabled:border-gray-700 disabled:text-gray-500"
+                >
+                  Preview Compatibility
+                </button>
+                <button
+                  type="submit"
+                  disabled={mode === 'update' && !selectedId}
+                  className="rounded bg-cyan-600 px-5 py-2 text-sm font-bold text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-gray-600"
+                >
+                  {mode === 'create' ? `Create ${ENTITY_SINGULAR[selectedType]}` : `Save ${ENTITY_SINGULAR[selectedType]}`}
+                </button>
+              </div>
             </div>
           </form>
         )}
       </section>
+
+      {editor && (
+        <section className="rounded-lg border border-[#2f334d] bg-[#1a1b26] p-5">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">Audit Log</h2>
+              <div className="mt-1 text-sm text-gray-400">
+                Recent admin edits are recorded as world events with entity links.
+              </div>
+            </div>
+            <Link
+              to="/events?type=admin_world_edit"
+              className="text-sm font-semibold text-blue-300 hover:text-blue-100"
+            >
+              All Admin Edits
+            </Link>
+          </div>
+
+          {auditLog.length === 0 ? (
+            <div className="mt-4 rounded border border-gray-700 bg-gray-900 px-4 py-3 text-sm text-gray-400">
+              No admin edits have been recorded yet.
+            </div>
+          ) : (
+            <ol className="mt-4 divide-y divide-gray-800">
+              {auditLog.map(entry => (
+                <li key={entry.id} className="py-3">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <div className="text-xs uppercase text-gray-500">
+                        Year {entry.year ?? 'Unknown'} - {labelize(entry.status)} - {formatAuditDate(entry.createdAt)}
+                      </div>
+                      <Link
+                        to={entry.eventUrl}
+                        className="mt-1 block font-semibold text-yellow-200 hover:text-yellow-100"
+                      >
+                        {entry.title}
+                      </Link>
+                      <p className="mt-1 text-sm text-gray-300">{entry.description}</p>
+                    </div>
+                    <Link
+                      to={entry.timelineUrl}
+                      className="shrink-0 rounded border border-gray-700 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-gray-800"
+                    >
+                      {auditEntityLabel(entry)}
+                    </Link>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
     </PageLayout>
   );
 };

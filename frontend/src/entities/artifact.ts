@@ -37,6 +37,8 @@ export interface DivineArtifact {
   ownerId?: string | null;
   ownerName: string;
   ownerRegionId?: string | null;
+  seeded?: boolean;
+  originSummary?: string | null;
   eventIds: string[];
   history: ArtifactHistoryEntry[];
   empowerCost: number;

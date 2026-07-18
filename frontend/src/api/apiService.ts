@@ -27,6 +27,7 @@ import {
 } from '../entities/artifact';
 import {
   WeatherChangeDelta,
+  WeatherConsequenceChain,
   WeatherEntityChange,
   WeatherInfluenceEntry,
   WeatherIntensityKey,
@@ -39,6 +40,7 @@ import {
 } from '../entities/weather';
 import {
   TemporalOmenConfidence,
+  TemporalOmenChain,
   TemporalOmenEntry,
   TemporalOmenHorizon,
   TemporalOmenHorizonOption,
@@ -52,19 +54,24 @@ import {
 } from '../entities/temporalOmen';
 import {
   MagicDiscoveryBettingHook,
+  MagicDiscoveryChange,
+  MagicDiscoveryChanges,
   MagicDiscoveryHistoryEntry,
   MagicDiscoveryPath,
   MagicDiscoveryPathOption,
   MagicDiscoveryPathStatus,
+  MagicDiscoveryProgression,
   MagicDiscoverySignal,
   MagicDiscoveryStatusResponse,
   MagicDiscoverySuggestedTarget,
   MagicDiscoveryTarget,
   MagicDiscoveryTargetOption,
   MagicDiscoveryTargetType,
+  MagicDiscoveryTickSummary,
 } from '../entities/magicDiscovery';
 import {
   MythCandidate,
+  MythEcho,
   MythEffectTarget,
   MythEffects,
   MythologyStatusResponse,
@@ -79,6 +86,7 @@ import {
   CivilizationBehaviorScore,
   CivilizationChanges,
   CivilizationDecision,
+  CivilizationDiplomacy,
   CivilizationPriorityTier,
   CivilizationRegionAgenda,
   CivilizationRegionStats,
@@ -101,6 +109,7 @@ import {
   PantheonPoliticsStatus,
   PantheonPressure,
   PantheonRelationship,
+  PantheonRelationshipArc,
   PantheonSignal,
   PantheonStatusResponse,
   PantheonTickSummary,
@@ -418,13 +427,19 @@ export interface EraGeneratedEntity {
   regionId?: string | null;
   regionName?: string | null;
   settlementId?: string | null;
+  settlementName?: string | null;
   type?: string;
   role?: string;
   level?: number;
   population?: number;
   output?: number;
   status?: string;
+  sourceHeroId?: string | null;
+  sourceHeroName?: string | null;
+  sourceLegacyType?: string | null;
+  lineageType?: string | null;
   lineageSource?: string | null;
+  eventId?: string | null;
   summary: string;
 }
 
@@ -435,6 +450,7 @@ export interface EraGeneratedContent {
   heroes: EraGeneratedEntity[];
   landmarks: EraGeneratedEntity[];
   resources: EraGeneratedEntity[];
+  descendants?: EraGeneratedEntity[];
 }
 
 export interface EraTransitionHistoryEntry {
@@ -468,6 +484,7 @@ export interface EraTransitionHistoryEntry {
     generatedHeroes?: number;
     generatedLandmarks?: number;
     generatedResources?: number;
+    generatedDescendants?: number;
   };
   generated?: EraGeneratedContent;
   beforeSnapshot?: EraComparisonWorldSnapshot;
@@ -592,6 +609,20 @@ export interface GameTickDivineToolConsequence {
   outcome?: string;
   predictedRiskScore?: number;
   actualRiskScore?: number;
+  focusLabel?: string;
+  patternLabel?: string;
+  intensityLabel?: string;
+  chainId?: string;
+  chainStep?: number;
+  chainMaxSteps?: number;
+  chainStatus?: string;
+  sourceEventId?: string;
+  nextYear?: number | null;
+  relatedRegionIds?: string[];
+  relatedHeroIds?: string[];
+  relatedSettlementIds?: string[];
+  relatedLandmarkIds?: string[];
+  relatedResourceIds?: string[];
 }
 
 export interface GameTickDivineToolSection {
@@ -600,6 +631,7 @@ export interface GameTickDivineToolSection {
   events?: number;
   consequences?: GameTickDivineToolConsequence[];
   followUps?: GameTickDivineToolConsequence[];
+  chains?: GameTickDivineToolConsequence[];
   errors?: Array<string | { id?: string; message?: string; tool?: string }>;
 }
 
@@ -611,7 +643,33 @@ export interface GameTickDivineToolsSummary {
   weather?: GameTickDivineToolSection | null;
   omens?: GameTickDivineToolSection | null;
   consequences?: GameTickDivineToolConsequence[];
+  chains?: GameTickDivineToolConsequence[];
   errors?: Array<string | { id?: string; message?: string; tool?: string }>;
+}
+
+export interface GameTickMythEcho {
+  id?: string;
+  mythId?: string;
+  title?: string;
+  mythType?: string;
+  mythTypeLabel?: string;
+  year?: number;
+  eventId?: string;
+  resonance?: number;
+  summary?: string;
+  affected?: {
+    regions?: number;
+    heroes?: number;
+    landmarks?: number;
+  };
+}
+
+export interface GameTickMythologySummary {
+  processed?: number;
+  changed?: number;
+  events?: number;
+  echoes?: GameTickMythEcho[];
+  errors?: Array<string | { mythId?: string; message?: string }>;
 }
 
 export interface GameTickResult {
@@ -628,6 +686,8 @@ export interface GameTickResult {
   divineTools?: GameTickDivineToolsSummary;
   civilization?: CivilizationTickSummary;
   pantheon?: PantheonTickSummary;
+  magicDiscovery?: MagicDiscoveryTickSummary;
+  mythology?: GameTickMythologySummary;
   bets?: GameTickBetSummary;
   divineFavor?: GameTickFavorSummary;
   eraPressure?: EraPressureSummary | null;
@@ -721,6 +781,173 @@ export interface EntityHistorySummaryResponse {
     heroes: EntityHistoryItem[];
   };
   bets: BetHistorySummary;
+}
+
+export interface ChronicleReplayFrame {
+  index: number;
+  eventId: string;
+  year?: number | null;
+  era?: number | null;
+  title: string;
+  description: string;
+  type: string;
+  status: string;
+  timelineUrl: string;
+  relatedIds: {
+    regions: string[];
+    heroes: string[];
+    settlements: string[];
+    landmarks: string[];
+    resources: string[];
+  };
+  beatSummary: string;
+  runningContext: {
+    frame: number;
+    totalFrames: number;
+    dominantEventType?: string | null;
+    entityCounts: Record<string, number>;
+  };
+}
+
+export interface ChronicleReplayResponse {
+  exportedAt: string;
+  version: string;
+  packageType: 'chronicle_replay';
+  filters: Record<string, string | number | null | undefined>;
+  summary: {
+    frameCount: number;
+    yearRange: {
+      from?: number | null;
+      to?: number | null;
+    };
+    topEventTypes: Record<string, number>;
+    playbackOrder: 'oldest_to_newest';
+  };
+  controls: {
+    supportsStep: boolean;
+    supportsScrub: boolean;
+    supportsEntityFilters: boolean;
+  };
+  frames: ChronicleReplayFrame[];
+}
+
+export interface ChronicleShareTimelineEntry {
+  id: string;
+  year?: number | null;
+  era?: number | null;
+  title: string;
+  description: string;
+  type: string;
+  status: string;
+  timelineUrl: string;
+  filters: Record<string, string[]>;
+  relatedIds: {
+    regions: string[];
+    heroes: string[];
+    settlements: string[];
+    landmarks: string[];
+    resources: string[];
+  };
+  createdAt?: string | null;
+}
+
+export interface ChronicleSharePackage {
+  exportedAt: string;
+  version: string;
+  packageType: 'chronicle_share';
+  filters: Record<string, string | number | null | undefined>;
+  headline: string;
+  shareText: string;
+  summary: {
+    currentYear: number;
+    currentEra: number;
+    eventCount: number;
+    highlightCount: number;
+    yearRange: {
+      from?: number | null;
+      to?: number | null;
+    };
+    topEventTypes: Record<string, number>;
+    worldCounts: Record<string, number>;
+  };
+  eraContext: {
+    currentEra: number;
+    currentYear: number;
+    topTrigger?: string | null;
+    pressureScore?: number | null;
+    tier?: string | null;
+    tierLabel?: string | null;
+    warnings: string[];
+  };
+  entitySpotlight: Record<string, Array<Record<string, unknown>>>;
+  bettingHighlights: Array<Record<string, unknown>>;
+  highlights: ChronicleShareTimelineEntry[];
+  timeline: ChronicleShareTimelineEntry[];
+}
+
+export interface ChronicleShareGovernance {
+  visibility: string;
+  visibilityStatus: 'active' | 'expired' | 'revoked' | string;
+  retentionDays: number;
+  expiresAt: string;
+  isExpired: boolean;
+  isRevoked: boolean;
+  revokedAt?: string | null;
+  revokedBy?: {
+    id: string;
+    displayName: string;
+    role: string;
+    isGuest: boolean;
+  } | null;
+  policySummary: string;
+}
+
+export interface PublishedChronicleShareResponse {
+  shareId: string;
+  shareUrl: string;
+  createdAt: string;
+  expiresAt: string;
+  createdBy?: {
+    id: string;
+    displayName: string;
+    role: string;
+    isGuest: boolean;
+  } | null;
+  governance: ChronicleShareGovernance;
+  package: ChronicleSharePackage;
+}
+
+export interface ChronicleShareSummary {
+  shareId: string;
+  shareUrl: string;
+  createdAt: string;
+  expiresAt: string;
+  createdBy?: {
+    id: string;
+    displayName: string;
+    role: string;
+    isGuest: boolean;
+  } | null;
+  governance: ChronicleShareGovernance;
+  headline: string;
+  currentYear: number | null;
+  eventCount: number | null;
+  highlightCount: number | null;
+  visibilityStatus: 'active' | 'expired' | 'revoked' | string;
+  isExpired: boolean;
+  canRevoke: boolean;
+}
+
+export interface ChronicleShareManagementResponse {
+  shares: ChronicleShareSummary[];
+  canManageAll: boolean;
+}
+
+export interface ChronicleShareRevokeResponse {
+  shareId: string;
+  revoked: boolean;
+  revokedAt?: string;
+  visibilityStatus?: 'revoked' | string;
 }
 
 export interface GameEventFilters {
@@ -1506,6 +1733,11 @@ const normalizeDivineArtifact = (value: unknown): DivineArtifact => {
       (source.ownerRegionId ?? source.owner_region_id)
         ? String(source.ownerRegionId ?? source.owner_region_id)
         : null,
+    seeded: Boolean(source.seeded ?? false),
+    originSummary:
+      source.originSummary !== undefined || source.origin_summary !== undefined
+        ? String(source.originSummary ?? source.origin_summary)
+        : null,
     eventIds: asStringArray(source.eventIds ?? source.event_ids),
     history,
     empowerCost: Number(source.empowerCost ?? source.empower_cost ?? 0),
@@ -1521,7 +1753,7 @@ const normalizeArtifactStatusResponse = (value: unknown): ArtifactStatusResponse
   const artifacts = Array.isArray(rawArtifacts) ? rawArtifacts.map(normalizeDivineArtifact) : [];
 
   return {
-    artifactLimit: Number(source.artifactLimit ?? source.artifact_limit ?? 5),
+    artifactLimit: Number(source.artifactLimit ?? source.artifact_limit ?? 9),
     activeCount: Number(source.activeCount ?? source.active_count ?? artifacts.length),
     creationCost: Number(source.creationCost ?? source.creation_cost ?? 40),
     empowerBaseCost: Number(source.empowerBaseCost ?? source.empower_base_cost ?? 20),
@@ -1775,10 +2007,34 @@ const normalizeWeatherRiskOutcome = (value: unknown): WeatherRiskOutcome => {
   };
 };
 
+const normalizeWeatherConsequenceChain = (value: unknown): WeatherConsequenceChain => {
+  const source = isRecordValue(value) ? value : {};
+
+  return {
+    id: String(source.id ?? ''),
+    status: String(source.status ?? 'active'),
+    startedYear: normalizeNullableNumber(source.startedYear ?? source.started_year),
+    lastAdvancedYear: normalizeNullableNumber(
+      source.lastAdvancedYear ?? source.last_advanced_year
+    ),
+    nextYear: normalizeNullableNumber(source.nextYear ?? source.next_year),
+    step: Number(source.step ?? 0),
+    maxSteps: Number(source.maxSteps ?? source.max_steps ?? 0),
+    sourceEventId:
+      source.sourceEventId !== undefined || source.source_event_id !== undefined
+        ? String(source.sourceEventId ?? source.source_event_id)
+        : null,
+    eventIds: asStringArray(source.eventIds ?? source.event_ids),
+    title: String(source.title ?? ''),
+    latestSummary: String(source.latestSummary ?? source.latest_summary ?? ''),
+  };
+};
+
 const normalizeWeatherInfluenceEntry = (value: unknown): WeatherInfluenceEntry => {
   const source = isRecordValue(value) ? value : {};
   const settlementChangesValue = source.settlementChanges ?? source.settlement_changes;
   const resourceChangesValue = source.resourceChanges ?? source.resource_changes;
+  const chainsValue = source.chains;
 
   return {
     id: String(source.id ?? ''),
@@ -1803,6 +2059,9 @@ const normalizeWeatherInfluenceEntry = (value: unknown): WeatherInfluenceEntry =
       : [],
     resourceChanges: Array.isArray(resourceChangesValue)
       ? resourceChangesValue.map(normalizeWeatherEntityChange)
+      : [],
+    chains: Array.isArray(chainsValue)
+      ? chainsValue.map(normalizeWeatherConsequenceChain).filter(chain => chain.id)
       : [],
   };
 };
@@ -1989,6 +2248,33 @@ const normalizeTemporalOmenPrediction = (value: unknown): TemporalOmenPrediction
   };
 };
 
+const normalizeTemporalOmenChain = (value: unknown): TemporalOmenChain => {
+  const source = isRecordValue(value) ? value : {};
+
+  return {
+    id: String(source.id ?? ''),
+    status: String(source.status ?? 'active'),
+    startedYear: normalizeNullableNumber(source.startedYear ?? source.started_year),
+    lastAdvancedYear: normalizeNullableNumber(
+      source.lastAdvancedYear ?? source.last_advanced_year
+    ),
+    nextYear: normalizeNullableNumber(source.nextYear ?? source.next_year),
+    step: Number(source.step ?? 0),
+    maxSteps: Number(source.maxSteps ?? source.max_steps ?? 0),
+    lastRiskScore:
+      source.lastRiskScore !== undefined || source.last_risk_score !== undefined
+        ? Number(source.lastRiskScore ?? source.last_risk_score)
+        : undefined,
+    sourceEventId:
+      source.sourceEventId !== undefined || source.source_event_id !== undefined
+        ? String(source.sourceEventId ?? source.source_event_id)
+        : null,
+    eventIds: asStringArray(source.eventIds ?? source.event_ids),
+    title: String(source.title ?? ''),
+    latestSummary: String(source.latestSummary ?? source.latest_summary ?? ''),
+  };
+};
+
 const normalizeTemporalOmenEntry = (value: unknown): TemporalOmenEntry => {
   const source = isRecordValue(value) ? value : {};
   const signals = Array.isArray(source.signals)
@@ -1996,6 +2282,9 @@ const normalizeTemporalOmenEntry = (value: unknown): TemporalOmenEntry => {
     : [];
   const predictions = Array.isArray(source.predictions)
     ? source.predictions.map(normalizeTemporalOmenPrediction).filter(prediction => prediction.title)
+    : [];
+  const chains = Array.isArray(source.chains)
+    ? source.chains.map(normalizeTemporalOmenChain).filter(chain => chain.id)
     : [];
 
   return {
@@ -2021,6 +2310,7 @@ const normalizeTemporalOmenEntry = (value: unknown): TemporalOmenEntry => {
       source.relatedSettlementIds ?? source.related_settlement_ids
     ),
     relatedResourceIds: asStringArray(source.relatedResourceIds ?? source.related_resource_ids),
+    chains,
     consistencyNote: String(source.consistencyNote ?? source.consistency_note ?? ''),
   };
 };
@@ -2193,6 +2483,32 @@ const normalizeMagicDiscoverySignal = (value: unknown): MagicDiscoverySignal => 
   };
 };
 
+const normalizeMagicDiscoveryChange = (value: unknown): MagicDiscoveryChange => {
+  const source = isRecordValue(value) ? value : {};
+
+  return {
+    id: String(source.id ?? ''),
+    name: String(source.name ?? ''),
+    before: isRecordValue(source.before) ? source.before : {},
+    after: isRecordValue(source.after) ? source.after : {},
+    summary: String(source.summary ?? ''),
+  };
+};
+
+const normalizeMagicDiscoveryChanges = (value: unknown): MagicDiscoveryChanges => {
+  const source = isRecordValue(value) ? value : {};
+  const normalizeChanges = (raw: unknown): MagicDiscoveryChange[] =>
+    Array.isArray(raw) ? raw.map(normalizeMagicDiscoveryChange) : [];
+
+  return {
+    regions: normalizeChanges(source.regions),
+    settlements: normalizeChanges(source.settlements),
+    resources: normalizeChanges(source.resources),
+    heroes: normalizeChanges(source.heroes),
+    landmarks: normalizeChanges(source.landmarks),
+  };
+};
+
 const normalizeMagicDiscoveryHistoryEntry = (value: unknown): MagicDiscoveryHistoryEntry => {
   const source = isRecordValue(value) ? value : {};
 
@@ -2207,6 +2523,37 @@ const normalizeMagicDiscoveryHistoryEntry = (value: unknown): MagicDiscoveryHist
     targetName: String(source.targetName ?? source.target_name ?? ''),
     progress: Number(source.progress ?? 0),
     status: normalizeMagicDiscoveryPathStatus(source.status),
+  };
+};
+
+const normalizeMagicDiscoveryProgression = (value: unknown): MagicDiscoveryProgression => {
+  const source = isRecordValue(value) ? value : {};
+
+  return {
+    id: String(source.id ?? ''),
+    path: String(source.path ?? ''),
+    pathLabel: String(source.pathLabel ?? source.path_label ?? ''),
+    status: normalizeMagicDiscoveryPathStatus(source.status),
+    progress: Number(source.progress ?? 0),
+    maturity: Number(source.maturity ?? 0),
+    progressGain: Number(source.progressGain ?? source.progress_gain ?? 0),
+    maturityGain: Number(source.maturityGain ?? source.maturity_gain ?? 0),
+    targetType: normalizeMagicDiscoveryTargetType(source.targetType ?? source.target_type),
+    targetId: String(source.targetId ?? source.target_id ?? ''),
+    targetName: String(source.targetName ?? source.target_name ?? ''),
+    regionId:
+      source.regionId !== undefined || source.region_id !== undefined
+        ? String(source.regionId ?? source.region_id)
+        : null,
+    year: Number(source.year ?? 0),
+    eventId:
+      source.eventId !== undefined || source.event_id !== undefined
+        ? String(source.eventId ?? source.event_id)
+        : null,
+    title: String(source.title ?? ''),
+    summary: String(source.summary ?? ''),
+    type: String(source.type ?? 'magic_progression'),
+    changes: normalizeMagicDiscoveryChanges(source.changes),
   };
 };
 
@@ -2243,6 +2590,7 @@ const normalizeMagicDiscoveryPath = (value: unknown): MagicDiscoveryPath => {
     status: normalizeMagicDiscoveryPathStatus(source.status),
     progress: Number(source.progress ?? 0),
     evidenceScore: Number(source.evidenceScore ?? source.evidence_score ?? 0),
+    maturity: Number(source.maturity ?? 0),
     discoveryYear:
       source.discoveryYear !== undefined || source.discovery_year !== undefined
         ? normalizeNullableNumber(source.discoveryYear ?? source.discovery_year)
@@ -2250,6 +2598,10 @@ const normalizeMagicDiscoveryPath = (value: unknown): MagicDiscoveryPath => {
     lastResearchedYear:
       source.lastResearchedYear !== undefined || source.last_researched_year !== undefined
         ? normalizeNullableNumber(source.lastResearchedYear ?? source.last_researched_year)
+        : null,
+    lastProgressionYear:
+      source.lastProgressionYear !== undefined || source.last_progression_year !== undefined
+        ? normalizeNullableNumber(source.lastProgressionYear ?? source.last_progression_year)
         : null,
     lastTarget: isRecordValue(source.lastTarget ?? source.last_target)
       ? normalizeMagicDiscoveryTarget(source.lastTarget ?? source.last_target)
@@ -2285,6 +2637,7 @@ const normalizeMagicDiscoveryStatusResponse = (value: unknown): MagicDiscoverySt
   const rawPaths = source.paths;
   const rawSuggestedTargets = source.suggestedTargets ?? source.suggested_targets;
   const rawBettingHooks = source.bettingHooks ?? source.betting_hooks;
+  const rawRecentProgressions = source.recentProgressions ?? source.recent_progressions;
 
   return {
     currentYear: Number(source.currentYear ?? source.current_year ?? 0),
@@ -2292,6 +2645,14 @@ const normalizeMagicDiscoveryStatusResponse = (value: unknown): MagicDiscoverySt
     summary: String(source.summary ?? ''),
     pathOptions: normalizeMagicDiscoveryPathOptions(source.pathOptions ?? source.path_options),
     paths: Array.isArray(rawPaths) ? rawPaths.map(normalizeMagicDiscoveryPath) : [],
+    progressionSummary: String(
+      source.progressionSummary ??
+        source.progression_summary ??
+        'No autonomous magic progression has resolved yet.'
+    ),
+    recentProgressions: Array.isArray(rawRecentProgressions)
+      ? rawRecentProgressions.map(normalizeMagicDiscoveryProgression)
+      : [],
     targetOptions: normalizeMagicDiscoveryTargetOptions(
       source.targetOptions ?? source.target_options
     ),
@@ -2380,6 +2741,25 @@ const normalizeMythEffects = (value: unknown): MythEffects => {
   };
 };
 
+const normalizeMythEcho = (value: unknown): MythEcho => {
+  const source = isRecordValue(value) ? value : {};
+
+  return {
+    id: String(source.id ?? ''),
+    year: Number(source.year ?? 0),
+    eventId: String(source.eventId ?? source.event_id ?? ''),
+    resonance: Number(source.resonance ?? 0),
+    activityCount: Number(source.activityCount ?? source.activity_count ?? 0),
+    summary: String(source.summary ?? ''),
+    effects: normalizeMythEffects(source.effects),
+    signals: asStringArray(source.signals),
+    mythId: (source.mythId ?? source.myth_id) ? String(source.mythId ?? source.myth_id) : undefined,
+    mythTitle: (source.mythTitle ?? source.myth_title)
+      ? String(source.mythTitle ?? source.myth_title)
+      : undefined,
+  };
+};
+
 const normalizeMythCandidate = (value: unknown): MythCandidate => {
   const source = isRecordValue(value) ? value : {};
 
@@ -2411,6 +2791,8 @@ const normalizeMythCandidate = (value: unknown): MythCandidate => {
 
 const normalizePromotedMyth = (value: unknown): PromotedMyth => {
   const source = isRecordValue(value) ? value : {};
+  const rawEvolutionHistory = source.evolutionHistory ?? source.evolution_history;
+  const latestEcho = source.latestEcho ?? source.latest_echo;
 
   return {
     id: String(source.id ?? ''),
@@ -2439,6 +2821,20 @@ const normalizePromotedMyth = (value: unknown): PromotedMyth => {
     reason: String(source.reason ?? ''),
     influenceSummary: String(source.influenceSummary ?? source.influence_summary ?? ''),
     effects: normalizeMythEffects(source.effects),
+    echoCount: Number(source.echoCount ?? source.echo_count ?? 0),
+    lastEchoYear:
+      source.lastEchoYear !== undefined || source.last_echo_year !== undefined
+        ? normalizeNullableNumber(source.lastEchoYear ?? source.last_echo_year)
+        : null,
+    latestEcho: isRecordValue(latestEcho) ? normalizeMythEcho(latestEcho) : null,
+    evolutionHistory: Array.isArray(rawEvolutionHistory)
+      ? rawEvolutionHistory.map(normalizeMythEcho)
+      : [],
+    autonomousEvolution: String(
+      source.autonomousEvolution ??
+        source.autonomous_evolution ??
+        'This myth has not echoed autonomously yet.'
+    ),
   };
 };
 
@@ -2447,11 +2843,14 @@ const normalizeMythologyStatusResponse = (value: unknown): MythologyStatusRespon
   const rawMythTypeOptions = source.mythTypeOptions ?? source.myth_type_options;
   const rawMyths = source.myths;
   const rawCandidates = source.candidates;
+  const rawRecentEchoes = source.recentEchoes ?? source.recent_echoes;
 
   return {
     currentYear: Number(source.currentYear ?? source.current_year ?? 0),
     promotionCost: Number(source.promotionCost ?? source.promotion_cost ?? 0),
     summary: String(source.summary ?? ''),
+    evolutionSummary: String(source.evolutionSummary ?? source.evolution_summary ?? ''),
+    recentEchoes: Array.isArray(rawRecentEchoes) ? rawRecentEchoes.map(normalizeMythEcho) : [],
     mythTypeOptions: Array.isArray(rawMythTypeOptions)
       ? rawMythTypeOptions.map(normalizeMythTypeOption).filter(option => option.key)
       : [],
@@ -2653,6 +3052,41 @@ const normalizeCivilizationDecision = (value: unknown): CivilizationDecision => 
   };
 };
 
+const normalizeCivilizationDiplomacy = (value: unknown): CivilizationDiplomacy => {
+  const source = isRecordValue(value) ? value : {};
+  const rawEventIds = source.eventIds ?? source.event_ids;
+
+  return {
+    id: String(source.id ?? ''),
+    pactKey: String(source.pactKey ?? source.pact_key ?? ''),
+    kind: String(source.kind ?? 'trade_compact'),
+    kindLabel: String(source.kindLabel ?? source.kind_label ?? ''),
+    sourceRegionId: String(source.sourceRegionId ?? source.source_region_id ?? ''),
+    sourceRegionName: String(source.sourceRegionName ?? source.source_region_name ?? ''),
+    targetRegionId: String(source.targetRegionId ?? source.target_region_id ?? ''),
+    targetRegionName: String(source.targetRegionName ?? source.target_region_name ?? ''),
+    score: Number(source.score ?? 0),
+    startedYear: Number(source.startedYear ?? source.started_year ?? 0),
+    lastAdvancedYear: Number(source.lastAdvancedYear ?? source.last_advanced_year ?? 0),
+    stepCount: Number(source.stepCount ?? source.step_count ?? 0),
+    eventId:
+      source.eventId !== undefined || source.event_id !== undefined
+        ? String(source.eventId ?? source.event_id)
+        : null,
+    eventIds: asStringArray(rawEventIds),
+    summary: String(source.summary ?? ''),
+    effectSummary: String(source.effectSummary ?? source.effect_summary ?? ''),
+    changes: normalizeCivilizationChanges(source.changes),
+    relatedRegionIds: asStringArray(source.relatedRegionIds ?? source.related_region_ids),
+    relatedSettlementIds: asStringArray(
+      source.relatedSettlementIds ?? source.related_settlement_ids
+    ),
+    relatedHeroIds: asStringArray(source.relatedHeroIds ?? source.related_hero_ids),
+    relatedLandmarkIds: asStringArray(source.relatedLandmarkIds ?? source.related_landmark_ids),
+    relatedResourceIds: asStringArray(source.relatedResourceIds ?? source.related_resource_ids),
+  };
+};
+
 const defaultCivilizationBehaviorCounts = (): Record<CivilizationBehaviorKey, number> => ({
   expansion: 0,
   defense: 0,
@@ -2683,6 +3117,7 @@ const normalizeCivilizationStatusResponse = (value: unknown): CivilizationStatus
   const rawRegionAgendas = source.regionAgendas ?? source.region_agendas;
   const rawRecentDecisions = source.recentDecisions ?? source.recent_decisions;
   const rawTopAgenda = source.topAgenda ?? source.top_agenda;
+  const rawDiplomacy = source.diplomacy;
 
   return {
     currentYear: Number(source.currentYear ?? source.current_year ?? 0),
@@ -2696,6 +3131,10 @@ const normalizeCivilizationStatusResponse = (value: unknown): CivilizationStatus
       : [],
     recentDecisions: Array.isArray(rawRecentDecisions)
       ? rawRecentDecisions.map(normalizeCivilizationDecision)
+      : [],
+    diplomacySummary: String(source.diplomacySummary ?? source.diplomacy_summary ?? ''),
+    diplomacy: Array.isArray(rawDiplomacy)
+      ? rawDiplomacy.map(normalizeCivilizationDiplomacy)
       : [],
     behaviorCounts: normalizeCivilizationBehaviorCounts(
       source.behaviorCounts ?? source.behavior_counts
@@ -2985,6 +3424,57 @@ const normalizePantheonPoliticalEscalation = (
   };
 };
 
+const normalizePantheonRelationshipArc = (value: unknown): PantheonRelationshipArc => {
+  const source = isRecordValue(value) ? value : {};
+
+  return {
+    id: String(source.id ?? ''),
+    arcKey: String(source.arcKey ?? source.arc_key ?? ''),
+    year: Number(source.year ?? 0),
+    sourceId: String(source.sourceId ?? source.source_id ?? ''),
+    sourceName: String(source.sourceName ?? source.source_name ?? ''),
+    targetId: String(source.targetId ?? source.target_id ?? ''),
+    targetName: String(source.targetName ?? source.target_name ?? ''),
+    stance: String(source.stance ?? 'rival'),
+    stage: String(source.stage ?? 'watchful'),
+    momentum: Number(source.momentum ?? 0),
+    tension: Number(source.tension ?? source.tension_score ?? 0),
+    pressureScore: Number(source.pressureScore ?? source.pressure_score ?? 0),
+    targetRegionId:
+      source.targetRegionId !== undefined || source.target_region_id !== undefined
+        ? String(source.targetRegionId ?? source.target_region_id)
+        : null,
+    targetRegionName:
+      source.targetRegionName !== undefined || source.target_region_name !== undefined
+        ? String(source.targetRegionName ?? source.target_region_name)
+        : null,
+    startedYear: Number(source.startedYear ?? source.started_year ?? source.year ?? 0),
+    lastAdvancedYear: Number(
+      source.lastAdvancedYear ?? source.last_advanced_year ?? source.year ?? 0
+    ),
+    stepCount: Number(source.stepCount ?? source.step_count ?? 1),
+    title: String(source.title ?? ''),
+    summary: String(source.summary ?? ''),
+    eventId:
+      source.eventId !== undefined || source.event_id !== undefined
+        ? String(source.eventId ?? source.event_id)
+        : null,
+    eventIds: asStringArray(source.eventIds ?? source.event_ids),
+    changes: normalizePantheonChanges(source.changes),
+    relatedRegionIds: asStringArray(source.relatedRegionIds ?? source.related_region_ids),
+    relatedSettlementIds: asStringArray(
+      source.relatedSettlementIds ?? source.related_settlement_ids
+    ),
+    relatedHeroIds: asStringArray(source.relatedHeroIds ?? source.related_hero_ids),
+    relatedLandmarkIds: asStringArray(source.relatedLandmarkIds ?? source.related_landmark_ids),
+    relatedResourceIds: asStringArray(source.relatedResourceIds ?? source.related_resource_ids),
+    nextPressure:
+      source.nextPressure !== undefined || source.next_pressure !== undefined
+        ? String(source.nextPressure ?? source.next_pressure)
+        : null,
+  };
+};
+
 const normalizePantheonPoliticsStatus = (value: unknown): PantheonPoliticsStatus => {
   const source = isRecordValue(value) ? value : {};
   const rawEscalations = source.escalations;
@@ -3044,6 +3534,7 @@ const normalizePantheonStatusResponse = (value: unknown): PantheonStatusResponse
   const rawRecentInterventions = source.recentInterventions ?? source.recent_interventions;
   const rawRelationships = source.relationships;
   const rawPolitics = source.politics;
+  const rawRelationshipArcs = source.relationshipArcs ?? source.relationship_arcs;
   const rawBettingHooks = source.bettingHooks ?? source.betting_hooks;
   const rawTopActor = source.topActor ?? source.top_actor;
   const rawCounterplay = source.counterplay;
@@ -3063,6 +3554,9 @@ const normalizePantheonStatusResponse = (value: unknown): PantheonStatusResponse
     politics: isRecordValue(rawPolitics)
       ? normalizePantheonPoliticsStatus(rawPolitics)
       : null,
+    relationshipArcs: Array.isArray(rawRelationshipArcs)
+      ? rawRelationshipArcs.map(normalizePantheonRelationshipArc)
+      : [],
     bettingHooks: Array.isArray(rawBettingHooks)
       ? rawBettingHooks.map(normalizePantheonBettingHook)
       : [],
@@ -3680,6 +4174,63 @@ export const getEntityHistorySummary = async (options?: {
   return fetchData<EntityHistorySummaryResponse>(`history/summary${suffix}`);
 };
 
+export const getChronicleReplay = async (options?: {
+  limit?: number;
+  era?: string | number;
+  regionId?: string;
+  heroId?: string;
+  settlementId?: string;
+  landmarkId?: string;
+  resourceId?: string;
+}): Promise<ChronicleReplayResponse> => {
+  const params = new URLSearchParams();
+  Object.entries(options ?? {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value) !== '') {
+      params.set(key, String(value));
+    }
+  });
+
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  return fetchData<ChronicleReplayResponse>(`export/chronicle-replay${suffix}`);
+};
+
+export const publishChronicleShare = async (options?: {
+  limit?: number;
+  era?: string | number;
+  regionId?: string;
+  heroId?: string;
+  settlementId?: string;
+  landmarkId?: string;
+  resourceId?: string;
+}): Promise<PublishedChronicleShareResponse> => {
+  return postData<Record<string, string | number | undefined>, PublishedChronicleShareResponse>(
+    'export/chronicle-share/public',
+    options ?? {}
+  );
+};
+
+export const getChronicleShareManagement = async (): Promise<ChronicleShareManagementResponse> => {
+  return fetchData<ChronicleShareManagementResponse>('export/chronicle-share/public');
+};
+
+export const revokeChronicleShare = async (
+  shareId: string
+): Promise<ChronicleShareRevokeResponse> => {
+  const response = await apiClient.delete<ChronicleShareRevokeResponse | { success: boolean; data: ChronicleShareRevokeResponse }>(
+    `export/chronicle-share/public/${encodeURIComponent(shareId)}`
+  );
+  const data = response.data;
+  return isWrappedApiResponse<ChronicleShareRevokeResponse>(data) ? data.data : data as ChronicleShareRevokeResponse;
+};
+
+export const getPublicChronicleShare = async (
+  shareId: string
+): Promise<PublishedChronicleShareResponse> => {
+  return fetchData<PublishedChronicleShareResponse>(
+    `public/chronicle-share/${encodeURIComponent(shareId)}`
+  );
+};
+
 export interface InfluenceActionPayload {
   action: string;
   entityId: string;
@@ -3813,12 +4364,32 @@ export interface AdminWorldEditorOptions {
   };
 }
 
+export interface AdminWorldEditorAuditEntry {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  year: number | null;
+  createdAt: string | null;
+  regionId: string | null;
+  entityType: AdminWorldEditorEntityType;
+  entityId: string | null;
+  eventUrl: string;
+  timelineUrl: string;
+  relatedRegionIds: string[];
+  relatedHeroIds: string[];
+  relatedSettlementIds: string[];
+  relatedLandmarkIds: string[];
+  relatedResourceIds: string[];
+}
+
 export interface AdminWorldEditorStatusResponse {
   currentYear: number;
   entityTypes: AdminWorldEditorEntityType[];
   summary: Record<AdminWorldEditorEntityType, number>;
   options: AdminWorldEditorOptions;
   entities: Record<AdminWorldEditorEntityType, Array<Record<string, unknown>>>;
+  auditLog: AdminWorldEditorAuditEntry[];
 }
 
 export interface AdminWorldEditorMutationResponse {
@@ -3828,6 +4399,28 @@ export interface AdminWorldEditorMutationResponse {
   eventId: string;
   summary: string;
   status: AdminWorldEditorStatusResponse;
+}
+
+export interface AdminWorldEditorPreviewResponse {
+  entityType: AdminWorldEditorEntityType;
+  mode: 'create' | 'update';
+  wouldPersist: false;
+  isValid: boolean;
+  entityId: string;
+  summary: string;
+  appliedFields: string[];
+  compatibility: {
+    riskTier: 'stable' | 'low' | 'medium' | 'high';
+    affectedSystems: string[];
+    warnings: string[];
+    signals: Array<{
+      label: string;
+      value: string;
+      tone: 'positive' | 'neutral' | 'warning';
+    }>;
+    notes: string[];
+    relatedIds: Record<'regions' | 'settlements' | 'landmarks' | 'resources' | 'heroes', string[]>;
+  };
 }
 
 export const getAdminWorldEditor = (): Promise<AdminWorldEditorStatusResponse> => {
@@ -3844,6 +4437,16 @@ export const createAdminWorldEntity = (
     `admin/world-editor/${encodeURIComponent(entityType)}`,
     payload
   ).then(value => value as AdminWorldEditorMutationResponse);
+};
+
+export const previewAdminWorldEntity = (
+  entityType: AdminWorldEditorEntityType,
+  payload: AdminWorldEditorPayload
+): Promise<AdminWorldEditorPreviewResponse> => {
+  return postData<AdminWorldEditorPayload, AdminWorldEditorPreviewResponse | Record<string, unknown>>(
+    `admin/world-editor/${encodeURIComponent(entityType)}/preview`,
+    payload
+  ).then(value => value as AdminWorldEditorPreviewResponse);
 };
 
 export const updateAdminWorldEntity = (

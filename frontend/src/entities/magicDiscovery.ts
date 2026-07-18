@@ -27,6 +27,22 @@ export interface MagicDiscoverySignal {
   summary: string;
 }
 
+export interface MagicDiscoveryChange {
+  id: string;
+  name: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  summary: string;
+}
+
+export interface MagicDiscoveryChanges {
+  regions: MagicDiscoveryChange[];
+  settlements: MagicDiscoveryChange[];
+  resources: MagicDiscoveryChange[];
+  heroes: MagicDiscoveryChange[];
+  landmarks: MagicDiscoveryChange[];
+}
+
 export interface MagicDiscoveryHistoryEntry {
   eventId: string;
   title: string;
@@ -38,6 +54,27 @@ export interface MagicDiscoveryHistoryEntry {
   targetName: string;
   progress: number;
   status: MagicDiscoveryPathStatus;
+}
+
+export interface MagicDiscoveryProgression {
+  id: string;
+  path: string;
+  pathLabel: string;
+  status: MagicDiscoveryPathStatus;
+  progress: number;
+  maturity: number;
+  progressGain: number;
+  maturityGain: number;
+  targetType: MagicDiscoveryTargetType;
+  targetId: string;
+  targetName: string;
+  regionId?: string | null;
+  year: number;
+  eventId?: string | null;
+  title: string;
+  summary: string;
+  type: string;
+  changes: MagicDiscoveryChanges;
 }
 
 export interface MagicDiscoveryBettingHook {
@@ -60,8 +97,10 @@ export interface MagicDiscoveryPath {
   status: MagicDiscoveryPathStatus;
   progress: number;
   evidenceScore: number;
+  maturity: number;
   discoveryYear?: number | null;
   lastResearchedYear?: number | null;
+  lastProgressionYear?: number | null;
   lastTarget?: MagicDiscoveryTarget | null;
   signals: MagicDiscoverySignal[];
   eventIds: string[];
@@ -81,7 +120,17 @@ export interface MagicDiscoveryStatusResponse {
   summary: string;
   pathOptions: MagicDiscoveryPathOption[];
   paths: MagicDiscoveryPath[];
+  progressionSummary: string;
+  recentProgressions: MagicDiscoveryProgression[];
   targetOptions: MagicDiscoveryTargetOption[];
   suggestedTargets: MagicDiscoverySuggestedTarget[];
   bettingHooks: MagicDiscoveryBettingHook[];
+}
+
+export interface MagicDiscoveryTickSummary {
+  processed?: number;
+  changed?: number;
+  events?: number;
+  progressions?: MagicDiscoveryProgression[];
+  errors?: Array<string | { pathKey?: string | null; message?: string }>;
 }

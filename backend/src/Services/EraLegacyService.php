@@ -128,9 +128,9 @@ class EraLegacyService
                     default => 'regional_memory',
                 };
                 $reason = "{$hero->name} has level {$level}, {$featCount} recorded feats, and {$status} status.";
-                if (is_array($champion)) {
-                    $reason .= " Champion rank {$championRank}, bond {$championBond}/100, and {$championOutcomeCount} outcome(s) make this an explicit champion legacy.";
-                }
+            if (is_array($champion)) {
+                $reason .= " Champion rank {$championRank}, bond {$championBond}/100, and {$championOutcomeCount} outcome(s) make this an explicit champion legacy.";
+            }
                 $signals = [
                     ['label' => 'Level', 'value' => (string)$level],
                     ['label' => 'Feats', 'value' => (string)$featCount],
@@ -377,18 +377,25 @@ class EraLegacyService
     {
         $preferredTypes = [
             'era_pressure',
+            'era_descendant',
             'hero_level',
             'hero_death',
             'bet_resolution',
             'divine_influence',
+            'magic_progression',
             'champion_quest_completed',
             'champion_rivalry_resolved',
             'champion_rivalry_escalated',
             'artifact_consequence',
+            'artifact_chain',
             'weather_consequence',
+            'weather_chain',
             'time_omen_followup',
+            'time_omen_chain',
             'pantheon_intervention',
             'pantheon_counterplay',
+            'pantheon_relationship_arc',
+            'civilization_diplomacy',
             'region_tick',
             'settlement_tick',
             'resource_tick',
@@ -579,17 +586,19 @@ class EraLegacyService
     {
         return match ($type) {
             'era_pressure' => 'omen',
+            'era_descendant' => 'era_myth',
             'hero_level' => 'heroic_legend',
             'champion_quest_completed', 'champion_rivalry_resolved' => 'heroic_legend',
             'champion_rivalry_escalated' => 'rivalry_scar',
-            'artifact_consequence' => 'relic_myth',
-            'weather_consequence' => 'weather_sign',
-            'time_omen_followup' => 'omen',
-            'pantheon_intervention', 'pantheon_counterplay' => 'divine_intervention',
+            'artifact_consequence', 'artifact_chain' => 'relic_myth',
+            'magic_progression' => 'discovery_myth',
+            'weather_consequence', 'weather_chain' => 'weather_sign',
+            'time_omen_followup', 'time_omen_chain' => 'omen',
+            'pantheon_intervention', 'pantheon_counterplay', 'pantheon_relationship_arc' => 'divine_intervention',
             'hero_death' => 'martyr_legend',
             'bet_resolution' => 'divine_wager',
             'divine_influence' => 'divine_intervention',
-            'region_tick', 'settlement_tick', 'resource_tick' => 'world_change',
+            'region_tick', 'settlement_tick', 'resource_tick', 'civilization_diplomacy' => 'world_change',
             default => 'chronicle',
         };
     }
@@ -598,10 +607,17 @@ class EraLegacyService
     {
         return match ((string)$event->type) {
             'artifact_consequence' => "{$event->title} is an artifact consequence with enough entity links to shape next-era relic memory.",
+            'artifact_chain' => "{$event->title} is a multi-step artifact chain with enough entity links to shape next-era relic memory.",
+            'magic_progression' => "{$event->title} is autonomous magical progression that can carry discovered practice into the next era.",
             'weather_consequence' => "{$event->title} is a delayed weather scar that can explain climate memory across the era boundary.",
+            'weather_chain' => "{$event->title} is a multi-step weather chain that can explain climate memory across the era boundary.",
             'time_omen_followup' => "{$event->title} resolved a temporal omen, giving era continuity an explicit prophecy thread.",
+            'time_omen_chain' => "{$event->title} extended a temporal omen into a multi-step prophecy thread.",
             'pantheon_intervention' => "{$event->title} is direct AI pantheon pressure that can carry divine politics into the next era.",
             'pantheon_counterplay' => "{$event->title} is direct player counterplay against AI pantheon pressure, preserving divine politics as era memory.",
+            'pantheon_relationship_arc' => "{$event->title} is a persistent pantheon alliance or rivalry arc, preserving divine politics as era memory.",
+            'civilization_diplomacy' => "{$event->title} is persistent inter-region civic diplomacy that can carry political geography into the next era.",
+            'era_descendant' => "{$event->title} is an explicit next-era descendant, preserving lineage identity as era memory.",
             default => "{$event->title} is recent, linked, or important enough to become carried myth.",
         };
     }

@@ -19,10 +19,17 @@ import {
 } from '../api/StatisticsService';
 import PageLayout from '../components/PageLayout';
 import {
+  ChronicleReplayResponse,
+  ChronicleShareManagementResponse,
+  ChronicleShareSummary,
+  getChronicleReplay,
+  getChronicleShareManagement,
   getEntityHistorySummary,
   getGameStatus,
   EntityHistorySummaryResponse,
   GameStatus,
+  publishChronicleShare,
+  revokeChronicleShare,
 } from '../api/apiService';
 import { apiClient } from '../api/apiClient';
 import DashboardLastTickPanel from '../components/DashboardLastTickPanel';
@@ -33,6 +40,7 @@ import DashboardEraTransitionPanel from '../components/DashboardEraTransitionPan
 import DashboardEraComparisonPanel from '../components/DashboardEraComparisonPanel';
 import DashboardCivilizationPanel from '../components/DashboardCivilizationPanel';
 import DashboardPantheonPanel from '../components/DashboardPantheonPanel';
+import DashboardChronicleReplayPanel from '../components/DashboardChronicleReplayPanel';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -43,9 +51,60 @@ export const Dashboard: React.FC = () => {
   const [regionStats, setRegionStats] = useState<RegionStatistics | null>(null);
   const [financialStats, setFinancialStats] = useState<FinancialStatistics | null>(null);
   const [historySummary, setHistorySummary] = useState<EntityHistorySummaryResponse | null>(null);
+  const [chronicleReplay, setChronicleReplay] = useState<ChronicleReplayResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [exportingChronicle, setExportingChronicle] = useState(false);
+  const [publishingChronicle, setPublishingChronicle] = useState(false);
+  const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
+  const [chronicleShareUrl, setChronicleShareUrl] = useState<string | null>(null);
+  const [shareManagement, setShareManagement] = useState<ChronicleShareManagementResponse | null>(
+    null
+  );
+
+  const publicUrl = (path: string): string => {
+    const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
+    const relativePath = path.startsWith('/') ? path : `/${path}`;
+    return new URL(`${basePath}${relativePath}`, window.location.origin).toString();
+  };
+
+  const formatShareDate = (value?: string | null): string => {
+    if (!value) return 'Unknown';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
+  };
+
+  const shareStatusLabel = (status: string): string => {
+    if (status === 'active') return 'Active public link';
+    if (status === 'expired') return 'Expired';
+    if (status === 'revoked') return 'Revoked';
+    return status;
+  };
+
+  const shareStatusClass = (status: string): string => {
+    if (status === 'active') return 'border-emerald-700 text-emerald-200';
+    if (status === 'expired') return 'border-amber-700 text-amber-200';
+    if (status === 'revoked') return 'border-red-800 text-red-200';
+    return 'border-gray-700 text-gray-200';
+  };
+
+  const shareSummaryFromPublish = (
+    response: Awaited<ReturnType<typeof publishChronicleShare>>
+  ): ChronicleShareSummary => ({
+    shareId: response.shareId,
+    shareUrl: response.shareUrl,
+    createdAt: response.createdAt,
+    expiresAt: response.expiresAt,
+    createdBy: response.createdBy,
+    governance: response.governance,
+    headline: response.package.headline,
+    currentYear: response.package.summary.currentYear,
+    eventCount: response.package.summary.eventCount,
+    highlightCount: response.package.summary.highlightCount,
+    visibilityStatus: response.governance.visibilityStatus,
+    isExpired: response.governance.isExpired,
+    canRevoke: true,
+  });
 
   const downloadExport = async (
     path: string,
@@ -86,18 +145,68 @@ export const Dashboard: React.FC = () => {
     );
   };
 
+  const handlePublishChronicle = async () => {
+    try {
+      setPublishingChronicle(true);
+      const response = await publishChronicleShare({ limit: 40 });
+      setChronicleShareUrl(publicUrl(response.shareUrl));
+      setShareManagement(previous => {
+        const nextShare = shareSummaryFromPublish(response);
+        const existing = previous?.shares ?? [];
+        return {
+          canManageAll: previous?.canManageAll ?? false,
+          shares: [
+            nextShare,
+            ...existing.filter(share => share.shareId !== nextShare.shareId),
+          ].slice(0, 20),
+        };
+      });
+    } catch (error) {
+      console.error('Chronicle share publishing failed:', error);
+    } finally {
+      setPublishingChronicle(false);
+    }
+  };
+
+  const handleRevokeChronicleShare = async (shareId: string) => {
+    try {
+      setRevokingShareId(shareId);
+      await revokeChronicleShare(shareId);
+      setShareManagement(previous =>
+        previous
+          ? { ...previous, shares: previous.shares.filter(share => share.shareId !== shareId) }
+          : previous
+      );
+      setChronicleShareUrl(previous => (previous && previous.includes(shareId) ? null : previous));
+    } catch (error) {
+      console.error('Chronicle share revoke failed:', error);
+    } finally {
+      setRevokingShareId(null);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [statusData, summaryData, heroData, regionData, financialData, historyData] =
-          await Promise.all([
-            getGameStatus(),
-            statisticsService.getSummary(),
-            statisticsService.getHeroStats(),
-            statisticsService.getRegionStats(),
-            statisticsService.getFinancialStats(),
-            getEntityHistorySummary(),
-          ]);
+        const [
+          statusData,
+          summaryData,
+          heroData,
+          regionData,
+          financialData,
+          historyData,
+          replayData,
+          sharesData,
+        ] = await Promise.all([
+          getGameStatus(),
+          statisticsService.getSummary(),
+          statisticsService.getHeroStats(),
+          statisticsService.getRegionStats(),
+          statisticsService.getFinancialStats(),
+          getEntityHistorySummary(),
+          getChronicleReplay({ limit: 16 }),
+          getChronicleShareManagement(),
+        ]);
 
         setGameStatus(statusData);
         setSummary(summaryData);
@@ -105,6 +214,8 @@ export const Dashboard: React.FC = () => {
         setRegionStats(regionData);
         setFinancialStats(financialData);
         setHistorySummary(historyData);
+        setChronicleReplay(replayData);
+        setShareManagement(sharesData);
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
@@ -167,50 +278,119 @@ export const Dashboard: React.FC = () => {
         ],
       }
     : null;
+  const dashboardCurrentYear = gameStatus?.currentYear ?? summary?.currentYear;
+  const dashboardCurrentEra = summary?.currentEra ?? gameStatus?.eraPressure?.currentEra;
 
   return (
     <PageLayout gameStatus={gameStatus}>
       {/* Header with Export Button */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-white">World Dashboard</h1>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <button
-            onClick={handleChronicleExport}
-            disabled={exportingChronicle}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            {exportingChronicle ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                Exporting...
-              </>
-            ) : (
-              <>📜 Export Chronicle</>
-            )}
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
-          >
-            {exporting ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                Exporting...
-              </>
-            ) : (
-              <>📥 Export World</>
-            )}
-          </button>
+        <div className="flex flex-col items-stretch gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={handlePublishChronicle}
+              disabled={publishingChronicle}
+              className="px-4 py-2 bg-yellow-500 hover:bg-yellow-400 disabled:bg-gray-600 text-gray-950 rounded-lg transition-colors font-semibold"
+            >
+              {publishingChronicle ? 'Creating...' : 'Create Share Page'}
+            </button>
+            <button
+              onClick={handleChronicleExport}
+              disabled={exportingChronicle}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-600 text-white rounded-lg transition-colors"
+            >
+              {exportingChronicle ? 'Exporting...' : 'Export Chronicle'}
+            </button>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded-lg transition-colors"
+            >
+              {exporting ? 'Exporting...' : 'Export World'}
+            </button>
+          </div>
+          {chronicleShareUrl && (
+            <a
+              href={chronicleShareUrl}
+              className="break-all text-right text-sm font-semibold text-blue-300 hover:text-blue-100"
+            >
+              {chronicleShareUrl}
+            </a>
+          )}
         </div>
       </div>
+
+      {shareManagement && shareManagement.shares.length > 0 && (
+        <section className="mb-8 rounded-lg border border-[#2f334d] bg-[#1a1b26] p-4">
+          <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">Chronicle Share Links</h2>
+              <div className="text-sm text-gray-400">
+                {shareManagement.canManageAll
+                  ? 'Showing recent public chronicle shares.'
+                  : 'Showing your public chronicle shares.'}
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+            {shareManagement.shares.slice(0, 6).map(share => (
+              <div key={share.shareId} className="rounded border border-[#2f334d] bg-[#151722] p-3">
+                <div className="flex flex-wrap items-center gap-2 text-xs uppercase text-gray-500">
+                  <span>
+                    Year {share.currentYear ?? '?'} - {share.eventCount ?? 0} events -{' '}
+                    {share.highlightCount ?? 0} highlights
+                  </span>
+                  <span
+                    className={`rounded border px-2 py-0.5 ${shareStatusClass(share.visibilityStatus)}`}
+                  >
+                    {shareStatusLabel(share.visibilityStatus)}
+                  </span>
+                </div>
+                {share.visibilityStatus === 'active' ? (
+                  <a
+                    href={publicUrl(share.shareUrl)}
+                    className="mt-1 block font-semibold text-yellow-200 hover:text-yellow-100"
+                  >
+                    {share.headline}
+                  </a>
+                ) : (
+                  <div className="mt-1 font-semibold text-gray-300">{share.headline}</div>
+                )}
+                <div className="mt-2 text-xs text-gray-500">
+                  Created {formatShareDate(share.createdAt)} - Expires{' '}
+                  {formatShareDate(share.expiresAt)}
+                </div>
+                <div className="mt-1 text-xs text-gray-400">
+                  Policy: {share.governance.policySummary}
+                </div>
+                <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="break-all text-xs text-gray-400">{publicUrl(share.shareUrl)}</div>
+                  {share.canRevoke && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void handleRevokeChronicleShare(share.shareId);
+                      }}
+                      disabled={revokingShareId === share.shareId}
+                      className="shrink-0 rounded border border-red-800 px-3 py-1 text-xs font-semibold text-red-200 hover:bg-red-950/40 disabled:border-gray-700 disabled:text-gray-500"
+                    >
+                      {revokingShareId === share.shareId ? 'Revoking...' : 'Revoke'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-[#1a1b26] p-4 rounded-lg border border-[#2f334d]">
           <div className="text-gray-400 text-sm">Current Era</div>
           <div className="text-2xl font-bold text-blue-400">
-            {summary?.currentEra} (Year {summary?.currentYear})
+            {dashboardCurrentEra} (Year {dashboardCurrentYear})
           </div>
         </div>
         <div className="bg-[#1a1b26] p-4 rounded-lg border border-[#2f334d]">
@@ -236,6 +416,7 @@ export const Dashboard: React.FC = () => {
       <DashboardCivilizationPanel civilization={gameStatus?.civilization} />
       <DashboardPantheonPanel pantheon={gameStatus?.pantheon} />
       <DashboardLastTickPanel simulation={gameStatus?.simulation} />
+      <DashboardChronicleReplayPanel replay={chronicleReplay} />
       <DashboardHistoryPanel summary={historySummary} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

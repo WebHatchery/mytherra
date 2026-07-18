@@ -22,7 +22,8 @@ final class EraGenerationWiringTest extends TestCase
     {
         self::assertStringContainsString('class EraGenerationService', $this->serviceSource);
 
-        foreach ([
+        foreach (
+            [
             'createSettlement',
             'createHero',
             'createLandmark',
@@ -33,7 +34,8 @@ final class EraGenerationWiringTest extends TestCase
             'Landmark::create',
             'ResourceNode::create',
             'GameEvent::create',
-        ] as $expected) {
+            ] as $expected
+        ) {
             self::assertStringContainsString($expected, $this->serviceSource);
         }
     }
@@ -46,10 +48,16 @@ final class EraGenerationWiringTest extends TestCase
 
         self::assertStringContainsString('EraGenerationService', $transition);
         self::assertStringContainsString("\$changes['generation'] = \$this->eraGenerationService->generate", $transition);
+        self::assertStringContainsString("\$changes['descendants'] = \$this->createDescendants", $transition);
         self::assertStringContainsString("'generated' => [", $transition);
         self::assertStringContainsString("'generatedSettlements' => count", $transition);
+        self::assertStringContainsString("'generatedDescendants' => count", $transition);
+        self::assertStringContainsString("'descendants' => \$changes['descendants']['descendants']", $transition);
         self::assertStringContainsString('EraGeneratedContent', $api);
+        self::assertStringContainsString('sourceHeroId', $api);
+        self::assertStringContainsString('descendants?: EraGeneratedEntity[]', $api);
         self::assertStringContainsString('New Era Foundations', $chronicle);
+        self::assertStringContainsString('Descendants', $chronicle);
         self::assertStringContainsString('Generation Event', $chronicle);
     }
 }

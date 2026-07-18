@@ -25,7 +25,13 @@ final class MagicDiscoveryWiringTest extends TestCase
         self::assertStringContainsString('known', $service);
         self::assertStringContainsString('magic_research', $service);
         self::assertStringContainsString('magic_discovery', $service);
+        self::assertStringContainsString('magic_progression', $service);
+        self::assertStringContainsString('advanceWorld', $service);
+        self::assertStringContainsString('progressionCandidates', $service);
+        self::assertStringContainsString('PROGRESSION_COOLDOWN_YEARS', $service);
+        self::assertStringContainsString('recentProgressions', $service);
         self::assertStringContainsString('applyDurableDiscovery', $service);
+        self::assertStringContainsString('applyProgressionEffects', $service);
         self::assertStringContainsString('bettingHooks', $service);
         self::assertStringContainsString('pathsForTarget', $service);
         self::assertStringContainsString("'betType' => 'magic_discovery'", $service);
@@ -52,19 +58,25 @@ final class MagicDiscoveryWiringTest extends TestCase
         self::assertStringContainsString("'magicDiscovery' => \$this->magicDiscoveryService->status()", $status);
         self::assertStringContainsString("'magicDiscovery' => \$magicDiscovery", $export);
         self::assertStringContainsString("'magic' => 'exportMagicDiscovery'", $export);
+        self::assertStringContainsString('magic_progression', $export);
         self::assertStringContainsString('MagicDiscoveryService', $betting);
         self::assertStringContainsString('magic-discovery-', $betting);
         self::assertStringContainsString('magic_discovery', $betting);
         self::assertStringContainsString("'magic_discovery'", $betModel);
         self::assertStringContainsString("case 'magic_discovery'", $loop);
+        self::assertStringContainsString('magicDiscoveryService->advanceWorld($tickYear, 2)', $loop);
+        self::assertStringContainsString('magic progressions', $loop);
         self::assertStringContainsString('evaluateMagicDiscoveryBet', $loop);
         self::assertStringContainsString('calculateMagicDiscoveryModifier', $odds);
         self::assertStringContainsString('MagicDiscoveryStatusResponse', $api);
+        self::assertStringContainsString('MagicDiscoveryProgression', $api);
+        self::assertStringContainsString('normalizeMagicDiscoveryProgression', $api);
         self::assertStringContainsString('getMagicDiscovery', $api);
         self::assertStringContainsString('researchMagic', $api);
         self::assertStringContainsString("'magic_discovery'", $betEntity);
         self::assertStringContainsString('Magic Discovery', $page);
         self::assertStringContainsString('Research Magic', $page);
+        self::assertStringContainsString('Autonomous Progression', $page);
         self::assertStringContainsString('Betting Hooks', $page);
     }
 }
